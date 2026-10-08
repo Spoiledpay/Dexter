@@ -1,0 +1,11 @@
+{
+  "enableAllProjectMcpServers": false,
+  "enabledPlugins": [],
+  "env": {},
+  "model": "deepseek-v4.1-flash",
+  "permissions": {
+    "allow": [],
+    "ask": [],
+    "deny": []
+  }
+}

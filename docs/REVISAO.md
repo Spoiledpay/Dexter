@@ -1,0 +1,15 @@
+# Dexter — Revisões
+
+Log de revisões (data, escopo, resultado). Toda revisão roda
+`build.bat` + `tests\run_tests.bat` antes de fechar.
+
+| Data | Escopo | Resultado |
+|---|---|---|
+| 2026-10-06 | Sessão inicial: Fases 0–4 + bin (R-0.x–R-5.2). Build limpo, zero warnings NASM. | `run_tests.bat` **24/24 OK**. Round-trip win64/hello (`hi`, exit 0) e bin/hello+var64 (byte-idênticos + comportamento idêntico). |
+| 2026-10-06 | Expansão: corpus §8 (tiny/loop/strings/no_relocs), banner sem args, pipeline de versão (`version.bin` + `tools/bump_version.ps1`, R-0.6). | `run_tests.bat` **31/31 OK**. Banner `Dexter disassembler Tool Version 1.2.x` + `LabsObjects All rights reserved`, saída 0. Round-trip funcional em todo o corpus viável (win64 e bin). |
+| 2026-10-07 | R-6.1 (emissor nativo opt-in `-native` com garantia de tamanho exato + fallback `db`) + fixes bloqueadores (hang do collect `edi/rdi`, D O(n²), dispatch C0+, `mov`-SIB, `.cs_in_code`, spill `[rbp-56]`). | `build.bat` limpo (zero warnings) + `run_tests.bat` **42/42 OK**. Round-trip nativo: hello (`hi`), tiny (42), loop (`55`), strings e no_relocs (comportamento igual). |
+| 2026-10-07 | R-6.2 (lexer NASM `dex_lex_one` + `DexToken` + driver `tests/lex_check.asm` + seção `[8]`). | `build.bat` limpo + `run_tests.bat` **46/46 OK** (golden `hello.asm`: 166 tokens, 0 unknowns; smokes: saída nativa, vazio, bytes esquisitos). |
+| 2026-10-07 | R-6.3 (parser textual `dex_parse_asm` + AST heap + driver `tests/ast_check.asm` + seção `[9]`; fixes: div-zero `ast_grow_arr`, AV `free_unit`, spill `m`, `_` no lexer (golden 166→164), `bits`/`db` bare, sinal em imm). Sondas DIAG-TEMP removidas. | `build.bat` limpo (zero warnings) + `run_tests.bat` **52/52 OK**. Goldens: hello `1/1/18/3/1/1/8`, loop `1/5/30/9/2/0/8` (CFG validado à mão). Round-trips R-6.1 intactos. |
+| 2026-10-07 | R-6.5 parcial (`-ast-dump`: `DF_ASTDUMP` + `dex_ast_dump` + hook `gen_astdump_emit` win64/bin + seção `[10]`; fix `r8`-len volátil no hook). | `build.bat` limpo + `run_tests.bat` **55/55 OK**. Geração byte-idêntica com/sem flag; produto × `ast_check` concordam no resumo. |
+| 2026-10-07 | R-6.4 fatia 1 (`dex_lift_insn` + `DexIR` + driver `tests/lift_check.asm` + seção `[11]`; fixes: alinhamento driver/lift/`dex_ast_dump`, IAT do driver, regra D-10). | `build.bat` limpo (zero warnings) + `run_tests.bat` **60/60 OK**. Goldens LIFT/TKIND exatos. Restam fatias 2 (codegen + R-labels) e 3 (IAT). |
+| 2026-10-07 | R-6.4 fatia 2 (`dex_codegen_ir` + walker via lift + R-labels + `tests/codegen_check.asm` + `[12b]`; fixes: spill `r10d`, nome `symtab_*`, `[rel+índice]`, mojibake; regras D-11). | `build.bat` limpo + `run_tests.bat` **75/75 OK**. Refator 2a byte-idêntica (`fc /b`); round-trips -native no corpus simples (hi/55/42/nr/strings). Resta fatia 3 (IAT). |

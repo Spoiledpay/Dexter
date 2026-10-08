@@ -1,0 +1,226 @@
+# Dexter — Roadmap (requisitos R-x.y + status real)
+
+Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
+`[ ]` futuro. IDs estáveis para branches/commits.
+
+## Fase 0 — Esqueleto, CLI e I/O `[x]`
+
+- [x] R-0.1 Pastas + `build.bat` (nasm+link autodetect) + `clean.bat`
+- [x] R-0.2 `main.asm` (`/ENTRY:main`, sem CRT, ExitProcess com códigos 0/1/2/3/5)
+- [x] R-0.3 CLI completa (`-o -O -m -r -L -N -s -start -end -hex -nop-pad
+  -no-imports -no-relocs -strings -v -vv -q -ver -h/--help`), tokenizer
+  próprio sobre `GetCommandLineA`, defaults `C:\Nasm\…`, `-m bin` recusado
+  na v0.1 e **aceito** na v0.2 (bin implementado)
+- [x] R-0.4 I/O kernel32 (open/size/mmap/write/flush/console), share-read
+  em saída (nasm/link leem concorrente), `mmap_rw` p/ patch
+- [x] R-0.5 `heap` (cap 1 GiB), `strlen/memcmp/memcpy/streq/hex/dec`,
+  `FNV-1a`, log stdout/stderr
+- [x] R-0.6 Versionamento de build: `version.bin` (magic `DXVB` +
+  major/minor/patch u16/u16/u32, base 1.2.3) + `tools/bump_version.ps1`
+  (robusto: ausente/corrompido → backup + reinit; escrita atômica;
+  rollover de patch) integrado ao `build.bat` (etapa [0/3] → gera
+  `obj/version.inc` via `-I obj\`); banner/`-ver` dinâmicos
+  (`Dexter disassembler Tool Version M.m.p` + `LabsObjects All rights
+  reserved`); sem args → banner + ajuda, saída 0
+
+## Fase 1 — PE Loader `[x]`
+
+- [x] R-1.1 `dex_pe_load`: MZ, `e_lfanew`, `PE\0\0`, `0x8664` (32-bit → 3),
+  `0x20B`, alignments, `SizeOfImage ≤ 1 GiB`, tabela de seções com
+  validação `raw_ptr+raw_size ≤ filesize`
+- [x] R-1.2 `rva_to_offset` / `offset_to_rva` (headers identidade, `.bss`
+  sem offset, cap seções 96)
+- [x] R-1.3 `pe_find_section` (p/ `-s`)
+- [x] R-1.4 dump `-v` (base/entry/seções/imports/exports/relocs) e `-vv`
+  (+hexdump 64 B/seção)
+
+## Fase 2 — Decoder (LDE real + fallback honesto) `[x]`
+
+- [x] R-2.1 legacy (66 67 F0 F2 F3 segmentos) + REX (último vale)
+- [x] R-2.2 ModRM+SIB+disp (addr64 e addr32/0x67, RIP-rel, disp com sinal)
+- [x] R-2.3 tabelas 1/2/`38`/`3A` (flags modrm/imm/rel/grupo) + mnemônicos
+  comuns (MSVC/LLVM: mov/lea/add/sub/call/jmp/ret/push/pop/test/cmp/…)
+- [x] R-2.4 grupos `80-83`/`C0-C1`/`F6-F7`/`FE-FF`/`0FBA`, `B0-BF`
+  (REX.W→imm64), `A0-A3` moffs, `C2/CA` ret-imm16, `C8` enter,
+  `E8/E9/EB/70-7F/0F80-8F` (alvos `VA+len+rel` em `target_va`)
+- [x] R-2.5 `dex_disasm_one` retorna 1..15 (0 só sem bytes); desconhecido =
+  `mne=0` + `db` exato (nunca erro falso)
+- [x] R-2.6 emissor `db` + `label_<VA>:` + `; mne` (+ `; @0xVA` com `-hex`);
+  `nop`/`int3` reais com `-nop-pad`
+- [ ] R-2.7 VEX/EVEX (`C4/C5/62`), x87, 3DNow! → hoje fallback `db`
+  (correto em bytes; semântica de label futura)
+
+## Fase 3 — Imports/Exports/Relocs `[x]`
+
+- [x] R-3.1 import directory → `ImportEntry{dll,func,ordinal,iat_rva}`
+  (nomes apontam p/ o mapeamento; corrompido → 0, nunca crash)
+- [x] R-3.2 exports (count + RVAs de nomes) e relocs (RVAs u32, cap 65536)
+- [ ] R-3.3 rewrite de IAT (`call [rel __imp_X]` regenerado) — DESATIVADO
+  por decisão (db-copy preserva; ver ARQUITETURA §1). Reativar só com
+  layout não-idêntico (Fase 5)
+
+## Fase 4 — Geração + rebuild `[x]`
+
+- [x] R-4.1 seções em ordem com classes `code`/`data`/`rdata`, `global`
+  do entry-label, `.reloc` omitida com `-no-relocs`, `.pdata`/`.xdata`
+  aparadas p/ `vsize` (guarda de VA), `.bss` documentada (v0.2: seção
+  vazia; ver R-4.4)
+- [x] R-4.2 `dex_rebuild` win64: `nasm -f win64` + `link /NODEFAULTLIB
+  /DEBUG:NONE /SUBSYSTEM:x /DYNAMICBASE:NO /BASE:idem
+  /ENTRY:label_<entry>` via `CreateProcessA` (exit code DWORD!)
+- [x] R-4.3 `dex_patch_dirs`: adota DataDirectories originais onde o link
+  deixou vazio (imports/recursos/pdata/debug/tls/…) via `mmap_rw`
+- [x] R-4.4 `.bss` (raw 0) sai como seção vazia; o link dimensiona.
+  LIMITAÇÃO HONESTA: o `link.exe` reordena seções e pode derrubar vazias,
+  então o modo win64 só garante round-trip comportamental em PEs simples
+  (hello: OK). O path fiel p/ PEs reais é `-m bin` (R-5.1).
+- [ ] R-4.5 `call [rel]` p/ IAT regenerada (depende de R-3.3)
+
+## Fase 5 — Fidelidade total e modo `bin` (parcial `[x]`, resto `[ ]`)
+
+- [x] R-5.1 `-m bin`: headers+seções+overlay em `db` + `times` pad →
+  `nasm -f bin` = **byte-idêntico** (hello 2560 B e var64 91872 B:
+  `fc /b` igual + comportamento igual)
+- [x] R-5.2 round-trip testado: win64/hello (`hi`, exit 0) e bin/hello+var64
+- [ ] R-5.3 `-f bin` com import table REGENERADA (hoje: copiada — suficiente
+  e fiel; regenerar só se preciso)
+- [ ] R-5.4 strings em code-flow, jump tables, SEH/unwind reemitido,
+  fuzzy corpus expandido, `tests\fuzz_pe.py`
+
+## Fase 6 — AST / Lexer / Geração de código nativo (nova, incremental `[ ]`)
+
+> Decisão documentada em `docs/adr/0001-ast-lexer-codegen.md` (2026-10-07).
+> R-6.1 FECHADO em 2026-10-07: `-native` liga o caminho nativo no walker
+> (`build_operands` + `emit_native` + fallback `db`, tamanho exato
+> garantido); `db` continua o default. Falta o frontend (lexer/parser/AST
+> por cima, R-6.2+), sem quebrar o round-trip atual.
+
+- [x] R-6.1 Opção A — emissor nativo opt-in (`-native`, `DF_NATIVE`):
+  `walk_code_sec` chama `dex_build_operands` e tenta `dex_emit_native`,
+  com rollback (snapshot de `AsmBuf.len`) + fallback `db` byte-exato;
+  refs RIP/REL p/ dados caem em `db` (dados sem labels por-VA; R-labels
+  em R-6.4); garantia de tamanho exato: `strict dword/qword` p/ imm
+  (forma original via `Insn.imm_size`), `db` p/ disp32-curto não-RIP,
+  push-68-curto, ALU/teste geral+acumulador e `[abs ..]` p/ SIB-abs;
+  teste: `hello/tiny/loop/strings/no_relocs` round-trip win64+nativo
+  com comportamento igual (`hi`, `42`, `55`, strings, `fc` igual)
+- [x] R-6.2 Opção B — lexer NASM (`src/front/lexer.asm`): `dex_lex_one`
+  total (nunca falha por conteúdo; `UNKNOWN` p/ resto) com `DexToken`
+  40 B (`kind/val/ptr/len/line/col`); `LABEL` (`x:` exceto seg),
+  `REG` (GPR via tabelas + hi/seg, case-insensitive), `NUM` (0x/dec),
+  `STR` (`"`/`'`, sem escapes), pontuação, `COMMENT`, `EOL`;
+  `tests/lex_check.asm` (driver sem deps do produto) + `[8]` na suíte:
+  golden `tests/hello.asm` = 164 tokens, 0 unknowns (166 antes do fix
+  `_` em R-6.3; smoke extra: saída nativa 4922 tokens + vazio + bytes
+  esquisitos, tudo sem crash)
+- [x] R-6.3 Parser + AST (`src/front/parser.asm`, `src/front/ast.asm`):
+  `Func(VA entry) → Blocos básicos (alvos REL de target_va) → CFG`
+  (`is_branch/is_call/is_ret` de `Insn`); nós `Func/Block/Instr/Op`;
+  ownership: AST em heap com free no mesmo nível.
+  FECHADO em 2026-10-07 (suzie 52/52): `dex_parse_asm` textual sobre o
+  stream do lexer (Pass A call-targets + Pass B montagem + Pass C
+  resolve/succs); `dex_lex_match` reusado p/ keywords; `db`/`equ` bare
+  (`db 0x90` sem label) e diretiva por tok0 (`bits 64` com NUM);
+  imediatos com sinal (`mov ecx, -11`); goldens pinados em `[9]`:
+  hello = `funcs=1 blocks=1 instrs=18 succs=3 db=1 equ=1 dir=8`,
+  loop = `funcs=1 blocks=5 instrs=30 succs=9 db=2 equ=0 dir=8`
+  (CFG validado à mão: 1 bloco/label, tidx exatos, calls externos -1).
+  Bugs reais achados e corrigidos (todos com teste que captura):
+  div-zero em `ast_grow_arr` (`div r9` com `r9` morto no call),
+  AV no free (`bi` em `r10d` volátil), `m` em `r11d` volátil,
+  `_` no meio do ident lexado como 2 tokens, `bits 64` caindo em CODE.
+- [x] R-6.4 Lifter + codegen (`src/back/lift.asm`, `src/back/codegen.asm`):
+  `DexOp → IR (ADD/SUB/MOV/LEA/CALL/JMP/RET)` → reemissão via
+  `dex_emit_native`; jump-tables e RIP-em-dados (tabela R da passada 1)
+  viram labels reais; `call [rel __imp_X]` reativado só aqui (R-3.3/R-4.5)
+  FATIA 1 FECHADA em 2026-10-07 (`dex_lift_insn` em `src/back/lift.asm`:
+  `DexIR` 24 B sem heap — cls IR_DB/INSTR/CALL/CALLIMP/JMP/JMPIMP/
+  BRANCH/RET + tkind NONE/CODE/DATA/IMPORT com tva/imp; predicado de
+  código espelha `.cs_in_code`; `tests/lift_check.asm` + `[11]`:
+  goldens `LIFT db=1 instr=3 call=3 callimp=1 jmp=1 jmpimp=1 branch=1
+  ret=1` + `TKIND none=4 code=3 data=2 import=3`; suite 60/60).
+  FATIA 2 FECHADA em 2026-10-07: `src/back/codegen.asm`
+  (`dex_codegen_ir`: label + nativo com rollback, ou 1→db) + walker via
+  lift+codegen (oploop manual morto; 2a provada byte-idêntica via `fc /b`
+  nos 5 + `tests/ref_native/`) + R-labels (2b: `symtab_to_sorted`
+  Shellsort + split da emissão de dados nos alvos R + run-degrade p/
+  `-strings`; `lea rdx, [rel label_...]` nativo com round-trip no corpus
+  simples; `[12b]` na suíte; suite 75/75). RESTA fatia 3 (rewrite IAT
+  kernel32 com fallback db).
+- [x] R-6.5 Flags (parcial): `-native` (A) pronto em R-6.1; `-ast-dump`
+  pronto (parse-back do `.asm` gerado via `dex_parse_asm` +
+  `dex_ast_dump` em stdout, geração byte-idêntica; `[10]` na suíte);
+  `-emit=db|native` ainda futuro; `DF_NATIVE`/`DF_ASTDUMP` em
+  `DexConfig.flags`; documentado em `docs/CLI.md`
+- [ ] R-6.6 Opção C (futura): IR otimizável + backend próprio (`-f bin`
+  com seção `.text` regenerada); depende de R-6.1–R-6.4 verdes + fuzz
+
+Nova estrutura (só entra no `build.bat` quando cada arquivo existir de verdade):
+
+```text
+src/front/lexer.asm    ; R-6.2 dex_lex_one [x] (+ DexToken em dexter.inc)
+src/front/parser.asm   ; R-6.3 dex_parse_asm
+src/front/ast.asm      ; R-6.3 dex_ast_* (new/free/dump)
+src/back/lift.asm      ; R-6.4 dex_lift_insn (DexOp -> IR)
+src/back/codegen.asm   ; R-6.4 dex_codegen_func (IR -> AsmBuf via emit_native)
+```
+
+Regra de transição (zero regressão): `db` continua o default; `-native`
+é opt-in; `tests\run_tests.bat` deve continuar 100% OK com e sem `-native`
+no corpus simples; PEs complexos continuam em `-m bin`.
+
+## Dívida técnica conhecida (honesta, com ID)
+
+- D-1 `docs/adr/` ainda sem ADRs numerados (decisões estão em ARQUITETURA;
+  numerar ao refatorar).
+- D-2 `.bss` no modo win64 sai como seção vazia (link dimensiona; checar VA
+  em binário com `.bss` referenciada — var64 passou no comportamento).
+- D-3 `symtab`/`strpool`/`labels-imp` implementados e linkados mas sem uso
+  no generate atual (biblioteca p/ R-3.3/R-4.5; cobertos por build, sem teste
+  dedicado — adicionar teste unitário).
+- D-4 `dex_file_seek`/`read_at`/`write_at` REMOVIDOS (falhavam com 87 neste
+  ambiente; I/O posicional = `mmap_rw`). Reinvestigar causa WinAPI um dia.
+- D-5 `-no-imports` hoje só afeta parse/`-v` (rebuild por cópia não precisa
+  de imports). Manter + documentar até R-3.3.
+- D-6 `-start`/`-end` valem p/ código; dados saem inteiros (documentado).
+- D-7 Tabela D desligada (2026-10-07): insert por-VA com 2 `HeapAlloc` +
+  lookup O(n²/256) trava binários grandes (`.text` 45 MB do `ld.lld` =
+  horas); D não tem nenhum leitor hoje (só `insert`/`free`) — R continua
+  (barata e necessária em R-6.4); `g_symD` segue alocada/liberada (custo
+  ~0); reativar com estrutura adequada (intervalos/bitmap) em R-6.4.
+- D-8 Regra de slots de spill (2026-10-07, bugs reais desta sessão):
+  `[rbp-8..-56]` num frame `8 pushes + sub rsp,88` são os registradores
+  salvos (nunca usar como spill!); spills só em `[rbp-64..]` (dentro do
+  frame, fora da shadow de calls aninhados); registradores não-voláteis
+  (`rdi/r13/...`) nunca sobrevivem a `mov rdi, ...` inline — recarregar
+  do slot (caso `.collect_syms`: `edi` count vs `rdi` base → hang);
+  `r10/r11` morrem em syscalls ntdll (não manter valores através de
+  `HeapAlloc`/`WriteFile`); `edx` morre em `.build_rm` (base SIB).
+- D-9 Regras do frontend textual (2026-10-07, R-6.3; todos com
+  reproduzir→fix→suite 52/52):
+  `div` nunca com divisor vindo de call sem spill (`ast_grow_arr`:
+  `r9` elemsz com push + guarda `test r9,r9`; forma sem `div`
+  preferida p/ capacidade); índice de loop com calls dentro usa
+  registrador não-volátil (`bi` em `edi` no free); `m` (índice do
+  mnemônico) vive em spill `[rbp-72]` entre dispatch e code_instr
+  (`r11d` volátil morre nos calls de abertura); meio de ident aceita
+  `_?#@~.$` (faixa Z..a cai em `.ti_ck1`; golden 166→164);
+  diretiva vale por tok0 com qualquer tok1 (`bits 64`); `db`/`equ` bare
+  (tok0 é a keyword) viram dados sem label; imediato aceita sinal
+  prefixado ao único NUM com fold (`-11`) e size pela magnitude.
+- D-10 Regra de alinhamento de pilha (2026-10-07, R-6.4 fatia 1; bug
+  real: AV em todo `call` do driver novo): antes de CADA `call`,
+  rsp%16==0 (ou seja, `(pushes + sub) % 16 == 8` na entrada, quando
+  rsp%16==8). Função sem frame usa shadow `sub rsp, 40` (não 32) nos
+  calls internos; contar pushes de verdade (rbp conta!); comentário de
+  frame sempre com a conta explícita. Corrigidos juntos: `dex_ast_dump`
+  (8 pushes + `sub 32` → `sub 40`; funcionava por sorte) e comentário
+  do `dex_ast_free_unit` (7 pushes + 32 = 88, não "6+32=80").
+- D-11 Regras da fatia 2 (2026-10-07, todos com reproduzir→fix→suite):
+  argumentos em registradores voláteis morrem no `call` — spill de `j`
+  (`r10d`) em slot antes do helper (garbage→len gigante→OOM→erro 2);
+  `name` de símbolo segue convenção do arquivo (`symtab_*`, não
+  `dex_*`); endereçamento x64 não tem `[rel base+índice]` (via
+  registrador); nunca editar fonte via round-trip ASCII (mojibake em
+  comentários — reparar na hora); `db` de teste com bytes exatos
+  (`ImportEntry` tem 33 B com 1 `db` a mais: `iat_rva` desloca).

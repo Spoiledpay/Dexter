@@ -1,0 +1,22 @@
+# Jimi Code
+.Jimi/settings.local.json
+data/sessions/*
+data/backups/*
+
+# Artefatos de build (Dexter)
+out/
+obj/
+tests/out/
+tests/*.obj
+tests/hello.exe
+tests/*_rt.exe
+tests/*_bin.exe
+tests/*.out
+tests/*.asm.sha256
+
+# Binários: ignorar por padrão, EXCETO o corpus de teste versionado
+*.exe
+!tests/for.exe
+!tests/var32.exe
+!tests/var64.exe
+!tests/link.exe
