@@ -145,8 +145,13 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   nos 5 + `tests/ref_native/`) + R-labels (2b: `symtab_to_sorted`
   Shellsort + split da emissão de dados nos alvos R + run-degrade p/
   `-strings`; `lea rdx, [rel label_...]` nativo com round-trip no corpus
-  simples; `[12b]` na suíte; suite 75/75). RESTA fatia 3 (rewrite IAT
-  kernel32 com fallback db).
+  simples; `[12b]` na suíte; suite 75/75). FATIA 3 (rewrite IAT)
+  EM ANDAMENTO, BLOQUEADA em 2026-10-07: walker emite `call|jmp [rel
+  __imp_X]` (provado 1×) + `dex_emit_imp_label` no `.idata` (driver
+  `tests/imp_check.asm` verde isolado), mas generate `-native` com
+  conteúdo dá AV (`0xC0000005`, sem `.asm`; db/bin intactos).
+  Detalhe e plano em `docs/SESSAO-2026-10-07-R64.md` §3–§4.
+  Suite: 67 passam, 13 falham ([12b]/[13], mesma raiz).
 - [x] R-6.5 Flags (parcial): `-native` (A) pronto em R-6.1; `-ast-dump`
   pronto (parse-back do `.asm` gerado via `dex_parse_asm` +
   `dex_ast_dump` em stdout, geração byte-idêntica; `[10]` na suíte);
@@ -224,3 +229,14 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   registrador); nunca editar fonte via round-trip ASCII (mojibake em
   comentários — reparar na hora); `db` de teste com bytes exatos
   (`ImportEntry` tem 33 B com 1 `db` a mais: `iat_rva` desloca).
+- D-12 Regras da fatia 3 / depuração (2026-10-07, bloqueador aberto):
+  file-scope (`global` ou label sem ponto) no MEIO do arquivo parte o
+  escopo dos labels locais — globais novos vão no fim (`dex_emit_imp_label`,
+  `dex_build_impname`) ou viram globais in place; `if errorlevel 1`
+  IGNORA crash (AV é negativo: falso "OK" + skips silenciosos) — usar
+  `if !errorlevel! NEQ 0` em toda checagem de saída do dexter;
+  VEH temporário p/ RIP exato vai em `tools/` + hook mínimo (REMOVER
+  tudo depois; nunca retornar CONTINUE_SEARCH — sair via ExitProcess);
+  sondas que chamam print corrompem a medição se usarem regs vivos
+  (`write` usa `r9`!); `select` sem newline é ambíguo; não confiar em
+  memória de configs de bisect — re-verificar o estado real (`grep`).

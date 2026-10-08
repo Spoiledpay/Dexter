@@ -51,7 +51,9 @@ out/ obj/        artefatos de build (ignorados no git)
 
 ## Estado atual (v1.2.x + R-6.1/R-6.2 fechados)
 
-- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 75/75.
+- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 67 passam,
+  13 falham ([12b]/[13], bloqueador R-6.4.3 — ver
+  `docs/SESSAO-2026-10-07-R64.md`).
 - [x] R-6.4 fatias 1–2: lift (`DexIR`) + codegen (rollback) + R-labels
   (`lea [rel label_]` nativo com round-trip) + drivers de teste.
 - [x] R-6.5 parcial: `-ast-dump` (resumo AST do `.asm` gerado em stdout).

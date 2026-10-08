@@ -873,9 +873,12 @@ Onde paramos (ponto exato):
   byte-idêntica via fc nos 5 de tests/ref_native/) + R-labels
   (symtab_to_sorted + split de dados + run-degrade; lea nativo;
   [12]/[12b]). Fixes: spill r10d, symtab_*, rel+índice, mojibake
-  (D-11). Suite 75/75 OK. Resta fatia 3 (IAT).
-- Próximo código: R-6.4 lift/codegen (src/back/lift.asm +
-  codegen.asm, dex_lift_insn + dex_codegen_func; só aqui o rewrite
-  call [rel __imp_X] volta, R-3.3/R-4.5). Estrutura nova só entra no
-  build.bat quando cada .asm existir de verdade (zero stub, regra
-  skill 1.1). Opção C (IR otimizável) futura.
+  (D-11). Suite 75/75 OK.
+- R-6.4 FATIA 3 EM ANDAMENTO, BLOQUEADA em 2026-10-07: walker emite
+  `call|jmp [rel __imp_X]` + `dex_emit_imp_label` no `.idata` (drivers
+  `imp_check`/`sym_check` verdes; 1 rewrite real emitido); AV em
+  generate `-native` com conteúdo (db/bin intactos). Git criado
+  (controle de mudanças!). Suite honesta: 67 passam, 13 falham
+  ([12b]/[13], mesma raiz). Retomada em `docs/SESSAO-2026-10-07-R64.md`.
+- Próximo código: fechar R-6.4.3 (caçar AV §4 da sessão), depois R-6.5
+  resto (`-emit`), R-3.3/R-4.5, tag. Opção C (IR otimizável) futura.

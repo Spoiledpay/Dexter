@@ -2,6 +2,24 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-6.4 fatia 3 (IAT) EM ANDAMENTO, BLOQUEADA (2026-10-07)
+
+### Adicionado (funcionando isolado, sem efeito fim-a-fim ainda)
+
+- `dex_emit_imp_label` (fim de `src/gen/rebuild.asm`, global p/ teste)
+  + `dex_build_impname` (globalizado): `__imp_<dll>_<func|ordN>` no
+  `.idata` (label-at-slot, sem extern); walker constrói nomes;
+  codegen kinds 1/2. Drivers `tests/imp_check.asm` (HIT/MISS, heap-buf)
+  e `tests/sym_check.asm` (D-3 pago) verdes isolados.
+- Git criado (controle de mudanças, skill 5.1); harness endurecido
+  (`if !errorlevel! NEQ 0` em [12b]/[13]).
+
+### Problema aberto (bloqueador)
+
+- Generate `-native` com conteúdo → `0xC0000005` (db/bin intactos);
+  13 checks de [12b]/[13] falham (mesma raiz). Detalhe, evidência VEH
+  e plano em `docs/SESSAO-2026-10-07-R64.md` §3–§4.
+
 ## [Unreleased] — R-6.4 fatia 2: codegen + R-labels (2026-10-07)
 
 ### Adicionado
