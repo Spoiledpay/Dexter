@@ -5,6 +5,10 @@ rem Uso: tests\run_tests.bat
 rem Requer: out\dexter.exe (build.bat), C:\Nasm\nasm.exe, tests\hello.asm
 rem Códigos: 0 tudo OK; 1 alguma falha. Nunca executa binários suspeitos
 rem sem timeout: usa timeout.exe (sinaliza falha se travar).
+rem REGRA (2026-10-07, D-12): checar saída do dexter SEMPRE com
+rem `if !errorlevel! NEQ 0` (delayed). `if errorlevel 1` IGNORA crash
+rem (AV = -1073741819, negativo: falso "OK" + testes seguintes pulados
+rem em silêncio via `if exist`). findstr/fc retornam 0/1 (imunes).
 rem =====================================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0\.."
@@ -228,31 +232,31 @@ if exist tests\out\codegen_check.exe (
 
 echo === [12b] R-labels nativos (refs RIP->dados viram label) ===
 "%DX%" tests\hello.exe -o tests\out\nat_hello.asm -native -q
-if errorlevel 1 ( echo "  FALHA: generate -native hello" & set /a FAIL+=1 ) else ( echo "  OK: generate -native hello" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native hello" & set /a FAIL+=1 ) else ( echo "  OK: generate -native hello" & set /a PASS+=1 )
 findstr /c:"[rel label_" tests\out\nat_hello.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem ref RIP nativa" & set /a FAIL+=1 ) else ( echo "  OK: ref RIP nativa" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -o tests\out\nat_hello.asm -r -O tests\out\nat_hello.exe -native -q
-if errorlevel 1 ( echo "  FALHA: rebuild -native hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native hello" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native hello" & set /a PASS+=1 )
 if exist tests\out\nat_hello.exe (
     tests\out\nat_hello.exe > tests\out\nat_hello.out 2>&1
     findstr /c:"hi" tests\out\nat_hello.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: nat_hello nao imprime hi" & set /a FAIL+=1 ) else ( echo "  OK: nat_hello imprime hi" & set /a PASS+=1 )
 )
 "%DX%" tests\loop.exe -o tests\out\nat_loop.asm -r -O tests\out\nat_loop.exe -native -q
-if errorlevel 1 ( echo "  FALHA: rebuild -native loop" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native loop" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native loop" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native loop" & set /a PASS+=1 )
 if exist tests\out\nat_loop.exe (
     tests\out\nat_loop.exe > tests\out\nat_loop.out 2>&1
     findstr /c:"55" tests\out\nat_loop.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: nat_loop nao imprime 55" & set /a FAIL+=1 ) else ( echo "  OK: nat_loop imprime 55" & set /a PASS+=1 )
 )
 "%DX%" tests\tiny.exe -o tests\out\nat_tiny.asm -r -O tests\out\nat_tiny.exe -native -q
-if errorlevel 1 ( echo "  FALHA: rebuild -native tiny" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native tiny" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native tiny" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native tiny" & set /a PASS+=1 )
 if exist tests\out\nat_tiny.exe (
     tests\out\nat_tiny.exe >nul 2>&1
     if !errorlevel! EQU 42 ( echo "  OK: nat_tiny exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: nat_tiny exit!=42" & set /a FAIL+=1 )
 )
 "%DX%" tests\strings.exe -o tests\out\nat_strings.asm -r -O tests\out\nat_strings.exe -native -strings -q
-if errorlevel 1 ( echo "  FALHA: rebuild -native -strings" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native -strings" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native -strings" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native -strings" & set /a PASS+=1 )
 if exist tests\out\nat_strings.exe (
     tests\strings.exe > tests\out\nat_strings_orig.out 2>&1
     tests\out\nat_strings.exe > tests\out\nat_strings_rt.out 2>&1
@@ -262,24 +266,24 @@ if exist tests\out\nat_strings.exe (
 
 echo === [13] rewrite IAT (call [rel __imp_X] nativo) ===
 "%DX%" tests\hello.exe -o tests\out\iat_hello.asm -native -q
-if errorlevel 1 ( echo "  FALHA: generate -native hello" & set /a FAIL+=1 ) else ( echo "  OK: generate -native hello" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native hello" & set /a FAIL+=1 ) else ( echo "  OK: generate -native hello" & set /a PASS+=1 )
 findstr /c:"call [rel __imp_" tests\out\iat_hello.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem call __imp_" & set /a FAIL+=1 ) else ( echo "  OK: call __imp_ presente" & set /a PASS+=1 )
 findstr /c:"__imp_KERNEL32_ExitProcess:" tests\out\iat_hello.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem label __imp_" & set /a FAIL+=1 ) else ( echo "  OK: label __imp_ definido" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -o tests\out\iat_hello.asm -r -O tests\out\iat_hello.exe -native -q
-if errorlevel 1 ( echo "  FALHA: rebuild IAT hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild IAT hello" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild IAT hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild IAT hello" & set /a PASS+=1 )
 if exist tests\out\iat_hello.exe (
     tests\out\iat_hello.exe > tests\out\iat_hello.out 2>&1
     findstr /c:"hi" tests\out\iat_hello.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: iat_hello nao imprime hi" & set /a FAIL+=1 ) else ( echo "  OK: iat_hello imprime hi" & set /a PASS+=1 )
 )
 "%DX%" tests\var64.exe -o tests\out\iat_var64.asm -native -q
-if errorlevel 1 ( echo "  FALHA: generate -native var64" & set /a FAIL+=1 ) else ( echo "  OK: generate -native var64" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native var64" & set /a FAIL+=1 ) else ( echo "  OK: generate -native var64" & set /a PASS+=1 )
 findstr /c:"__imp_KERNEL32_LoadLibraryA" tests\out\iat_var64.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem __imp_ em var64 (14 imports)" & set /a FAIL+=1 ) else ( echo "  OK: __imp_ em var64" & set /a PASS+=1 )
 "%DX%" tests\no_relocs.exe -o tests\out\iat_norelocs.asm -r -O tests\out\iat_norelocs.exe -native -q
-if errorlevel 1 ( echo "  FALHA: rebuild IAT no_relocs" & set /a FAIL+=1 ) else ( echo "  OK: rebuild IAT no_relocs" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild IAT no_relocs" & set /a FAIL+=1 ) else ( echo "  OK: rebuild IAT no_relocs" & set /a PASS+=1 )
 if exist tests\out\iat_norelocs.exe (
     tests\out\iat_norelocs.exe > tests\out\iat_norelocs_rt.out 2>&1
     tests\no_relocs.exe > tests\out\iat_norelocs_orig.out 2>&1
