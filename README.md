@@ -22,7 +22,7 @@ out\dexter.exe tests\hello.exe -o tests\out\hello.asm -r -O tests\out\hello_rt.e
 tests\out\hello_rt.exe            &:: imprime "hi"
 out\dexter.exe tests\var64.exe -o tests\out\var64_bin.asm -m bin -r -O tests\out\var64_bin.exe
 fc /b tests\var64.exe tests\out\var64_bin.exe   &:: iguais
-tests\run_tests.bat               &:: suíte completa (24/24)
+tests\run_tests.bat               &:: suíte completa (95/95)
 ```
 
 Flags e códigos de retorno: `docs/CLI.md`. Arquitetura e decisões:
@@ -49,17 +49,18 @@ out/ obj/        artefatos de build (ignorados no git)
 | `tests\var32.exe`, `tests\link.exe` | 32-bit — rejeição limpa (saída 3) |
 | `tests\for.exe` | `Magic=0` — rejeição limpa (saída 3); **não executar sem timeout** |
 
-## Estado atual (v1.2.x + R-6.1/R-6.2 fechados)
+## Estado atual (v1.2.181 + R-6.4 fechado)
 
-- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 67 passam,
-  13 falham ([12b]/[13], bloqueador R-6.4.3 — ver
-  `docs/SESSAO-2026-10-07-R64.md`).
-- [x] R-6.4 fatias 1–2: lift (`DexIR`) + codegen (rollback) + R-labels
-  (`lea [rel label_]` nativo com round-trip) + drivers de teste.
+- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 95/95 OK
+  (R-6.4.3 fechado em 2026-10-11 — ver
+  `docs/SESSAO-2026-10-11-R643.md`).
+- [x] R-6.4 fatias 1–3: lift (`DexIR`) + codegen (rollback) + R-labels
+  (`lea [rel label_]` nativo com round-trip) + rewrite IAT
+  (`call|jmp [rel __imp_X]` + labels, round-trip) + drivers de teste.
 - [x] R-6.5 parcial: `-ast-dump` (resumo AST do `.asm` gerado em stdout).
 - [x] R-6.1: `-native` opt-in com round-trip no corpus simples (hello,
   tiny, loop, strings, no_relocs) + fixes (hang collect, D O(n²),
   dispatch C0+, mov-SIB, `.cs_in_code`, spill `[rbp-56]`).
 - [x] R-6.2: `dex_lex_one` (`src/front/lexer.asm`, 17 kinds) + driver
   `tests/lex_check.asm` (golden 166 tokens, 0 unknowns).
-- [ ] R-2.7 (VEX/EVEX), R-3.3/R-4.5 (rewrite IAT só na Fase 6), R-5.3+, R-6.3–R-6.6 — ver ROADMAP + `docs/adr/0001-ast-lexer-codegen.md`.
+- [ ] R-2.7 (VEX/EVEX), R-5.3+, R-6.5 resto (`-emit`), R-6.6 — ver ROADMAP + `docs/adr/0001-ast-lexer-codegen.md`.

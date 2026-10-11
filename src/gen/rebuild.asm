@@ -1542,7 +1542,8 @@ dex_generate_asm:
     mov rdi, r11                 ; curlab = lab0
     mov rax, [rel g_chunkimg]    ; img (global dedicada, setada pelo caller)
     mov rsi, [rax+PeImage.image_base] ; base
-    mov [rbp-100], rax           ; img (p/ __imp_; slot livre)
+    mov [rbp-104], rax           ; img (p/ __imp_; slot livre; era -100 que
+                               ; colidia com va em -96: 2 qwords a 4B!)
     mov rax, [rel g_rn]
     mov [rbp-80], rax            ; n
     mov rax, [rel g_rarr]
@@ -1576,7 +1577,7 @@ dex_generate_asm:
     add rax, rcx                 ; chunkVA = va_base+cur
     mov rcx, rbx
     mov rdx, rax
-    mov r8, [rbp-100]            ; img
+    mov r8, [rbp-104]            ; img
     sub rsp, 32
     call dex_emit_imp_label
     add rsp, 32
@@ -1615,7 +1616,7 @@ dex_generate_asm:
     add rax, rcx                 ; chunkVA = va_base+cur
     mov rcx, rbx
     mov rdx, rax
-    mov r8, [rbp-100]            ; img
+    mov r8, [rbp-104]            ; img
     sub rsp, 32
     call dex_emit_imp_label
     add rsp, 32

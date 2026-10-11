@@ -267,9 +267,9 @@ if exist tests\out\nat_strings.exe (
 echo === [13] rewrite IAT (call [rel __imp_X] nativo) ===
 "%DX%" tests\hello.exe -o tests\out\iat_hello.asm -native -q
 if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native hello" & set /a FAIL+=1 ) else ( echo "  OK: generate -native hello" & set /a PASS+=1 )
-findstr /c:"call [rel __imp_" tests\out\iat_hello.asm >nul 2>&1
-if errorlevel 1 ( echo "  FALHA: sem call __imp_" & set /a FAIL+=1 ) else ( echo "  OK: call __imp_ presente" & set /a PASS+=1 )
-findstr /c:"__imp_KERNEL32_ExitProcess:" tests\out\iat_hello.asm >nul 2>&1
+findstr /c:"jmp [rel __imp_" tests\out\iat_hello.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem jmp __imp_ (thunks do hello)" & set /a FAIL+=1 ) else ( echo "  OK: jmp __imp_ presente" & set /a PASS+=1 )
+findstr /c:"__imp_KERNEL32_dll_ExitProcess:" tests\out\iat_hello.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem label __imp_" & set /a FAIL+=1 ) else ( echo "  OK: label __imp_ definido" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -o tests\out\iat_hello.asm -r -O tests\out\iat_hello.exe -native -q
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild IAT hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild IAT hello" & set /a PASS+=1 )
@@ -280,7 +280,9 @@ if exist tests\out\iat_hello.exe (
 )
 "%DX%" tests\var64.exe -o tests\out\iat_var64.asm -native -q
 if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native var64" & set /a FAIL+=1 ) else ( echo "  OK: generate -native var64" & set /a PASS+=1 )
-findstr /c:"__imp_KERNEL32_LoadLibraryA" tests\out\iat_var64.asm >nul 2>&1
+findstr /c:"call [rel __imp_KERNEL32_dll_LoadLibraryA]" tests\out\iat_var64.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem call __imp_ em var64" & set /a FAIL+=1 ) else ( echo "  OK: call __imp_ em var64" & set /a PASS+=1 )
+findstr /c:"__imp_KERNEL32_dll_LoadLibraryA" tests\out\iat_var64.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem __imp_ em var64 (14 imports)" & set /a FAIL+=1 ) else ( echo "  OK: __imp_ em var64" & set /a PASS+=1 )
 "%DX%" tests\no_relocs.exe -o tests\out\iat_norelocs.asm -r -O tests\out\iat_norelocs.exe -native -q
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild IAT no_relocs" & set /a FAIL+=1 ) else ( echo "  OK: rebuild IAT no_relocs" & set /a PASS+=1 )
@@ -289,6 +291,34 @@ if exist tests\out\iat_norelocs.exe (
     tests\no_relocs.exe > tests\out\iat_norelocs_orig.out 2>&1
     fc tests\out\iat_norelocs_orig.out tests\out\iat_norelocs_rt.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
+)
+
+echo === [14] imp label-at-slot (driver imp_check: HIT+MISS) ===
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp_check.obj tests\imp_check.asm
+if errorlevel 1 ( echo "  FALHA: nasm imp_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm imp_check" & set /a PASS+=1 )
+if exist tests\out\imp_check.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link imp_check" & set /a FAIL+=1 ) else ( echo "  OK: link imp_check" & set /a PASS+=1 )
+)
+if exist tests\out\imp_check.exe (
+    tests\out\imp_check.exe > tests\out\imp.out 2>&1
+    if errorlevel 1 ( echo "  FALHA: imp_check exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: imp_check exit 0" & set /a PASS+=1 )
+    findstr /c:"__imp_KERNEL32_dll_ExitProcess:" tests\out\imp.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: sem label HIT" & set /a FAIL+=1 ) else ( echo "  OK: label HIT" & set /a PASS+=1 )
+)
+
+echo === [15] symtab (driver sym_check: golden ordenado) ===
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\sym_check.obj tests\sym_check.asm
+if errorlevel 1 ( echo "  FALHA: nasm sym_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm sym_check" & set /a PASS+=1 )
+if exist tests\out\sym_check.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\sym_check.exe tests\out\sym_check.obj obj\symbols.obj obj\memory.obj obj\string.obj obj\hash.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link sym_check" & set /a FAIL+=1 ) else ( echo "  OK: link sym_check" & set /a PASS+=1 )
+)
+if exist tests\out\sym_check.exe (
+    tests\out\sym_check.exe > tests\out\sym.out 2>&1
+    if errorlevel 1 ( echo "  FALHA: sym_check exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: sym_check exit 0" & set /a PASS+=1 )
+    findstr /c:"SYM n=5 v=1000 1500 2000 2A00 3100" tests\out\sym.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: golden SYM" & set /a FAIL+=1 ) else ( echo "  OK: golden SYM" & set /a PASS+=1 )
 )
 
 echo.

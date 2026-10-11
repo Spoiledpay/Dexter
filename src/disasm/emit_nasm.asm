@@ -114,18 +114,24 @@ dex_emit_label:
     mov r12, rdx
     lea rdx, [rel s_label_pre]
     mov rcx, rbx
+    sub rsp, 32
     call asmbuf_append_str
+    add rsp, 32
     test eax, eax
     jnz .fail_l
     mov rcx, rbx
     mov rdx, r12
     xor r8d, r8d
+    sub rsp, 32
     call asmbuf_append_u64_hex
+    add rsp, 32
     test eax, eax
     jnz .fail_l
     lea rdx, [rel s_colon_nl]
     mov rcx, rbx
+    sub rsp, 32
     call asmbuf_append_str
+    add rsp, 32
 .fail_l:
     add rsp, 40
     pop r13

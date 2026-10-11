@@ -882,3 +882,9 @@ Onde paramos (ponto exato):
   ([12b]/[13], mesma raiz). Retomada em `docs/SESSAO-2026-10-07-R64.md`.
 - Próximo código: fechar R-6.4.3 (caçar AV §4 da sessão), depois R-6.5
   resto (`-emit`), R-3.3/R-4.5, tag. Opção C (IR otimizável) futura.
+- ATUALIZAÇÃO 2026-10-11: R-6.4.3 FECHADA (Dexter 1.2.181, suíte 95/95).
+  Causa: colisão de slots `[rbp-96]`/`[rbp-100]` em `.wds_chunks`
+  (fix: `img`→`[rbp-104]`); `[13]` verde, `[14]`/`[15]` criados,
+  goldens `ref_native/` regenerados. Detalhe:
+  `docs/SESSAO-2026-10-11-R643.md`. Próximo: R-6.5 resto, R-3.3/R-4.5
+  (docs finais), tag, e Fase 3 do `marco.md` (views + JSON mínimo).

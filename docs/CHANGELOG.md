@@ -2,6 +2,32 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-6.4 fatia 3 FECHADA (2026-10-11)
+
+### Corrigido (causa raiz do AV `-native`, com reproduzir→fix→suíte 95/95)
+
+- Colisão de slots em `.wds_chunks` (`src/gen/rebuild.asm`): `img` em
+  `[rbp-100]` × `va` em `[rbp-96]` (2 qwords a 4 bytes) corrompiam-se
+  mutuamente; `img` selvagem (`r8=-1`) chegava a `dex_emit_imp_label`
+  e falhava em `mov rax,[r13+0x10]` (`0xC0000005`, RIP=imp_label+24,
+  fault `-1` — provado via VEH temporário já removido + `.lst` +
+  dissecção por inputs: binário sem alvos R passa, com R e sem imports
+  crasha). Fix: `img` → `[rbp-104]` (3 linhas; regra nova D-13).
+- Shadow space em `dex_emit_label` (`src/disasm/emit_nasm.asm`, 3 sites —
+  checklist §6; era benigno, agora conforme).
+- `[13]`: expectativas no formato real `__imp_<dll>_<func>`
+  (`_dll_` de `.dll` sanitizado; `jmp` p/ thunks do hello, `call` p/
+  var64). Goldens `tests/ref_native/` regenerados p/ saída fatia 3
+  (`lea [rel label_]` + `call|jmp [rel __imp_X]` nativos, round-trips
+  provados).
+
+### Adicionado
+
+- `[14]` (`tests/imp_check.asm`: HIT/MISS) + `[15]`
+  (`tests/sym_check.asm`: golden `SYM n=5 v=1000 1500 2000 2A00 3100`,
+  paga D-3) na suíte. R-split observado de verdade
+  (`label_140002008:` no hello `-native`).
+
 ## [Unreleased] — R-6.4 fatia 3 (IAT) EM ANDAMENTO, BLOQUEADA (2026-10-07)
 
 ### Adicionado (funcionando isolado, sem efeito fim-a-fim ainda)

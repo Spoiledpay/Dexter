@@ -145,13 +145,18 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   nos 5 + `tests/ref_native/`) + R-labels (2b: `symtab_to_sorted`
   Shellsort + split da emissão de dados nos alvos R + run-degrade p/
   `-strings`; `lea rdx, [rel label_...]` nativo com round-trip no corpus
-  simples; `[12b]` na suíte; suite 75/75). FATIA 3 (rewrite IAT)
-  EM ANDAMENTO, BLOQUEADA em 2026-10-07: walker emite `call|jmp [rel
-  __imp_X]` (provado 1×) + `dex_emit_imp_label` no `.idata` (driver
-  `tests/imp_check.asm` verde isolado), mas generate `-native` com
-  conteúdo dá AV (`0xC0000005`, sem `.asm`; db/bin intactos).
-  Detalhe e plano em `docs/SESSAO-2026-10-07-R64.md` §3–§4.
-  Suite: 67 passam, 13 falham ([12b]/[13], mesma raiz).
+   simples; `[12b]` na suíte; suite 75/75). FATIA 3 (rewrite IAT)
+   FECHADA em 2026-10-11: causa raiz do AV era colisão de slots em
+   `.wds_chunks` (`img` em `[rbp-100]` × `va` em `[rbp-96]`: 2 qwords
+   a 4 bytes, corrupção mútua; `img` selvagem chegava a
+   `dex_emit_imp_label` como `r8=-1`, fault em `mov rax,[r13+0x10]`,
+   provado via VEH temporário (já removido) + `.lst` + dissecção por
+   inputs (tiny2 sem R passa, tiny3 com R e sem imports crasha).
+   Fix (3 linhas): `img` → `[rbp-104]`; junto: shadow em
+   `dex_emit_label` (checklist §6), goldens `ref_native/` regenerados
+   p/ saída fatia 3, `[13]` no formato real `__imp_<dll>_<func>` e
+   `[14]`(imp)+`[15]`(sym) criados. Suite: 95/95 OK (1.2.181).
+   Detalhe em `docs/SESSAO-2026-10-11-R643.md`.
 - [x] R-6.5 Flags (parcial): `-native` (A) pronto em R-6.1; `-ast-dump`
   pronto (parse-back do `.asm` gerado via `dex_parse_asm` +
   `dex_ast_dump` em stdout, geração byte-idêntica; `[10]` na suíte);
@@ -236,7 +241,13 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   IGNORA crash (AV é negativo: falso "OK" + skips silenciosos) — usar
   `if !errorlevel! NEQ 0` em toda checagem de saída do dexter;
   VEH temporário p/ RIP exato vai em `tools/` + hook mínimo (REMOVER
-  tudo depois; nunca retornar CONTINUE_SEARCH — sair via ExitProcess);
-  sondas que chamam print corrompem a medição se usarem regs vivos
-  (`write` usa `r9`!); `select` sem newline é ambíguo; não confiar em
-  memória de configs de bisect — re-verificar o estado real (`grep`).
+   tudo depois; nunca retornar CONTINUE_SEARCH — sair via ExitProcess);
+   sondas que chamam print corrompem a medição se usarem regs vivos
+   (`write` usa `r9`!); `select` sem newline é ambíguo; não confiar em
+   memória de configs de bisect — re-verificar o estado real (`grep`).
+- D-13 Regra de slots qword (2026-10-11, bug real R-6.4.3: `[rbp-96]`/`[rbp-100]`
+   a 4 bytes no `.wds_chunks` corrompiam `va`/`img` mutuamente → AV em
+   `dex_emit_imp_label`): slots qword SEMPRE em múltiplos de 8 dentro da
+   área (`-72,-80,-88,-96,-104`, nunca `-100`); ao revisar frame, listar
+   todos os `[rbp-N]` e conferir pares com |Δ|<8; desconfiar de `mov`
+   com disp8 `9C`/`A0` adjacentes no `.lst`.

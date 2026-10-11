@@ -132,7 +132,7 @@ fc /b original.exe clone.exe
 **Testar tudo de uma vez:**
 
 ```bat
-tests\run_tests.bat         &:: rápido: 42 checagens (saída 0 = tudo OK)
+tests\run_tests.bat         &:: rápido: 95 checagens (saída 0 = tudo OK)
 tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 ```
 
@@ -184,11 +184,12 @@ tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
   `clean.bat`, `tests\run_tests.bat` (rápido), `tests\run_slow.bat` (68 MB).
 - Convenção de commits: Conventional Commits + `Refs:` + `Testes:`.
 
-## 11. Fase 6 — AST / Lexer / Código nativo (R-6.1 pronto)
+## 11. Fase 6 — AST / Lexer / Código nativo (R-6.4 fechado)
 
-Onde estamos (2026-10-07): `-native` emite mnemônicos reais com
+Onde estamos (2026-10-11): `-native` emite mnemônicos reais com
 round-trip provado no corpus simples (`hello`, `tiny`, `loop`,
-`strings`, `no_relocs`); `db` continua o default fiel.
+`strings`, `no_relocs`) + rewrite IAT (`call|jmp [rel __imp_X]`,
+R-6.4.3 fechado); `db` continua o default fiel.
 
 Plano (incremental, `db` continua default):
 
@@ -199,7 +200,7 @@ Plano (incremental, `db` continua default):
   `src/front/lexer.asm` (`dex_lex_one`) + `parser.asm` + `ast.asm` →
   `Func → Blocos (CFG) → Instr → Op`; `out\dexter.exe app.exe -o
   app.asm -ast-dump` imprime o resumo da AST do `.asm` gerado.
-* **C — lift+codegen (R-6.4+, futura):** `src/back/lift.asm` + `codegen.asm`;
-  só aqui o rewrite `call [rel __imp_X]` volta (R-3.3/R-4.5).
+* **C — lift+codegen (R-6.4 FECHADO):** `src/back/lift.asm` + `codegen.asm`;
+  rewrite `call [rel __imp_X]` ativo (R-3.3/R-4.5 pagos aqui).
 
 Ver `docs/adr/0001-ast-lexer-codegen.md` e `docs/ROADMAP.md` R-6.x.
