@@ -48,7 +48,7 @@ De quebra, os labels `__imp_` "faltantes" (D-A aparente) e os goldens
 - [x] 1.5 `[13]` IAT verde (hello/var64/no_relocs)
 - [x] 1.6 `[14]` (imp_check) + `[15]` (sym_check) criados na suíte
 - [x] 1.7 Suite 100% OK + docs (ROADMAP/CHANGELOG/REVISAO/marco.md)
-- [ ] 1.8 Commit + tag (aguardando ordem explícita)
+- [x] 1.8 Commit + tag (aguardando ordem explícita)
 
 ## 4. Fase 2 — IAT nativo R-3.3/R-4.5
 
