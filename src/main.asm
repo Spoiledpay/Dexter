@@ -36,6 +36,7 @@ extern dex_console_print_u64hex
 extern dex_console_print_u64dec
 extern dex_console_newline
 extern dex_strlen
+extern dex_overview
 
 section .rodata
 s_usage    db "Uso: dexter <input.exe> [opcoes]  (-h para ajuda)", 13, 10, 0
@@ -167,6 +168,17 @@ main:
     call dex_pe_parse_relocs
     add rsp, 32
 .skip_rel:
+    ; overview? (inspect-only: imprime e sai 0, ignora -q/generate/rebuild)
+    mov eax, [rel g_cfg+DexConfig.flags]
+    test eax, DF_OVERVIEW
+    jz .no_overview
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    sub rsp, 32
+    call dex_overview
+    add rsp, 32
+    jmp .done_ok
+.no_overview:
     ; verbose? (respeita -q: silêncio total)
     mov eax, [rel g_cfg+DexConfig.quiet]
     test eax, eax

@@ -179,6 +179,25 @@ Regra de transição (zero regressão): `db` continua o default; `-native`
 é opt-in; `tests\run_tests.bat` deve continuar 100% OK com e sem `-native`
 no corpus simples; PEs complexos continuam em `-m bin`.
 
+## Fase 7 — Views + JSON mínimo (estilo REA, opt-in, inspect-only)
+
+> Acompanhamento fino em `marco.md` §5. Primeira entrega em 2026-10-11.
+
+- [x] R-7.1 `-overview`/`-json` (`src/diag/overview.asm`,
+  `dex_overview(cfg,img) → 0`, `DF_OVERVIEW`/`DF_JSON`): inspect-only
+  (nunca escreve `.asm`, ignora `-r`; `-q` não suprime, como
+  `-ast-dump`); texto no vocabulário do `-v` + JSON compacto de 1
+  linha (todos os imports sem cap silencioso, escapes `"`/`\`,
+  controle→`?` com cap 255 de dst, hex como string, counts decimais);
+  `[16]` na suíte (texto/json/inspect-only/`imports_count`=14 no
+  var64). Limite honesto: imports por ordinal (`func` vazio) sem
+  cobertura no corpus atual.
+- [ ] R-7.2 `-func/-xrefs/-trace` (sobre `target_va`, `truncated:true`
+  honesto)
+- [ ] R-7.3 `-rsrc` (inspetor PE resources, 3 níveis, fail explícito)
+- [ ] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout)
+- [ ] R-7.5 `--doctor` (nasm/link/kernel32/versão)
+
 ## Dívida técnica conhecida (honesta, com ID)
 
 - D-1 `docs/adr/` ainda sem ADRs numerados (decisões estão em ARQUITETURA;

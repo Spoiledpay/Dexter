@@ -27,6 +27,8 @@
 %define DF_VERBOSE2     0x0080
 %define DF_NATIVE       0x0100
 %define DF_ASTDUMP      0x0200
+%define DF_OVERVIEW     0x0400
+%define DF_JSON         0x0800
 
 ; ---- DexConfig.mode ----
 %define DEX_MODE_WIN64   0

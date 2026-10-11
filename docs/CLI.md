@@ -35,6 +35,8 @@ Versão atual sempre via `-ver` (lida de `version.bin` no build;
 | `-no-imports` | Não processa imports (afeta `-v`; rebuild por cópia não precisa deles) |
 | `-no-relocs` | Não processa relocs e **omite a seção `.reloc`** do `.asm` |
 | `-strings` | Runs ASCII ≥8 + NUL em dados viram `db "...", 0` |
+| `-overview` | (inspect-only) resumo do PE em stdout (base, entry, seções, imports/exports/relocs); não escreve `.asm`, ignora `-r`; `-q` não suprime |
+| `-json` | Com `-overview`: mesma informação em JSON compacto (1 linha, chaves estáveis, hex como string, counts decimais); sozinho é ignorado |
 | `-native` | (R-6.1, opt-in) emite mnemônicos reais (`mov rax, rbx`, `[rel label]`) via `dex_emit_native` quando possível, com tamanho byte-exato garantido (`strict`, regras de forma); fallback `db` byte-exato quando não (inclui refs RIP/REL p/ dados, sem labels); default desligado (= `db` atual). Round-trip provado no corpus simples |
 | `-ast-dump` | (R-6.5, opt-in) após gerar o `.asm`, faz parse-back em memória e imprime em stdout o resumo `AST funcs=F blocks=B instrs=I succs=S db=D equ=E dir=R` (mesmo formato do golden de `tests/ast_check.asm`); a geração do `.asm` é inalterada (byte-idêntica com/sem a flag); falha de parse (`.asm` >16 MB ou OOM) = aviso em stderr, nunca erro (respeita `-q`) |
 
@@ -69,4 +71,13 @@ dexter.exe app.exe -o app.asm -hex -v
 dexter.exe app.exe -o app.asm -r -O app_rebuild.exe
 dexter.exe app.exe -o app.asm -m bin -r -O app_bin.exe
 dexter.exe app.exe -s .text -start 0x1000 -end 0x2000
+dexter.exe app.exe -overview -json -q
 ```
+
+Chaves do JSON (`-overview -json`): `tool`, `version`, `image_base`,
+`entry_rva`, `num_sections`, `sections[]` (`name`, `vaddr`, `vsize`,
+`raw_size`), `imports_count`, `imports[]` (`dll`, `func` — vazio se
+ordinal — `ordinal`, `is_ordinal`, `iat_rva`), `exports_count`,
+`relocs_count`. Nomes com escape `"`/`\` (controle vira `?`, cap 255).
+Limitação honesta: imports por ordinal não têm cobertura no corpus
+atual (nenhum binário de teste usa).

@@ -44,6 +44,8 @@ s_help_txt:
     db "  -strings               Detecta strings e cria bloco db", 13, 10
     db "  -native                Emite mnemonicos reais (fallback db)", 13, 10
     db "  -ast-dump              Imprime resumo AST do .asm em stdout", 13, 10
+    db "  -overview              Resumo do PE em stdout (inspect-only)", 13, 10
+    db "  -json                  Com -overview: saida JSON maquina", 13, 10
     db 13, 10
     db "Diagnostico:", 13, 10
     db "  -v                     Verbose (nivel 1)", 13, 10

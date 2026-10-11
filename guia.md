@@ -81,6 +81,8 @@ out\dexter.exe app.exe -o app.asm -r -O novo.exe -N C:\outro\nasm.exe -L C:\outr
 out\dexter.exe app.exe -o app.asm -no-relocs   &:: omite a seção .reloc
 out\dexter.exe app.exe -o app.asm -no-imports  &:: pula parse de imports
 out\dexter.exe app.exe -o app.asm -q            &:: silencioso (só erros)
+out\dexter.exe app.exe -overview               &:: resumo inspect-only (sem .asm)
+out\dexter.exe app.exe -overview -json -q      &:: resumo em JSON máquina
 ```
 
 Códigos de retorno: `0` ok · `1` uso incorreto · `2` erro de I/O ·
@@ -132,7 +134,7 @@ fc /b original.exe clone.exe
 **Testar tudo de uma vez:**
 
 ```bat
-tests\run_tests.bat         &:: rápido: 95 checagens (saída 0 = tudo OK)
+tests\run_tests.bat         &:: rápido: 106 checagens (saída 0 = tudo OK)
 tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 ```
 

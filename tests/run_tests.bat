@@ -321,6 +321,30 @@ if exist tests\out\sym_check.exe (
     if errorlevel 1 ( echo "  FALHA: golden SYM" & set /a FAIL+=1 ) else ( echo "  OK: golden SYM" & set /a PASS+=1 )
 )
 
+echo === [16] -overview (texto + -json, inspect-only) ===
+"%DX%" tests\hello.exe -overview > tests\out\ov.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -overview exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -overview exit 0" & set /a PASS+=1 )
+findstr /c:"ImageBase:" tests\out\ov.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem ImageBase" & set /a FAIL+=1 ) else ( echo "  OK: ImageBase" & set /a PASS+=1 )
+findstr /c:"KERNEL32" tests\out\ov.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem imports no texto" & set /a FAIL+=1 ) else ( echo "  OK: imports no texto" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -overview -json > tests\out\ovj.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -overview -json exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -overview -json exit 0" & set /a PASS+=1 )
+findstr /c:"\"image_base\":\"0x140000000\"" tests\out\ovj.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem image_base no json" & set /a FAIL+=1 ) else ( echo "  OK: image_base no json" & set /a PASS+=1 )
+findstr /c:"\"func\":\"ExitProcess\"" tests\out\ovj.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem func no json" & set /a FAIL+=1 ) else ( echo "  OK: func no json" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -overview -q > tests\out\ovq.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -overview -q exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -overview -q exit 0" & set /a PASS+=1 )
+findstr /c:"ImageBase:" tests\out\ovq.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -q suprimiu overview" & set /a FAIL+=1 ) else ( echo "  OK: -q nao suprime" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -overview -o tests\out\should_not_exist.asm -q >nul 2>&1
+if exist tests\out\should_not_exist.asm ( echo "  FALHA: overview escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )
+"%DX%" tests\var64.exe -overview -json -q > tests\out\ovv.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: overview var64 exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: overview var64 exit 0" & set /a PASS+=1 )
+findstr /c:"\"imports_count\":14" tests\out\ovv.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: imports_count!=14" & set /a FAIL+=1 ) else ( echo "  OK: imports_count=14" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

@@ -39,6 +39,8 @@ s_norelocs    db "-no-relocs", 0
 s_strings     db "-strings", 0
 s_native      db "-native", 0
 s_astdump     db "-ast-dump", 0
+s_overview    db "-overview", 0
+s_json        db "-json", 0
 s_v           db "-v", 0
 s_vv          db "-vv", 0
 s_q           db "-q", 0
@@ -470,6 +472,16 @@ dex_parse_args:
     call .eq
     test eax, eax
     jnz .c_astdump
+    lea rcx, [rel s_overview]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_overview
+    lea rcx, [rel s_json]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_json
     lea rcx, [rel s_v]
     mov rdx, rbx
     call .eq
@@ -796,6 +808,28 @@ dex_parse_args:
     ret
 .c_astdump:
     or dword [r15+DexConfig.flags], DF_ASTDUMP
+    mov rdx, r12
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_overview:
+    or dword [r15+DexConfig.flags], DF_OVERVIEW
+    mov rdx, r12
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_json:
+    or dword [r15+DexConfig.flags], DF_JSON
     mov rdx, r12
     xor eax, eax
     add rsp, 48

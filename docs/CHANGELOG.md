@@ -2,6 +2,17 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-7.1 `-overview`/`-json` (2026-10-11)
+
+### Adicionado
+
+- `src/diag/overview.asm` (`dex_overview(cfg,img) → 0`, sem heap, só
+  stack 256B + escapes com budget): `-overview` inspect-only (texto no
+  vocabulário do `-v`) + `-json` (objeto compacto, validado via
+  `ConvertFrom-Json`: hello 3 seções/3 imports, var64 11/14, gcc
+  10/224); `-q` não suprime; PE inválido continua saída 3; seção
+  `[16]` (11 checks) na suíte. Limite honesto: ordinal sem corpus.
+
 ## [Unreleased] — R-6.4 fatia 3 FECHADA (2026-10-11)
 
 ### Corrigido (causa raiz do AV `-native`, com reproduzir→fix→suíte 95/95)
