@@ -45,6 +45,7 @@ s_func        db "-func", 0
 s_xrefs       db "-xrefs", 0
 s_trace       db "-trace", 0
 s_depth       db "-depth", 0
+s_rsrc        db "-rsrc", 0
 s_v           db "-v", 0
 s_vv          db "-vv", 0
 s_q           db "-q", 0
@@ -507,6 +508,11 @@ dex_parse_args:
     call .eq
     test eax, eax
     jnz .c_depth
+    lea rcx, [rel s_rsrc]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_rsrc
     lea rcx, [rel s_v]
     mov rdx, rbx
     call .eq
@@ -1051,6 +1057,17 @@ dex_parse_args:
     call dex_console_print_err
     add rsp, 32
     mov eax, 1
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_rsrc:
+    or dword [r15+DexConfig.flags], DF_RSRC
+    mov rdx, r12
+    xor eax, eax
     add rsp, 48
     pop r12
     pop r14

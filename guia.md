@@ -86,6 +86,7 @@ out\dexter.exe app.exe -overview -json -q      &:: resumo em JSON máquina
 out\dexter.exe app.exe -func 0x140001000       &:: dossiê da função
 out\dexter.exe app.exe -xrefs 0x140002000 -json &:: quem referencia o endereço
 out\dexter.exe app.exe -trace 0x140001000      &:: cadeia de calls
+out\dexter.exe app.exe -rsrc -json -q          &:: inventário de recursos
 ```
 
 Códigos de retorno: `0` ok · `1` uso incorreto · `2` erro de I/O ·
@@ -137,7 +138,7 @@ fc /b original.exe clone.exe
 **Testar tudo de uma vez:**
 
 ```bat
-tests\run_tests.bat         &:: rápido: 124 checagens (saída 0 = tudo OK)
+tests\run_tests.bat         &:: rápido: 140 checagens (saída 0 = tudo OK)
 tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 ```
 

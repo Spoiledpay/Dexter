@@ -41,6 +41,7 @@ Versão atual sempre via `-ver` (lida de `version.bin` no build;
 | `-xrefs <VA>` | (inspect-only) quem referencia VA: `call`/`jmp`/`branch` (via `target_va`) + `data` (RIP-rel); cap 256 com `truncated` honesto |
 | `-trace <VA>` | (inspect-only) cadeia de calls (first-call DFS até `-depth`); `end` ∈ `leaf/import/cycle/depth/outside` + `truncated`; jmp-out p/ import registra aresta |
 | `-depth <N>` | Profundidade do `-trace` (1..64 em hex `0x..`, padrão 8) |
+| `-rsrc` | (inspect-only) inventário de recursos PE em 3 níveis (tipo/nome/idioma); vazio honesto se ausente; corrompido → saída 3 |
 | `-native` | (R-6.1, opt-in) emite mnemônicos reais (`mov rax, rbx`, `[rel label]`) via `dex_emit_native` quando possível, com tamanho byte-exato garantido (`strict`, regras de forma); fallback `db` byte-exato quando não (inclui refs RIP/REL p/ dados, sem labels); default desligado (= `db` atual). Round-trip provado no corpus simples |
 | `-ast-dump` | (R-6.5, opt-in) após gerar o `.asm`, faz parse-back em memória e imprime em stdout o resumo `AST funcs=F blocks=B instrs=I succs=S db=D equ=E dir=R` (mesmo formato do golden de `tests/ast_check.asm`); a geração do `.asm` é inalterada (byte-idêntica com/sem a flag); falha de parse (`.asm` >16 MB ou OOM) = aviso em stderr, nunca erro (respeita `-q`) |
 
@@ -102,3 +103,13 @@ Endereços sempre em hex `0x...` (absolutos, VAs). Todas as queries
 são inspect-only (nunca escrevem `.asm`, ignoram `-r`; `-q` não
 suprime o pedido explícito) e nunca retornam erro por conteúdo
 (lista vazia / `found:false` / `leaf` em vez de crash).
+
+Chaves do `-rsrc -json`: `tool`, `version`, `count`,
+`resources[]` (`type` número ou `-1` se nomeado, `type_str`,
+`name` número ou `-1`, `name_str`, `lang` número ou `-1`,
+`lang_str`, `size`/`rva`/`offset` como strings `0x..`,
+`codepage`). Texto: `  /tipo/nome/idioma size=0x.. rva=0x..
+off=0x..` (nomes entre `"..."` com escape). Diretório ausente =
+inventário vazio (saída 0); malformado (fora de limites, forma
+inválida, payload não-mapeado, dir > 4MB) = saída 3 com motivo em
+stderr. Duplicatas de irmãos são listadas (anomalia visível).

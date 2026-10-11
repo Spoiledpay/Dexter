@@ -2,6 +2,27 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-7.3 `-rsrc` (2026-10-11)
+
+### Adicionado
+
+- `src/pe/pe_resources.asm` (`dex_rsrc_list(cfg,img) → 0|3`, sem
+  heap): inventário 3 níveis (tipo/nome/idioma, numéricos ou UTF-16
+  com escape `"`/`\`, controle→`?`, cap 255), teto dir 4MB, sem
+  recursão; vazio honesto se ausente; saída 3 com motivo em stderr
+  se malformado; duplicatas listadas (desvio documentado do REA);
+  flag `-rsrc` + hook inspect-only (precedência overview > rsrc >
+  func > xrefs > trace) + ajuda + seção `[18]` (16 checks: gcc
+  manifest, ld.lld version, vazio, 2 corrompidos, inspect-only).
+
+### Corrigido (bugs reais no próprio módulo, todos reproduzidos)
+
+- Slot `[rbp-416+8]` colidia com `[rbp-408]` (=c2): loop corria 33M
+  vezes até falhar (D-13); slots isolados (foff/cp/dsize).
+- Leitura qword de campo dword (`drva` puxava `size` junto: RVA
+  `0x147001FB058`); bounds comparavam offset com ponteiro
+  (vacuosos); checagem `foff+dsize` ausente; vírgula JSON invertida.
+
 ## [Unreleased] — R-7.2 `-func`/`-xrefs`/`-trace` (2026-10-11)
 
 ### Adicionado

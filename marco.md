@@ -64,7 +64,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] `-overview` (base/entry/seções/imports/exports/relocs, texto + `--json`)
 - [x] `-func <VA>` / `-xrefs <VA>` / `-trace <VA>` (sobre `target_va`, com `truncated:true` honesto)
 - [ ] `-strings` ampliado (refs em code-flow viram labels)
-- [ ] `-rsrc` (inspetor PE resources, 3 níveis type/name/lang, fail explícito, nunca parcial silencioso)
+- [x] `-rsrc` (inspect_pe_resources: type/name/language + payload validado)
 - [ ] `-snapshot` / `-compare a.exe b.exe` (hash FNV-1a + size + layout)
 - [ ] `dexter --doctor` (nasm/link/kernel32/versão)
 - [ ] Goldens na suíte + geração byte-idêntica com/sem flag

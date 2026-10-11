@@ -205,7 +205,15 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   com 1 ref; regra D-8), ponteiro sec morto por `mov eax,[rax+..]`
   (mesma classe do fix R-6.1 `.l1_mv_regfirst`), branch `je`↔`jne`
   invertido no trace, colisão `[rbp-96]`=endcode×entry-spill (D-13).
-- [ ] R-7.3 `-rsrc` (inspetor PE resources, 3 níveis, fail explícito)
+- [x] R-7.3 `-rsrc` (`src/pe/pe_resources.asm`, `dex_rsrc_list`):
+  inventário 3 níveis (tipo/nome/idioma, numéricos ou UTF-16 com
+  escape), sem heap, sem recursão (ciclos impossíveis), teto 4MB;
+  vazio honesto se ausente, saída 3 explícita se malformado;
+  duplicatas listadas (desvio documentado do REA); `[18]` na suíte
+  (gcc manifest `24/1/1033`, ld.lld version `16/1/1033`, vazio,
+  2 corrompidos, inspect-only) + fuzz manual (subdir/data/nome:
+  só 3 ou saída honesta, nunca crash/hang).
+- [ ] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout)
 - [ ] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout)
 - [ ] R-7.5 `--doctor` (nasm/link/kernel32/versão)
 

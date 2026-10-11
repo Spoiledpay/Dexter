@@ -32,6 +32,7 @@
 %define DF_FUNC         0x1000
 %define DF_XREFS        0x2000
 %define DF_TRACE        0x4000
+%define DF_RSRC         0x8000
 
 ; ---- DexConfig.mode ----
 %define DEX_MODE_WIN64   0

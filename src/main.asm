@@ -40,11 +40,13 @@ extern dex_overview
 extern dex_func
 extern dex_xrefs
 extern dex_trace
+extern dex_rsrc_list
 
 section .rodata
 s_usage    db "Uso: dexter <input.exe> [opcoes]  (-h para ajuda)", 13, 10, 0
 s_err_io   db "dexter: cannot open/read input file", 13, 10, 0
 s_err_pe   db "dexter: invalid or unsupported PE file", 13, 10, 0
+s_err_rsrc db "dexter: corrupt resource directory", 13, 10, 0
 s_err_gen  db "dexter: failed to generate asm", 13, 10, 0
 s_ok_gen   db "OK: asm written", 13, 10, 0
 s_ok_rb    db "OK: rebuild done", 13, 10, 0
@@ -182,7 +184,20 @@ main:
     add rsp, 32
     jmp .done_ok
 .no_overview:
-    ; queries? (inspect-only: roda cada flag pedida, depois sai 0)
+    ; queries? (inspect-only: precedência overview > rsrc > func > xrefs
+    ; > trace; cada uma sai 0 após rodar)
+    mov eax, [rel g_cfg+DexConfig.flags]
+    test eax, DF_RSRC
+    jz .q_no_rsrc
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    sub rsp, 32
+    call dex_rsrc_list
+    add rsp, 32
+    test eax, eax
+    jnz .err_rsrc_um
+    jmp .done_ok
+.q_no_rsrc:
     mov eax, [rel g_cfg+DexConfig.flags]
     test eax, DF_FUNC
     jz .q_no_func
@@ -321,6 +336,21 @@ main:
     call dex_close
     add rsp, 32
     lea rcx, [rel s_err_pe]
+    sub rsp, 32
+    call dex_console_print_err
+    add rsp, 32
+    mov ecx, 3
+    call ExitProcess
+.err_rsrc_um:
+    mov rcx, r13
+    sub rsp, 32
+    call dex_unmap
+    add rsp, 32
+    mov rcx, rbx
+    sub rsp, 32
+    call dex_close
+    add rsp, 32
+    lea rcx, [rel s_err_rsrc]
     sub rsp, 32
     call dex_console_print_err
     add rsp, 32

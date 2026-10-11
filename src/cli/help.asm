@@ -50,6 +50,7 @@ s_help_txt:
     db "  -xrefs <VA>            Quem referencia VA (call/jmp/branch/data)", 13, 10
     db "  -trace <VA>            Cadeia de calls (first-call DFS, -depth)", 13, 10
     db "  -depth <N>             Profundidade do -trace (1..64, padrao 8)", 13, 10
+    db "  -rsrc                  Inventario de recursos PE (3 niveis)", 13, 10
     db 13, 10
     db "Diagnostico:", 13, 10
     db "  -v                     Verbose (nivel 1)", 13, 10

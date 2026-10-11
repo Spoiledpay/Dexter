@@ -383,6 +383,42 @@ if errorlevel 1 ( echo "  FALHA: sem chain no json" & set /a FAIL+=1 ) else ( ec
 "%DX%" tests\hello.exe -func 0x140001000 -o tests\out\should_not2.asm -q >nul 2>&1
 if exist tests\out\should_not2.asm ( echo "  FALHA: query escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: query inspect-only" & set /a PASS+=1 )
 
+echo === [18] -rsrc (inventario de recursos PE) ===
+"%DX%" tests\gcc.exe -rsrc -q > tests\out\rsrc.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -rsrc gcc exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -rsrc gcc exit 0" & set /a PASS+=1 )
+findstr /c:"/24/1/1033" tests\out\rsrc.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem manifest 24/1/1033" & set /a FAIL+=1 ) else ( echo "  OK: manifest 24/1/1033" & set /a PASS+=1 )
+findstr /c:"size=0x147" tests\out\rsrc.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem size 147" & set /a FAIL+=1 ) else ( echo "  OK: size 147" & set /a PASS+=1 )
+"%DX%" tests\gcc.exe -rsrc -json -q > tests\out\rsrcj.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -rsrc -json exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -rsrc -json exit 0" & set /a PASS+=1 )
+findstr /c:"\"type\":24" tests\out\rsrcj.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem type 24" & set /a FAIL+=1 ) else ( echo "  OK: type 24" & set /a PASS+=1 )
+findstr /c:"\"size\":\"0x147\"" tests\out\rsrcj.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem size no json" & set /a FAIL+=1 ) else ( echo "  OK: size no json" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -rsrc -q > tests\out\rsrce.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -rsrc vazio exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -rsrc vazio exit 0" & set /a PASS+=1 )
+findstr /c:"Resources: 0" tests\out\rsrce.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem inventario vazio" & set /a FAIL+=1 ) else ( echo "  OK: inventario vazio" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -rsrc -json -q > tests\out\rsrcej.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -rsrc -json vazio exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -rsrc -json vazio exit 0" & set /a PASS+=1 )
+findstr /c:"\"count\":0" tests\out\rsrcej.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: count!=0" & set /a FAIL+=1 ) else ( echo "  OK: count 0" & set /a PASS+=1 )
+"%DX%" tests\ld.lld.exe -rsrc -q > tests\out\rsrcld.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -rsrc ld.lld exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -rsrc ld.lld exit 0" & set /a PASS+=1 )
+findstr /c:"/16/1/1033" tests\out\rsrcld.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem version 16/1/1033" & set /a FAIL+=1 ) else ( echo "  OK: version 16/1/1033" & set /a PASS+=1 )
+powershell -NoProfile -Command "$b=[IO.File]::ReadAllBytes('tests\gcc.exe'); [IO.File]::WriteAllBytes('tests\out\corrupt_rsrc.exe', $b); $b[0x1F184C]=0x00; $b[0x1F184D]=0xFF; $b[0x1F184E]=0xFF; $b[0x1F184F]=0xFF; [IO.File]::WriteAllBytes('tests\out\corrupt_rsrc.exe', $b)"
+"%DX%" tests\out\corrupt_rsrc.exe -rsrc -q > tests\out\corrupt.out 2>&1
+if !errorlevel! EQU 3 ( echo "  OK: size gigante rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 3" & set /a FAIL+=1 )
+findstr /c:"resource" tests\out\corrupt.out >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem motivo resource" & set /a FAIL+=1 ) else ( echo "  OK: motivo resource" & set /a PASS+=1 )
+powershell -NoProfile -Command "$b=[IO.File]::ReadAllBytes('tests\gcc.exe'); $b[0x1F180E]=99; [IO.File]::WriteAllBytes('tests\out\corrupt_rsrc2.exe', $b)"
+"%DX%" tests\out\corrupt_rsrc2.exe -rsrc -q > tests\out\corrupt2.out 2>&1
+if !errorlevel! EQU 3 ( echo "  OK: count inflado rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 3" & set /a FAIL+=1 )
+"%DX%" tests\gcc.exe -rsrc -o tests\out\should_not3.asm -q >nul 2>&1
+if exist tests\out\should_not3.asm ( echo "  FALHA: rsrc escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: rsrc inspect-only" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
