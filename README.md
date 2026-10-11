@@ -22,7 +22,7 @@ out\dexter.exe tests\hello.exe -o tests\out\hello.asm -r -O tests\out\hello_rt.e
 tests\out\hello_rt.exe            &:: imprime "hi"
 out\dexter.exe tests\var64.exe -o tests\out\var64_bin.asm -m bin -r -O tests\out\var64_bin.exe
 fc /b tests\var64.exe tests\out\var64_bin.exe   &:: iguais
-tests\run_tests.bat               &:: suíte completa (106/106)
+tests\run_tests.bat               &:: suíte completa (124/124)
 ```
 
 Flags e códigos de retorno: `docs/CLI.md`. Arquitetura e decisões:
@@ -49,12 +49,13 @@ out/ obj/        artefatos de build (ignorados no git)
 | `tests\var32.exe`, `tests\link.exe` | 32-bit — rejeição limpa (saída 3) |
 | `tests\for.exe` | `Magic=0` — rejeição limpa (saída 3); **não executar sem timeout** |
 
-## Estado atual (v1.2.182 + R-6.4 fechado + R-7.1)
+## Estado atual (v1.2.186 + R-6.4 fechado + R-7.2)
 
-- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 106/106 OK
+- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 124/124 OK
   (R-6.4.3 fechado em 2026-10-11 — ver
   `docs/SESSAO-2026-10-11-R643.md`).
 - [x] R-7.1: `-overview`/`-json` inspect-only (texto + JSON validado).
+- [x] R-7.2: `-func`/`-xrefs`/`-trace` (+`-depth`) inspect-only.
 - [x] R-6.4 fatias 1–3: lift (`DexIR`) + codegen (rollback) + R-labels
   (`lea [rel label_]` nativo com round-trip) + rewrite IAT
   (`call|jmp [rel __imp_X]` + labels, round-trip) + drivers de teste.

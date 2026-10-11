@@ -345,6 +345,44 @@ if !errorlevel! NEQ 0 ( echo "  FALHA: overview var64 exit!=0" & set /a FAIL+=1 
 findstr /c:"\"imports_count\":14" tests\out\ovv.txt >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: imports_count!=14" & set /a FAIL+=1 ) else ( echo "  OK: imports_count=14" & set /a PASS+=1 )
 
+echo === [17] -func/-xrefs/-trace (navegacao, inspect-only) ===
+"%DX%" tests\hello.exe -func 0x140001000 > tests\out\fn.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -func exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -func exit 0" & set /a PASS+=1 )
+findstr /c:"Function 0x140001000" tests\out\fn.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem Function" & set /a FAIL+=1 ) else ( echo "  OK: Function" & set /a PASS+=1 )
+findstr /c:"calls" tests\out\fn.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem calls" & set /a FAIL+=1 ) else ( echo "  OK: calls" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -func 0x140001000 -json -q > tests\out\fnj.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -func -json exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -func -json exit 0" & set /a PASS+=1 )
+findstr /c:"\"entry\":\"0x140001000\"" tests\out\fnj.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem entry no json" & set /a FAIL+=1 ) else ( echo "  OK: entry no json" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -func 0x1 -q > tests\out\fnnf.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -func invalido exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -func invalido exit 0" & set /a PASS+=1 )
+findstr /c:"not found" tests\out\fnnf.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem not-found" & set /a FAIL+=1 ) else ( echo "  OK: not-found honesto" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -xrefs 0x140002010 > tests\out\xr.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -xrefs exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -xrefs exit 0" & set /a PASS+=1 )
+findstr /c:"jmp" tests\out\xr.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem ref jmp" & set /a FAIL+=1 ) else ( echo "  OK: ref jmp" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -xrefs 0x140002010 -json -q > tests\out\xrj.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -xrefs -json exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -xrefs -json exit 0" & set /a PASS+=1 )
+findstr /c:"\"kind\":\"jmp\"" tests\out\xrj.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem kind jmp" & set /a FAIL+=1 ) else ( echo "  OK: kind jmp" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -xrefs 0x1 -json -q > tests\out\xre.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -xrefs vazio exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -xrefs vazio exit 0" & set /a PASS+=1 )
+findstr /c:"\"total\":0" tests\out\xre.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: total!=0" & set /a FAIL+=1 ) else ( echo "  OK: total 0" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -trace 0x140001000 > tests\out\tr.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -trace exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -trace exit 0" & set /a PASS+=1 )
+findstr /c:"--call-->" tests\out\tr.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem aresta call" & set /a FAIL+=1 ) else ( echo "  OK: aresta call" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -trace 0x140001000 -json -q > tests\out\trj.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -trace -json exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -trace -json exit 0" & set /a PASS+=1 )
+findstr /c:"\"chain\"" tests\out\trj.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem chain no json" & set /a FAIL+=1 ) else ( echo "  OK: chain no json" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -func 0x140001000 -o tests\out\should_not2.asm -q >nul 2>&1
+if exist tests\out\should_not2.asm ( echo "  FALHA: query escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: query inspect-only" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

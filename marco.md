@@ -62,7 +62,7 @@ De quebra, os labels `__imp_` "faltantes" (D-A aparente) e os goldens
 Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evidence-first (observado × inferido × desconhecido).
 
 - [x] `-overview` (base/entry/seções/imports/exports/relocs, texto + `--json`)
-- [ ] `-func <VA>` / `-xrefs <VA>` / `-trace` (sobre `target_va`, com `truncated:true` honesto)
+- [x] `-func <VA>` / `-xrefs <VA>` / `-trace <VA>` (sobre `target_va`, com `truncated:true` honesto)
 - [ ] `-strings` ampliado (refs em code-flow viram labels)
 - [ ] `-rsrc` (inspetor PE resources, 3 níveis type/name/lang, fail explícito, nunca parcial silencioso)
 - [ ] `-snapshot` / `-compare a.exe b.exe` (hash FNV-1a + size + layout)

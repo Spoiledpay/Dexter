@@ -41,6 +41,10 @@ s_native      db "-native", 0
 s_astdump     db "-ast-dump", 0
 s_overview    db "-overview", 0
 s_json        db "-json", 0
+s_func        db "-func", 0
+s_xrefs       db "-xrefs", 0
+s_trace       db "-trace", 0
+s_depth       db "-depth", 0
 s_v           db "-v", 0
 s_vv          db "-vv", 0
 s_q           db "-q", 0
@@ -60,6 +64,7 @@ e_bad_mode    db "dexter: -m must be win64 or bin", 13, 10, 0
 e_oom         db "dexter: out of memory (args)", 13, 10, 0
 e_bin_mode    db "dexter: -m bin not supported yet (see docs/ROADMAP.md phase 5)", 13, 10, 0
 e_bad_hex     db "dexter: invalid hex value (use 0x...)", 13, 10, 0
+e_bad_depth   db "dexter: -depth must be 1..64 (use 0x...)", 13, 10, 0
 
 section .text
 
@@ -482,6 +487,26 @@ dex_parse_args:
     call .eq
     test eax, eax
     jnz .c_json
+    lea rcx, [rel s_func]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_func
+    lea rcx, [rel s_xrefs]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_xrefs
+    lea rcx, [rel s_trace]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_trace
+    lea rcx, [rel s_depth]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_depth
     lea rcx, [rel s_v]
     mov rdx, rbx
     call .eq
@@ -839,6 +864,101 @@ dex_parse_args:
     pop r15
     pop rbp
     ret
+.c_func:
+    call .next_val
+    test rax, rax
+    jz .c_errval
+    mov [rbp-48], rdx          ; spill cursor (hex parse clobbera rdx)
+    mov rcx, rax
+    sub rsp, 32
+    call dex_parse_hex_u64
+    add rsp, 32
+    test edx, edx
+    jz .c_badhex
+    mov [r15+DexConfig.func_addr], rax
+    mov byte [r15+DexConfig.has_func], 1
+    or dword [r15+DexConfig.flags], DF_FUNC
+    mov rdx, [rbp-48]
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_xrefs:
+    call .next_val
+    test rax, rax
+    jz .c_errval
+    mov [rbp-48], rdx
+    mov rcx, rax
+    sub rsp, 32
+    call dex_parse_hex_u64
+    add rsp, 32
+    test edx, edx
+    jz .c_badhex
+    mov [r15+DexConfig.xrefs_addr], rax
+    mov byte [r15+DexConfig.has_xrefs], 1
+    or dword [r15+DexConfig.flags], DF_XREFS
+    mov rdx, [rbp-48]
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_trace:
+    call .next_val
+    test rax, rax
+    jz .c_errval
+    mov [rbp-48], rdx
+    mov rcx, rax
+    sub rsp, 32
+    call dex_parse_hex_u64
+    add rsp, 32
+    test edx, edx
+    jz .c_badhex
+    mov [r15+DexConfig.trace_addr], rax
+    mov byte [r15+DexConfig.has_trace], 1
+    or dword [r15+DexConfig.flags], DF_TRACE
+    mov rdx, [rbp-48]
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_depth:
+    call .next_val
+    test rax, rax
+    jz .c_errval
+    mov [rbp-48], rdx
+    mov rcx, rax
+    sub rsp, 32
+    call dex_parse_hex_u64
+    add rsp, 32
+    test edx, edx
+    jz .c_badhex
+    cmp rax, 1
+    jb .c_baddepth
+    cmp rax, 64
+    ja .c_baddepth
+    mov [r15+DexConfig.depth], rax
+    mov byte [r15+DexConfig.has_depth], 1
+    mov rdx, [rbp-48]
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
 .c_v:
     mov dword [r15+DexConfig.verbose], 1
     mov rdx, r12
@@ -914,6 +1034,19 @@ dex_parse_args:
     ret
 .c_badhex:
     lea rcx, [rel e_bad_hex]
+    sub rsp, 32
+    call dex_console_print_err
+    add rsp, 32
+    mov eax, 1
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_baddepth:
+    lea rcx, [rel e_bad_depth]
     sub rsp, 32
     call dex_console_print_err
     add rsp, 32

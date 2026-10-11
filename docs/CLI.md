@@ -36,7 +36,11 @@ Versão atual sempre via `-ver` (lida de `version.bin` no build;
 | `-no-relocs` | Não processa relocs e **omite a seção `.reloc`** do `.asm` |
 | `-strings` | Runs ASCII ≥8 + NUL em dados viram `db "...", 0` |
 | `-overview` | (inspect-only) resumo do PE em stdout (base, entry, seções, imports/exports/relocs); não escreve `.asm`, ignora `-r`; `-q` não suprime |
-| `-json` | Com `-overview`: mesma informação em JSON compacto (1 linha, chaves estáveis, hex como string, counts decimais); sozinho é ignorado |
+| `-json` | Com `-overview`/`-func`/`-xrefs`/`-trace`: mesma informação em JSON compacto (1 linha, chaves estáveis, hex como string, counts decimais); sozinho é ignorado |
+| `-func <VA>` | (inspect-only) dossiê da função em VA: bounds (linear-sweep até ret/jmp/inválido/fim, sem CFG), calls e jmps com alvos (+`__imp_` se IAT) |
+| `-xrefs <VA>` | (inspect-only) quem referencia VA: `call`/`jmp`/`branch` (via `target_va`) + `data` (RIP-rel); cap 256 com `truncated` honesto |
+| `-trace <VA>` | (inspect-only) cadeia de calls (first-call DFS até `-depth`); `end` ∈ `leaf/import/cycle/depth/outside` + `truncated`; jmp-out p/ import registra aresta |
+| `-depth <N>` | Profundidade do `-trace` (1..64 em hex `0x..`, padrão 8) |
 | `-native` | (R-6.1, opt-in) emite mnemônicos reais (`mov rax, rbx`, `[rel label]`) via `dex_emit_native` quando possível, com tamanho byte-exato garantido (`strict`, regras de forma); fallback `db` byte-exato quando não (inclui refs RIP/REL p/ dados, sem labels); default desligado (= `db` atual). Round-trip provado no corpus simples |
 | `-ast-dump` | (R-6.5, opt-in) após gerar o `.asm`, faz parse-back em memória e imprime em stdout o resumo `AST funcs=F blocks=B instrs=I succs=S db=D equ=E dir=R` (mesmo formato do golden de `tests/ast_check.asm`); a geração do `.asm` é inalterada (byte-idêntica com/sem a flag); falha de parse (`.asm` >16 MB ou OOM) = aviso em stderr, nunca erro (respeita `-q`) |
 
@@ -81,3 +85,20 @@ ordinal — `ordinal`, `is_ordinal`, `iat_rva`), `exports_count`,
 `relocs_count`. Nomes com escape `"`/`\` (controle vira `?`, cap 255).
 Limitação honesta: imports por ordinal não têm cobertura no corpus
 atual (nenhum binário de teste usa).
+
+Chaves do `-func -json`: `tool`, `version`, `entry`, `found`,
+`size`, `instrs`, `calls[]` (`va`, `imp`), `jmps[]` (`va`, `kind`),
+`has_ret`, `truncated`. `found:false` sai sem o resto.
+
+Chaves do `-xrefs -json`: `tool`, `version`, `query`, `total`,
+`truncated`, `refs[]` (`va`, `kind` ∈ `call/jmp/branch/data`,
+`detail` com `__imp_` ou vazio).
+
+Chaves do `-trace -json`: `tool`, `version`, `from`, `depth`,
+`truncated`, `end` ∈ `leaf/import/cycle/depth/outside`,
+`chain[]` (`from`, `to`, `kind` ∈ `call/jmp`, `imp`).
+
+Endereços sempre em hex `0x...` (absolutos, VAs). Todas as queries
+são inspect-only (nunca escrevem `.asm`, ignoram `-r`; `-q` não
+suprime o pedido explícito) e nunca retornam erro por conteúdo
+(lista vazia / `found:false` / `leaf` em vez de crash).

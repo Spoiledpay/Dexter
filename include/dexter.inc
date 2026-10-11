@@ -29,6 +29,9 @@
 %define DF_ASTDUMP      0x0200
 %define DF_OVERVIEW     0x0400
 %define DF_JSON         0x0800
+%define DF_FUNC         0x1000
+%define DF_XREFS        0x2000
+%define DF_TRACE        0x4000
 
 ; ---- DexConfig.mode ----
 %define DEX_MODE_WIN64   0
@@ -53,6 +56,15 @@ struc DexConfig
     .flags          resd 1   ; DF_*
     .verbose        resd 1   ; 0,1,2
     .quiet          resd 1
+    .func_addr      resq 1   ; -func VA (has_func)
+    .xrefs_addr     resq 1   ; -xrefs VA (has_xrefs)
+    .trace_addr     resq 1   ; -trace VA (has_trace)
+    .depth          resq 1   ; -depth (default 8, 1..64)
+    .has_func       resb 1
+    .has_xrefs      resb 1
+    .has_trace      resb 1
+    .has_depth      resb 1
+    .pad_q          resd 1
 endstruc
 
 ; Estado do PE carregado (preenchido por dex_pe_load).

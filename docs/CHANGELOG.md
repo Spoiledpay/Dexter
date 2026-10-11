@@ -2,6 +2,35 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-7.2 `-func`/`-xrefs`/`-trace` (2026-10-11)
+
+### Adicionado
+
+- `src/diag/xref.asm` (`dex_xrefs`: call/jmp/branch via `target_va` +
+  data via RIP-MEM, cap 256 com `truncated`, detail `__imp_`),
+  `src/diag/func.asm` (`dex_func`: bounds linear-sweep + calls/jmps +
+  `has_ret`, sem CFG por decisão documentada) e `src/diag/trace.asm`
+  (`dex_trace`: first-call DFS até `-depth` 1..64, `end` ∈
+  leaf/import/cycle/depth/outside); flags `-func/-xrefs/-trace`
+  (VAs hex) + `-depth`, hook inspect-only no main, ajuda, seção
+  `[17]` (18 checks). JSON validado via `ConvertFrom-Json` (inclui
+  `found:false` e `total:0` honestos).
+
+### Corrigido (bugs reais, todos reproduzidos antes do fix)
+
+- Contadores em registradores voláteis (`r10d`/`r11d`) através de
+  `dex_disasm_one`/prints (decoder e helpers destroem voláteis):
+  sintoma era `total: 0` com 1 ref impressa + AVs por VA selvagem.
+  Migrados p/ slots (`[rbp-80]/[rbp-84]`, `[rbp-164]/[rbp-172]`,
+  `[rbp-112]/[rbp-136]`); regra D-8 reafirmada.
+- Ponteiro de seção morto por `mov eax,[rax+..]` e reusado depois
+  (func `.find_sec`→`.f_in_code`, trace `.t_seclimit`→uso): spill
+  (`[rbp-96]` / push `rbx`). Mesma classe do fix R-6.1.
+- Branch `je`↔`jne` invertido no dispatch de call do trace.
+- Colisão `[rbp-96]` = endcode × spill de entry no print do trace
+  (D-13); entry foi p/ `[rbp-144]`. Aresta ganhou `kind` (thunk-jmp
+  mostrava `--call-->`).
+
 ## [Unreleased] — R-7.1 `-overview`/`-json` (2026-10-11)
 
 ### Adicionado

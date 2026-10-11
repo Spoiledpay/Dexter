@@ -37,6 +37,9 @@ extern dex_console_print_u64dec
 extern dex_console_newline
 extern dex_strlen
 extern dex_overview
+extern dex_func
+extern dex_xrefs
+extern dex_trace
 
 section .rodata
 s_usage    db "Uso: dexter <input.exe> [opcoes]  (-h para ajuda)", 13, 10, 0
@@ -65,7 +68,7 @@ s_v_rel    db "Relocs: ", 0
 
 section .bss
 align 16
-g_cfg:      resb 128
+g_cfg:      resb 192
 g_img:      resb 128
 g_sections: resb 3072          ; 96 * 32
 
@@ -179,6 +182,39 @@ main:
     add rsp, 32
     jmp .done_ok
 .no_overview:
+    ; queries? (inspect-only: roda cada flag pedida, depois sai 0)
+    mov eax, [rel g_cfg+DexConfig.flags]
+    test eax, DF_FUNC
+    jz .q_no_func
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    mov r8, [rel g_cfg+DexConfig.func_addr]
+    sub rsp, 32
+    call dex_func
+    add rsp, 32
+    jmp .q_did
+.q_no_func:
+    test eax, DF_XREFS
+    jz .q_no_xrefs
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    mov r8, [rel g_cfg+DexConfig.xrefs_addr]
+    sub rsp, 32
+    call dex_xrefs
+    add rsp, 32
+    jmp .q_did
+.q_no_xrefs:
+    test eax, DF_TRACE
+    jz .q_none
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    mov r8, [rel g_cfg+DexConfig.trace_addr]
+    sub rsp, 32
+    call dex_trace
+    add rsp, 32
+.q_did:
+    jmp .done_ok
+.q_none:
     ; verbose? (respeita -q: silêncio total)
     mov eax, [rel g_cfg+DexConfig.quiet]
     test eax, eax

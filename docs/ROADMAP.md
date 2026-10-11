@@ -194,6 +194,17 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   cobertura no corpus atual.
 - [ ] R-7.2 `-func/-xrefs/-trace` (sobre `target_va`, `truncated:true`
   honesto)
+- [x] R-7.2 `-func` (`src/diag/func.asm`, linear-sweep até ret/jmp/
+  inválido/fim, sem CFG) + `-xrefs` (`src/diag/xref.asm`: call/jmp/
+  branch/data, cap 256) + `-trace` (`src/diag/trace.asm`: first-call
+  DFS até `-depth`, `end`+`truncated` honestos, jmp-out p/ import
+  registra aresta); `[17]` na suíte (18 checks); JSON validado
+  (func/xrefs/trace + not-found/vazio). Bugs reais achados junto
+  (todos reproduzidos antes do fix): contadores em `r10d`/`r11d`
+  através de calls (decoder destrói voláteis — prova: `total: 0`
+  com 1 ref; regra D-8), ponteiro sec morto por `mov eax,[rax+..]`
+  (mesma classe do fix R-6.1 `.l1_mv_regfirst`), branch `je`↔`jne`
+  invertido no trace, colisão `[rbp-96]`=endcode×entry-spill (D-13).
 - [ ] R-7.3 `-rsrc` (inspetor PE resources, 3 níveis, fail explícito)
 - [ ] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout)
 - [ ] R-7.5 `--doctor` (nasm/link/kernel32/versão)
