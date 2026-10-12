@@ -68,3 +68,10 @@ Suíte 178/178 em 1.2.254. Resta (Fase 4/robustez + dívidas): jump
 tables p/ código, SEH/unwind reemitido, VEX/EVEX/x87, R-6.6 backend
 próprio, `bin` com imports regenerada, goldens com/sem flag, D-1,
 D-2/D-4..D-7, D-15/D-16 latentes, tag.
+
+## 8. Lote rápido pós-sessão (mesmo dia, 1.2.254, sem código)
+
+`[24]` (flags `-q`/`-v`/`-vv` geram `.asm` byte-idêntico, `fc /b`;
+`[10]` já cobria `-ast-dump`) + D-1 fechada como superada
+(`adr/0001` numerado; convenção `NNNN-*.md`) + tag `v1.2.254`
+anotada. Suíte **182/182 OK** (commit `595c865`).
