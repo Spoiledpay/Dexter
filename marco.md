@@ -16,7 +16,7 @@
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
 - [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
 - [x] R-6.5 `-emit` (1.2.254, `[23]`)
-- Placar honesto: 178 passam, 0 falham (`tests\run_tests.bat → 178/178 OK` em 1.2.254). Detalhe: `docs/SESSAO-2026-10-11-R74.md`
+- Placar honesto: 178 passam, 0 falham (`tests\run_tests.bat → 178/178 OK` em 1.2.254). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
 
 ## 1. Build / Testes / Uso (resumo)
 
