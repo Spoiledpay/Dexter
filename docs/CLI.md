@@ -46,6 +46,7 @@ Versão atual sempre via `-ver` (lida de `version.bin` no build;
 | `-compare <b.exe>` | (inspect-only) diff A (input) vs B em stdout: texto (`same`/`DIFF`, `+`/`-`/`~` por seção e `dll!func`) ou `-json` (`identical`); B ilegível/inválido → saída 2/3 |
 | `--doctor` / `-doctor` | (inspect-only) toolchain + versão em stdout (`Doctor:`, `nasm: <path> ok\|missing`, `link: …`, `kernel32: ok`, `input: valid PE x64`); exit 0 sempre; `-q` não suprime |
 | `-native` | (R-6.1, opt-in) emite mnemônicos reais (`mov rax, rbx`, `[rel label]`) via `dex_emit_native` quando possível, com tamanho byte-exato garantido (`strict`, regras de forma); fallback `db` byte-exato quando não (inclui refs RIP/REL p/ dados, sem labels); default desligado (= `db` atual). Round-trip provado no corpus simples |
+| `-emit <db\|native>` | (R-6.5) forma explícita do emissor: `native` ≡ `-native`, `db` ≡ default; `-native` segue como alias; last-wins entre ambos; outro valor → saída 1 |
 | `-ast-dump` | (R-6.5, opt-in) após gerar o `.asm`, faz parse-back em memória e imprime em stdout o resumo `AST funcs=F blocks=B instrs=I succs=S db=D equ=E dir=R` (mesmo formato do golden de `tests/ast_check.asm`); a geração do `.asm` é inalterada (byte-idêntica com/sem a flag); falha de parse (`.asm` >16 MB ou OOM) = aviso em stderr, nunca erro (respeita `-q`) |
 
 Em modo `-m bin` as flags de desassemblagem são ignoradas (aviso em stderr,

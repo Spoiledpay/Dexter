@@ -38,6 +38,9 @@ s_noimports   db "-no-imports", 0
 s_norelocs    db "-no-relocs", 0
 s_strings     db "-strings", 0
 s_native      db "-native", 0
+s_emit        db "-emit", 0
+s_emit_db     db "db", 0
+s_emit_native db "native", 0
 s_astdump     db "-ast-dump", 0
 s_overview    db "-overview", 0
 s_json        db "-json", 0
@@ -69,6 +72,7 @@ e_bad_mode    db "dexter: -m must be win64 or bin", 13, 10, 0
 e_oom         db "dexter: out of memory (args)", 13, 10, 0
 e_bin_mode    db "dexter: -m bin not supported yet (see docs/ROADMAP.md phase 5)", 13, 10, 0
 e_bad_hex     db "dexter: invalid hex value (use 0x...)", 13, 10, 0
+e_bad_emit    db "dexter: -emit must be db or native", 13, 10, 0
 e_bad_depth   db "dexter: -depth must be 1..64 (use 0x...)", 13, 10, 0
 
 section .text
@@ -477,6 +481,11 @@ dex_parse_args:
     call .eq
     test eax, eax
     jnz .c_native
+    lea rcx, [rel s_emit]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_emit
     lea rcx, [rel s_astdump]
     mov rdx, rbx
     call .eq
@@ -854,6 +863,54 @@ dex_parse_args:
     or dword [r15+DexConfig.flags], DF_NATIVE
     mov rdx, r12
     xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_emit:
+    ; -emit db|native (R-6.5): forma explícita do emissor; -native segue
+    ; como alias. Last-wins entre ambos (documentado em docs/CLI.md).
+    call .next_val
+    test rax, rax
+    jz .c_errval
+    mov [rbp-48], rax          ; spill token (eq/call matam rax)
+    lea rcx, [rel s_emit_native]
+    mov rdx, [rbp-48]
+    sub rsp, 32
+    call .eq
+    add rsp, 32
+    test eax, eax
+    jnz .c_emit_nat
+    lea rcx, [rel s_emit_db]
+    mov rdx, [rbp-48]
+    sub rsp, 32
+    call .eq
+    add rsp, 32
+    test eax, eax
+    jz .c_bad_emit
+    and dword [r15+DexConfig.flags], ~DF_NATIVE  ; -emit db
+    jmp .c_emit_ok
+.c_emit_nat:
+    or dword [r15+DexConfig.flags], DF_NATIVE    ; -emit native
+.c_emit_ok:
+    mov rdx, r12               ; cursor (next_val já avançou r12)
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_bad_emit:
+    lea rcx, [rel e_bad_emit]
+    sub rsp, 32
+    call dex_console_print_err
+    add rsp, 32
+    mov eax, 1
     add rsp, 48
     pop r12
     pop r14

@@ -43,6 +43,7 @@ s_help_txt:
     db "  -no-relocs             Ignora tabela de relocations", 13, 10
     db "  -strings               Detecta strings e cria bloco db", 13, 10
     db "  -native                Emite mnemonicos reais (fallback db)", 13, 10
+    db "  -emit <db|native>      Forma explicita do emissor (-native = alias)", 13, 10
     db "  -ast-dump              Imprime resumo AST do .asm em stdout", 13, 10
     db "  -overview              Resumo do PE em stdout (inspect-only)", 13, 10
     db "  -json                  Com -overview/-func/-xrefs/-trace: JSON", 13, 10

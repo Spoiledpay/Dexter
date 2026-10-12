@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-12, Dexter 1.2.253)
+## 0. Onde estamos (2026-10-12, Dexter 1.2.254)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -15,13 +15,14 @@
 - [x] R-7.5 `--doctor` (1.2.248, `[20]`)
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
 - [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
-- Placar honesto: 170 passam, 0 falham (`tests\run_tests.bat → 170/170 OK` em 1.2.253). Detalhe: `docs/SESSAO-2026-10-11-R74.md`
+- [x] R-6.5 `-emit` (1.2.254, `[23]`)
+- Placar honesto: 178 passam, 0 falham (`tests\run_tests.bat → 178/178 OK` em 1.2.254). Detalhe: `docs/SESSAO-2026-10-11-R74.md`
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[22]`, 170 checks em 1.2.253)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[23]`, 178 checks em 1.2.254)
 - [x] Suite lenta: `tests\run_slow.bat` (round-trip `ld.lld.exe` 68 MB)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + negativos `var32/link/for` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -87,7 +88,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [ ] SEH/unwind reemitido (hoje: cópia/trim)
 - [ ] R-2.7 VEX/EVEX/x87 rotulado (hoje: `db` correto)
 - [ ] R-5.3 bin com import table regenerada (hoje: copiada, suficiente)
-- [ ] R-6.5 `-emit=db|native` + R-6.6 IR otimizável/backend próprio
+- [x] R-6.5 `-emit=db|native` (1.2.254, `[23]`) + R-6.6 IR otimizável/backend próprio (futuro)
 
 ## 7. Dívida técnica (D-1–D-17, ver ROADMAP)
 

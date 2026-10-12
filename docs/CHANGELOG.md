@@ -2,6 +2,16 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-6.5 `-emit` (2026-10-12)
+
+### Adicionado
+
+- Flag `-emit db|native` (`src/cli/parse_args.asm` + ajuda): forma
+  explícita do emissor sobre o mesmo `DF_NATIVE` (`native` ≡ `-native`,
+  `db` limpa o bit; `-native` segue como alias; last-wins; valor
+  inválido/ausente → saída 1); seção `[23]` (8 checks: equivalência,
+  erros, last-wins ambos os lados).
+
 ## [Unreleased] — 3c fuzz mínimo + hang em imports (2026-10-12)
 
 ### Adicionado

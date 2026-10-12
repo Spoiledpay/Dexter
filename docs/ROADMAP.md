@@ -168,11 +168,9 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
    p/ saída fatia 3, `[13]` no formato real `__imp_<dll>_<func>` e
    `[14]`(imp)+`[15]`(sym) criados. Suite: 95/95 OK (1.2.181).
    Detalhe em `docs/SESSAO-2026-10-11-R643.md`.
-- [x] R-6.5 Flags (parcial): `-native` (A) pronto em R-6.1; `-ast-dump`
-  pronto (parse-back do `.asm` gerado via `dex_parse_asm` +
-  `dex_ast_dump` em stdout, geração byte-idêntica; `[10]` na suíte);
-  `-emit=db|native` ainda futuro; `DF_NATIVE`/`DF_ASTDUMP` em
-  `DexConfig.flags`; documentado em `docs/CLI.md`
+- [x] R-6.5 Flags: `-native` (A, R-6.1); `-ast-dump` (`[10]`); `-emit`
+  (1.2.254: `-emit db|native`, `native` ≡ `-native`, last-wins, outro
+  valor → 1; só plumbing sobre `DF_NATIVE`, `[23]` com 8 checks)
 - [ ] R-6.6 Opção C (futura): IR otimizável + backend próprio (`-f bin`
   com seção `.text` regenerada); depende de R-6.1–R-6.4 verdes + fuzz
 

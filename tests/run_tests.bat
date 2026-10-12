@@ -489,6 +489,26 @@ if !errorlevel! NEQ 0 ( echo "  FALHA: fuzz exit!=0 (ver tests\out\fuzz22.txt)" 
 findstr /c:"crashes=0" tests\out\fuzz22.txt >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem crashes=0" & set /a FAIL+=1 ) else ( echo "  OK: crashes=0" & set /a PASS+=1 )
 
+echo === [23] -emit db-native (R-6.5 resto) ===
+"%DX%" tests\hello.exe -o tests\out\emit_nat.asm -emit native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -emit native exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -emit native exit 0" & set /a PASS+=1 )
+findstr /c:"jmp [rel __imp_" tests\out\emit_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -emit native sem jmp __imp_" & set /a FAIL+=1 ) else ( echo "  OK: -emit native nativo" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -o tests\out\emit_db.asm -emit db -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -emit db exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -emit db exit 0" & set /a PASS+=1 )
+findstr /c:"__imp_" tests\out\emit_db.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: -emit db sem __imp_ (db fiel)" & set /a PASS+=1 ) else ( echo "  FALHA: -emit db com __imp_" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -o NUL -emit bogus -q >nul 2>&1
+if !errorlevel! EQU 1 ( echo "  OK: -emit bogus retorna 1" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 1" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -o NUL -emit -q >nul 2>&1
+if !errorlevel! EQU 1 ( echo "  OK: -emit sem valor retorna 1" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 1" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -o tests\out\emit_lw1.asm -native -emit db -q >nul 2>&1
+findstr /c:"__imp_" tests\out\emit_lw1.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: last-wins (-emit db vence)" & set /a PASS+=1 ) else ( echo "  FALHA: last-wins quebrado" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -o tests\out\emit_lw2.asm -emit db -native -q >nul 2>&1
+findstr /c:"jmp [rel __imp_" tests\out\emit_lw2.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: last-wins quebrado" & set /a FAIL+=1 ) else ( echo "  OK: last-wins (-native vence)" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
