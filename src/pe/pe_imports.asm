@@ -160,6 +160,12 @@ dex_pe_parse_imports:
     xor r10d, r10d             ; di
     xor r11d, r11d             ; vi
 .fill:
+    ; D-8: r10d (di) e r11d (vi) são voláteis e morrem nos calls dos
+    ; early-paths abaixo (rva_to_offset usa r10d!); sem spill, o lixo
+    ; volta a .fill_next e o inc nunca alcança n_desc (hang em PE
+    ; corrompido; achado via fuzz 2026-10-12). Slots em [rbp-64..].
+    mov [rbp-64], r10d           ; spill di
+    mov [rbp-68], r11d           ; spill vi
     cmp r10d, r14d
     jae .fill_done
     cmp r11d, r13d
@@ -288,7 +294,11 @@ dex_pe_parse_imports:
     jmp .thunk2
 .thunk_end:
     mov r10d, [rbp-72]         ; restore di
+    mov [rbp-64], r10d         ; refresh di (== topo; mantém invariante)
+    mov [rbp-68], r11d         ; refresh vi (com imports preenchidos!)
 .fill_next:
+    mov r10d, [rbp-64]         ; di autoritativo (nunca lixo de call)
+    mov r11d, [rbp-68]         ; vi autoritativo
     inc r10d
     jmp .fill
 .fill_done:

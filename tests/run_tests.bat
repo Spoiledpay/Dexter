@@ -483,6 +483,12 @@ if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else (
 findstr /c:"dq label_" tests\out\strptr_db.asm >nul 2>&1
 if errorlevel 1 ( echo "  OK: default sem dq (db fiel)" & set /a PASS+=1 ) else ( echo "  FALHA: default com dq label_" & set /a FAIL+=1 )
 
+echo === [22] fuzz PE (nunca crash/hang, so 0-3/5) ===
+python tests\fuzz_pe.py --cases 20 --seed 7 > tests\out\fuzz22.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: fuzz exit!=0 (ver tests\out\fuzz22.txt)" & set /a FAIL+=1 ) else ( echo "  OK: fuzz exit 0" & set /a PASS+=1 )
+findstr /c:"crashes=0" tests\out\fuzz22.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem crashes=0" & set /a FAIL+=1 ) else ( echo "  OK: crashes=0" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

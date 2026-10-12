@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-12, Dexter 1.2.250)
+## 0. Onde estamos (2026-10-12, Dexter 1.2.253)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -14,13 +14,14 @@
 - [x] R-7.1 `-overview`/`-json` + R-7.2 `-func`/`-xrefs`/`-trace` + R-7.3 `-rsrc` + R-7.4 `-snapshot`/`-compare` (texto+JSON válido, inspect-only)
 - [x] R-7.5 `--doctor` (1.2.248, `[20]`)
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
-- Placar honesto: 168 passam, 0 falham (`tests\run_tests.bat → 168/168 OK` em 1.2.250). Detalhe: `docs/SESSAO-2026-10-11-R74.md`
+- [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
+- Placar honesto: 170 passam, 0 falham (`tests\run_tests.bat → 170/170 OK` em 1.2.253). Detalhe: `docs/SESSAO-2026-10-11-R74.md`
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[21]`, 168 checks em 1.2.250)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[22]`, 170 checks em 1.2.253)
 - [x] Suite lenta: `tests\run_slow.bat` (round-trip `ld.lld.exe` 68 MB)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + negativos `var32/link/for` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -81,7 +82,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 
 ## 6. Fase 4 — Robustez (sem regressão)
 
-- [ ] `tests\fuzz_pe.py` (muta bytes, nunca executa input; meta: só saídas 3/4, nunca crash)
+- [x] `tests\fuzz_pe.py` mínimo (muta bytes, nunca executa input; 20 casos seed 7 na suíte `[22]` + baterias manuais 200/300/50; meta: só saídas 0-3/5, nunca crash/hang — 1 hang real achado e corrigido em 1.2.253)
 - [ ] Jump tables + dados em code-flow
 - [ ] SEH/unwind reemitido (hoje: cópia/trim)
 - [ ] R-2.7 VEX/EVEX/x87 rotulado (hoje: `db` correto)

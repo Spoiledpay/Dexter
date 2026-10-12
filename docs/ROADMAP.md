@@ -93,6 +93,10 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   alvos de ponteiros em g_symR; `.wds_emit_span` emite `dq label_` em
   `-native`, `s_tab` simbólica, round-trip strings provado, `[21]` verde;
   RESTA: jump-to-code, loads indexados `[rbx+n]`, `.str_run` com `\r\n`)
+- [x] R-5.4-fuzz `tests\fuzz_pe.py` mínimo (1.2.253, determinístico por
+  seed: flips + miradas em MZ/lfanew/seções/imports + truncamento;
+  mutante nunca executado; passa = saída em {0,1,2,3,5}; `[22]` com
+  20 casos seed 7; 1 hang real achado (imports, D-8) e corrigido)
 
 ## Fase 6 — AST / Lexer / Geração de código nativo (nova, incremental `[ ]`)
 
@@ -254,8 +258,13 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   frame, fora da shadow de calls aninhados); registradores não-voláteis
   (`rdi/r13/...`) nunca sobrevivem a `mov rdi, ...` inline — recarregar
   do slot (caso `.collect_syms`: `edi` count vs `rdi` base → hang);
-  `r10/r11` morrem em syscalls ntdll (não manter valores através de
-  `HeapAlloc`/`WriteFile`); `edx` morre em `.build_rm` (base SIB).
+   `r10/r11` morrem em syscalls ntdll (não manter valores através de
+   `HeapAlloc`/`WriteFile`); `edx` morre em `.build_rm` (base SIB).
+   Instância 2026-10-12 (fuzz): `.fill` de `pe_imports` com `di/vi` em
+   `r10d/r11d` através de `dex_rva_to_offset` (que usa `r10d`!) nos
+   early-paths → `inc` nunca alcançava `n_desc` (hang em PE corrompido);
+   fix: spill `[rbp-64]/[rbp-68]` no topo + reload no `.fill_next`
+   (com refresh no `.thunk_end` p/ não perder `vi`).
 - D-9 Regras do frontend textual (2026-10-07, R-6.3; todos com
   reproduzir→fix→suite 52/52):
   `div` nunca com divisor vindo de call sem spill (`ast_grow_arr`:

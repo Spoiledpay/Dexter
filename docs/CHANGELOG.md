@@ -2,6 +2,25 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — 3c fuzz mínimo + hang em imports (2026-10-12)
+
+### Adicionado
+
+- `tests\fuzz_pe.py` (determinístico por seed; mutante nunca executado):
+  flips aleatórios + miradas (MZ, `e_lfanew`, sig/Machine, seções,
+  import-dir, truncamento, bloco zerado); passa = saída em {0,1,2,3,5};
+  crash/timeout/saída desconhecida = falha (crasher salvo p/ repro);
+  seção `[22]` (20 casos seed 7) na suíte. Requer Python 3.
+
+### Corrigido (hang real achado pelo fuzz, com reproduzir→fix→suite)
+
+- `dex_pe_parse_imports` travava (não crashava) com descritor fantasma
+  (ex: 1 flip em terminador nulo → ILT lido como descritor → early-paths
+  com `di/vi` em `r10d/r11d` clobberados por `dex_rva_to_offset`):
+  `.fill` girava sem avançar (classe D-8). Fix: spill `[rbp-64]/[rbp-68]`
+  no topo do `.fill` + reload no `.fill_next` (refresh no `.thunk_end`).
+  Prova: 3 TIMEOUTs pré-fix (seed 42) → 200+300+50 casos limpos pós-fix.
+
 ## [Unreleased] — 3b dq-pointer (2026-10-12)
 
 ### Adicionado
