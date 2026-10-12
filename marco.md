@@ -52,10 +52,15 @@ De quebra, os labels `__imp_` "faltantes" (D-A aparente) e os goldens
 
 ## 4. Fase 2 — IAT nativo R-3.3/R-4.5
 
-- [ ] `dex_build_impname` + `dex_emit_imp_label` finais (label-at-slot, sem `extern`)
-- [ ] Codegen kinds 1/2 (`call|jmp [rel __imp_X]`) com fallback `db`
-- [ ] `.idata` com `__imp_X:` + round-trip hello/var64
-- [ ] Docs + suite verde + tag
+FECHADA em 2026-10-12 (Dexter 1.2.247, sem código novo — auditoria + docs).
+Evidência: `tests\out\audit_hello.asm` (3×`jmp [rel __imp_]` + labels,
+0 `extern`) + `audit_var64.asm` (2×`call [rel __imp_]`/14 labels, 0
+`extern`) + round-trip `-native` hello (`hi`); suíte **155/155 OK**.
+
+- [x] `dex_build_impname` + `dex_emit_imp_label` finais (label-at-slot, sem `extern`)
+- [x] Codegen kinds 1/2 (`call|jmp [rel __imp_X]`) com fallback `db`
+- [x] `.idata` com `__imp_X:` + round-trip hello/var64
+- [x] Docs + suite verde (ROADMAP R-3.3/R-4.5 → `[x]`; tag pendente de ordem explícita)
 
 ## 5. Fase 3 — Views + JSON mínimo (estilo REA, opt-in)
 

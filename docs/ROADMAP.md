@@ -55,9 +55,12 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
 - [x] R-3.1 import directory → `ImportEntry{dll,func,ordinal,iat_rva}`
   (nomes apontam p/ o mapeamento; corrompido → 0, nunca crash)
 - [x] R-3.2 exports (count + RVAs de nomes) e relocs (RVAs u32, cap 65536)
-- [ ] R-3.3 rewrite de IAT (`call [rel __imp_X]` regenerado) — DESATIVADO
-  por decisão (db-copy preserva; ver ARQUITETURA §1). Reativar só com
-  layout não-idêntico (Fase 5)
+- [x] R-3.3 rewrite de IAT (`call|jmp [rel __imp_X]` regenerado) — ATIVO
+  em `-native` via R-6.4.3 (`dex_build_impname` + `dex_emit_imp_label`
+  label-at-slot, sem `extern`; codegen kinds 1/2 com fallback `db`;
+  auditado: hello 3×`jmp [rel __imp_]` + var64 2×`call [rel __imp_]`/14
+  labels, 0 `extern`, round-trip `hi`; `[13]`/`[14]` verdes). Sem
+  `-native`, `db-copy` continua o default (decisão ARQUITETURA §1).
 
 ## Fase 4 — Geração + rebuild `[x]`
 
@@ -74,7 +77,7 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   LIMITAÇÃO HONESTA: o `link.exe` reordena seções e pode derrubar vazias,
   então o modo win64 só garante round-trip comportamental em PEs simples
   (hello: OK). O path fiel p/ PEs reais é `-m bin` (R-5.1).
-- [ ] R-4.5 `call [rel]` p/ IAT regenerada (depende de R-3.3)
+- [x] R-4.5 `call|jmp [rel]` p/ IAT regenerada (pago por R-3.3 em `-native`; ver `[13]`)
 
 ## Fase 5 — Fidelidade total e modo `bin` (parcial `[x]`, resto `[ ]`)
 
