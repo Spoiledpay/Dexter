@@ -233,8 +233,9 @@ no corpus simples; PEs complexos continuam em `-m bin`.
 
 ## Dívida técnica conhecida (honesta, com ID)
 
-- D-1 `docs/adr/` ainda sem ADRs numerados (decisões estão em ARQUITETURA;
-  numerar ao refatorar).
+- D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
+  existe e numerado; dívida original ("sem ADRs numerados") superada;
+  novas decisões seguem `NNNN-<título>.md`.
 - D-2 `.bss` no modo win64 sai como seção vazia (link dimensiona; checar VA
   em binário com `.bss` referenciada — var64 passou no comportamento).
 - D-3 `symtab`/`strpool`/`labels-imp` implementados e linkados mas sem uso

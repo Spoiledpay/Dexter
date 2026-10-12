@@ -509,6 +509,19 @@ if errorlevel 1 ( echo "  OK: last-wins (-emit db vence)" & set /a PASS+=1 ) els
 findstr /c:"jmp [rel __imp_" tests\out\emit_lw2.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: last-wins quebrado" & set /a FAIL+=1 ) else ( echo "  OK: last-wins (-native vence)" & set /a PASS+=1 )
 
+echo === [24] goldens com-sem flag (modo saida nao altera .asm) ===
+"%DX%" tests\hello.exe -o tests\out\flag_base.asm >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: baseline exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: baseline exit 0" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -o tests\out\flag_q.asm -q >nul 2>&1
+fc /b tests\out\flag_base.asm tests\out\flag_q.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -q altera .asm" & set /a FAIL+=1 ) else ( echo "  OK: -q byte-identico" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -o tests\out\flag_v.asm -v >tests\out\flag_v.txt 2>&1
+fc /b tests\out\flag_base.asm tests\out\flag_v.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -v altera .asm" & set /a FAIL+=1 ) else ( echo "  OK: -v byte-identico" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -o tests\out\flag_vv.asm -vv >tests\out\flag_vv.txt 2>&1
+fc /b tests\out\flag_base.asm tests\out\flag_vv.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -vv altera .asm" & set /a FAIL+=1 ) else ( echo "  OK: -vv byte-identico" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

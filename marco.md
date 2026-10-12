@@ -15,14 +15,14 @@
 - [x] R-7.5 `--doctor` (1.2.248, `[20]`)
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
 - [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
-- [x] R-6.5 `-emit` (1.2.254, `[23]`)
-- Placar honesto: 178 passam, 0 falham (`tests\run_tests.bat → 178/178 OK` em 1.2.254). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
+- [x] R-6.5 `-emit` (1.2.254, `[23]`) + lote rápido (1.2.254: `[24]`, D-1, tag `v1.2.254`)
+- Placar honesto: 182 passam, 0 falham (`tests\run_tests.bat → 182/182 OK` em 1.2.254). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[23]`, 178 checks em 1.2.254)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[24]`, 182 checks em 1.2.254)
 - [x] Suite lenta: `tests\run_slow.bat` (round-trip `ld.lld.exe` 68 MB)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + negativos `var32/link/for` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -79,7 +79,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] `-rsrc` (inspect_pe_resources: type/name/language + payload validado)
 - [x] `-snapshot` / `-compare a.exe b.exe` (hash FNV-1a + size + layout)
 - [x] `dexter --doctor` (nasm/link/kernel32/versão)
-- [ ] Goldens na suíte + geração byte-idêntica com/sem flag
+- [x] Goldens na suíte + geração byte-idêntica com/sem flag (1.2.254: `[24]` prova `-q`/`-v`/`-vv` byte-idênticos; `-ast-dump` já em `[10]`; flags inspect-only nunca geram `.asm` por construção)
 
 ## 6. Fase 4 — Robustez (sem regressão)
 
@@ -94,7 +94,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 
 - [x] D-3 parcial: `sym_check` (`[15]`, golden `SYM n=5`) — falta `strpool`/`labels-imp` dedicado
 - [ ] D-7: reativar tabela D com estrutura adequada (intervalos/bitmap)
-- [ ] D-1: numerar ADRs em `docs/adr/`
+- [x] D-1: convenção ADR estabelecida (`docs/adr/0001-ast-lexer-codegen.md` numerado; novas decisões seguem `NNNN-<título>.md`)
 - [ ] D-2/D-4/D-5/D-6: revisar `.bss`/seek/`-no-imports`/`-start` em dados
 
 ## 8. Como marcar
