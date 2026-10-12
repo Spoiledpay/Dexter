@@ -103,6 +103,7 @@ s_semi2 db "; ", 0
 s_ext   db "extern ", 0
 s_imp_l db "__imp_", 0
 s_dq    db ": dq ", 0
+s_dqpre db "    dq ", 0
 s_reloc db ".reloc", 0
 s_lab    db "label_", 0
 s_dotname db ".", 0
@@ -144,6 +145,8 @@ g_ir:      resb 24                 ; DexIR scratch do walker (R-6.4)
 g_rarr:    resq 1                  ; VAs RIP->dados ordenadas (R-6.4 2b; -native)
 g_rn:      resq 1                  ; count (qword)
 g_chunkimg: resq 1                 ; img p/ .wds_chunks (evita 7º arg pilha)
+g_spancfg: resq 1                  ; cfg p/ validador de alvo dq (NO_RELOCS)
+g_spanflags: resq 1                ; bit0 nodq: span sai db puro (.reloc: verbatim)
 
 section .text
 
@@ -261,6 +264,21 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .oom_free
+    mov [rel g_spancfg], rbx       ; cfg p/ validador dq (vale p/ o generate)
+    ; ---- 3b: starts de string-runs em g_symR (só -native -strings;
+    ; lookup unificado R U strings p/ dq-pointer, uma busca binária)
+    mov eax, [rbx+DexConfig.flags]
+    and eax, DF_NATIVE|DF_STRINGS
+    cmp eax, DF_NATIVE|DF_STRINGS
+    jne .no_cstr
+    mov rcx, rbx
+    mov rdx, r15
+    sub rsp, 32
+    call .collect_strs
+    add rsp, 32
+    test eax, eax
+    jnz .oom_free
+.no_cstr:
     ; ---- R-6.4 2b: array ordenado de alvos RIP->dados (só -native;
     ; 0 = OOM de verdade: n==0 retorna dummy ≠ 0)
     mov eax, [rbx+DexConfig.flags]
@@ -1264,6 +1282,18 @@ dex_generate_asm:
     mov eax, [rbp-112]
     mov [rbp-80], eax
 .wds_notrim:
+    ; 3b: .reloc sai sempre db verbatim (loader consome bytes; dq aqui
+    ; mudaria relocs aplicadas). Demais seções: dq-pointer permitido.
+    lea rcx, [rel s_reloc]
+    lea rdx, [r12+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    mov qword [rel g_spanflags], 0
+    test eax, eax
+    jz .wds_flagnodq_done
+    mov qword [rel g_spanflags], 1
+.wds_flagnodq_done:
     mov eax, [rbx+DexConfig.flags]
     test eax, DF_STRINGS
     jz .wds_plain
@@ -1592,7 +1622,7 @@ dex_generate_asm:
     mov r8d, r10d
     mov r9, rdi                  ; curlab
     sub rsp, 32
-    call dex_emit_data
+    call .wds_emit_span          ; 3b: db ou db+dq label_ (mesmos args)
     add rsp, 32
     test eax, eax
     jnz .wcc_fail
@@ -1629,7 +1659,7 @@ dex_generate_asm:
     mov r8d, r10d
     mov r9, rdi
     sub rsp, 32
-    call dex_emit_data
+    call .wds_emit_span          ; 3b: db ou db+dq label_ (mesmos args)
     add rsp, 32
     test eax, eax
     jnz .wcc_fail
@@ -1684,6 +1714,516 @@ dex_generate_asm:
 .sr_no:
     xor eax, eax
     pop rbx
+    ret
+
+;-----------------------------------------------------------------------------
+; .collect_strs — rcx=cfg, rdx=img -> eax=0 ok, 1 oom
+; Pré-passada 3b (só -native -strings): alimenta g_symR com
+;  (A) starts de string-runs e
+;  (B) alvos de ponteiros (qword com valor VA em seção de dados emitida)
+; das seções que .walk_data_sec emite. Lookup unificado R U runs U ptrs:
+; chunks fatia nesses pontos (labels reais) e .wds_emit_span vira os slots
+; em `dq label_`. Espelha o conjunto emitido (skip .reloc, filtro -s em
+; código, trim pdata/xdata pelo min) na direção segura: na dúvida NÃO
+; insere (db fallback, nunca símbolo indefinido).
+; Frame: 8 pushes + sub 88 = 152 ≡ 8 (igual .collect_syms).
+; Slots: [rbp-64]=slen/rva, [rbp-72]=va_base, [rbp-80]=fptr,
+;        [rbp-88]=eff, [rbp-96]=base.
+;-----------------------------------------------------------------------------
+.collect_strs:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rdi
+    push rsi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 88
+    mov rbx, rcx                  ; cfg (não-volátil: vive nos calls)
+    mov r15, rdx                 ; img
+    mov rax, [r15+PeImage.image_base]
+    mov [rbp-96], rax            ; base
+    xor r12d, r12d               ; i (seção)
+.css_sec:
+    mov eax, [r15+PeImage.num_sections]
+    cmp r12d, eax
+    jae .css_ok
+    mov eax, r12d
+    imul eax, SIZEOF_PE_SECTION
+    mov rcx, [r15+PeImage.sections_ptr]
+    lea r14, [rcx+rax]           ; sec
+    ; emitida? (espelho de .walk_data_sec)
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_NO_RELOCS
+    jz .css_keep
+    lea rcx, [rel s_reloc]
+    lea rdx, [r14+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .css_next
+.css_keep:
+    mov eax, [r14+PeSection.characterist]
+    test eax, IMAGE_SCN_CNT_CODE
+    jnz .css_iscode
+    test eax, IMAGE_SCN_MEM_EXECUTE
+    jz .css_data
+.css_iscode:
+    mov rax, [rbx+DexConfig.section_filter]
+    test rax, rax
+    jz .css_next                 ; sem filtro: código vai p/ walk_code
+    mov rcx, rax
+    lea rdx, [r14+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jz .css_data                 ; filtro não casa: vira db (walk_data)
+    jmp .css_next                ; casa: walk_code, sem runs/ptrs
+.css_data:
+    mov eax, [r14+PeSection.raw_size]
+    mov [rbp-88], rax            ; eff = raw
+    lea rcx, [rel s_pdata]
+    lea rdx, [r14+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .css_trim
+    lea rcx, [rel s_xdata]
+    lea rdx, [r14+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jz .css_both
+.css_trim:
+    mov eax, [r14+PeSection.vsize]
+    test eax, eax
+    jz .css_both
+    cmp eax, [rbp-88]
+    jae .css_both
+    mov [rbp-88], rax            ; eff = min (wide; direção segura)
+.css_both:
+    mov rax, [rbp-96]
+    mov ecx, [r14+PeSection.vaddr]
+    add rax, rcx
+    mov [rbp-72], rax            ; va_base
+    mov eax, [r14+PeSection.raw_ptr]
+    mov rcx, [r15+PeImage.file_buffer]
+    add rax, rcx
+    mov [rbp-80], rax            ; fptr
+    ; ---- passada A: starts de runs ----
+    xor r13d, r13d               ; k
+.css_ka:
+    mov eax, [rbp-88]
+    cmp r13d, eax
+    jae .css_passb
+    mov rax, [rbp-80]
+    mov ecx, r13d
+    add rax, rcx                 ; p = fptr+k
+    mov rcx, rax
+    mov edx, [rbp-88]
+    sub edx, r13d                ; restante
+    sub rsp, 32
+    call .str_run                ; puro: só rax/rcx/rdx
+    add rsp, 32
+    test rax, rax
+    jz .css_ka1
+    mov [rbp-64], rax            ; slen
+    mov eax, [r14+PeSection.vaddr]
+    mov ecx, r13d
+    add rax, rcx                 ; rva = vaddr+k
+    mov rcx, [rel g_symR]
+    mov rdx, rax
+    lea r8, [rel s_dotname]
+    sub rsp, 32
+    call symtab_insert_va
+    add rsp, 32
+    test rax, rax
+    jz .css_fail
+    mov rax, [rbp-64]
+    add r13d, eax
+    inc r13d
+    jmp .css_ka
+.css_ka1:
+    inc r13d
+    jmp .css_ka
+.css_passb:
+    ; ---- passada B: alvos de ponteiros (todo k; qword==VA válida?) ----
+    mov eax, [rbp-88]
+    cmp eax, 8
+    jb .css_next
+    xor r13d, r13d               ; k
+.css_kb:
+    mov eax, [rbp-88]
+    sub eax, 8
+    cmp r13d, eax
+    ja .css_next
+    mov rax, [rbp-80]
+    mov ecx, r13d
+    add rax, rcx
+    mov rax, [rax]               ; v (mov desalinhado: seguro em x64)
+    mov rcx, [rbp-96]            ; base
+    cmp rax, rcx
+    jb .css_kb1
+    sub rax, rcx                 ; rva
+    mov [rbp-64], rax            ; spill (validador tem calls)
+    mov rcx, rax                 ; rva
+    mov rdx, r15                 ; img
+    sub rsp, 32
+    call .ptr_tgt_ok
+    add rsp, 32
+    test eax, eax
+    jz .css_kb1
+    mov rax, [rbp-64]            ; rva
+    mov rcx, [rel g_symR]
+    mov rdx, rax
+    lea r8, [rel s_dotname]
+    sub rsp, 32
+    call symtab_insert_va
+    add rsp, 32
+    test rax, rax
+    jz .css_fail
+.css_kb1:
+    inc r13d
+    jmp .css_kb
+.css_next:
+    inc r12d
+    jmp .css_sec
+.css_ok:
+    xor eax, eax
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rdi
+    pop rbx
+    pop rbp
+    ret
+.css_fail:
+    mov eax, 1
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rdi
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .ptr_tgt_ok — rcx=rva, rdx=img -> eax=1 se rva está em seção de dados
+; EMITIDA e dentro do len efetivo (trim-wide pdata/xdata). Direção segura:
+; 0 = db. (Validador compartilhado: pré-scan e emissor de spans.)
+; Frame: 7 pushes (56B) + sub 32 = 88 ≡ 8.
+; Slots: [rbp-64]=rva, [rbp-72]=sections_ptr, [rbp-80]=eff.
+;-----------------------------------------------------------------------------
+.ptr_tgt_ok:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+    mov [rbp-64], rcx            ; rva
+    mov rbx, rdx                 ; img (não-volátil: vive nos calls)
+    mov rax, [rbx+PeImage.sections_ptr]
+    mov [rbp-72], rax
+    xor r12d, r12d               ; i
+.pt_scan:
+    mov eax, [rbx+PeImage.num_sections]
+    cmp r12d, eax
+    jae .pt_no
+    mov eax, r12d
+    imul eax, SIZEOF_PE_SECTION
+    mov rcx, [rbp-72]
+    lea r13, [rcx+rax]           ; tsec (não-volátil: vive nos calls)
+    mov eax, [r13+PeSection.vaddr]
+    mov ecx, [r13+PeSection.raw_size]
+    mov rdx, [rbp-64]            ; rva
+    cmp rdx, rax                 ; (vaddr zero-estendido)
+    jb .pt_next
+    sub rdx, rax                 ; off
+    cmp rdx, rcx                 ; (raw zero-estendido)
+    jae .pt_next
+    ; não-código? (labels de código incertas p/ dq: rejeita)
+    mov eax, [r13+PeSection.characterist]
+    test eax, IMAGE_SCN_CNT_CODE
+    jnz .pt_next
+    test eax, IMAGE_SCN_MEM_EXECUTE
+    jnz .pt_next
+    ; .reloc skipada? (não emitida: rejeita)
+    mov rax, [rel g_spancfg]
+    mov eax, [rax+DexConfig.flags]
+    test eax, DF_NO_RELOCS
+    jz .pt_eff
+    lea rcx, [rel s_reloc]
+    lea rdx, [r13+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .pt_no
+.pt_eff:
+    mov eax, [r13+PeSection.raw_size]
+    mov [rbp-80], rax            ; eff = raw
+    lea rcx, [rel s_pdata]
+    lea rdx, [r13+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .pt_trim
+    lea rcx, [rel s_xdata]
+    lea rdx, [r13+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jz .pt_cmp
+.pt_trim:
+    mov eax, [r13+PeSection.vsize]
+    test eax, eax
+    jz .pt_cmp
+    cmp eax, [rbp-80]
+    jae .pt_cmp
+    mov [rbp-80], rax            ; eff = min (wide; direção segura)
+.pt_cmp:
+    mov rax, [rbp-64]            ; rva
+    mov ecx, [r13+PeSection.vaddr]
+    sub rax, rcx                 ; off
+    cmp rax, [rbp-80]
+    jae .pt_next
+    mov eax, 1
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.pt_next:
+    inc r12d
+    jmp .pt_scan
+.pt_no:
+    xor eax, eax
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .wds_emit_span — rcx=buf, rdx=ptr, r8d=len, r9=curlab (-1 sem label)
+; 3b: como dex_emit_data, mas slots de 8 bytes cujo valor é VA rotulada
+; (R U runs U ptrs, cf. .collect_strs) saem `dq label_<VA>`; resto db.
+; Sem hit (ou nodq/rn==0/len<8): idêntico a dex_emit_data (bit-igual).
+; curlab vai na 1ª peça (db com label, ou label solta + dq).
+; Frame: 8 pushes (64B) + sub 56 = 120 ≡ 8.
+; Slots: [rbp-72]=base, [rbp-80]=rva/VA.
+;-----------------------------------------------------------------------------
+.wds_emit_span:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rdi
+    push rsi
+    sub rsp, 56
+    mov rbx, rcx                 ; buf (não-volátil: vive nos calls)
+    mov r12, rdx                 ; ptr
+    mov r13d, r8d                ; len
+    mov rdi, r9                  ; curlab
+    mov rax, [rel g_chunkimg]
+    mov rax, [rax+PeImage.image_base]
+    mov [rbp-72], rax            ; base
+    cmp qword [rel g_spanflags], 0
+    jne .wsp_db
+    cmp qword [rel g_rn], 0
+    je .wsp_db
+    cmp r13d, 8
+    jb .wsp_db
+    xor r14d, r14d               ; o (offset)
+    xor r15d, r15d               ; seg (início da peça pendente)
+    mov rsi, 1                   ; first (1ª peça leva curlab)
+.wsp_l:
+    mov eax, r14d
+    add eax, 8
+    cmp eax, r13d
+    ja .wsp_flush
+    mov rax, [r12+r14]           ; v (mov desalinhado: seguro em x64)
+    cmp rax, [rbp-72]
+    jb .wsp_next
+    mov rcx, [rbp-72]
+    sub rax, rcx                 ; rva
+    mov [rbp-80], rax            ; spill (busca pura abaixo; call mata rax)
+    ; busca binária em g_rarr (ordenado crescente; sem calls)
+    mov r8, [rel g_rarr]
+    mov r9, [rel g_rn]
+    xor r10d, r10d               ; lo
+    mov r11, r9                  ; hi
+.wsp_bs:
+    cmp r10, r11
+    jae .wsp_next
+    lea rcx, [r10+r11]
+    shr rcx, 1                   ; mid
+    mov rdx, [r8+rcx*8]          ; key
+    cmp rax, rdx
+    je .wsp_hit
+    jb .wsp_bhi
+    lea r10, [rcx+1]             ; lo = mid+1
+    jmp .wsp_bs
+.wsp_bhi:
+    mov r11, rcx                 ; hi = mid
+    jmp .wsp_bs
+.wsp_hit:
+    ; alvo tem label? (validador compartilhado; calls: estado em
+    ; não-voláteis/slots sobrevive)
+    mov rcx, [rbp-80]            ; rva
+    mov rdx, [rel g_chunkimg]    ; img
+    sub rsp, 32
+    call .ptr_tgt_ok
+    add rsp, 32
+    test eax, eax
+    jz .wsp_next
+    mov rax, [rbp-80]            ; rva
+    add rax, [rbp-72]            ; + base = VA alvo (é ela que o dq rotula;
+    mov [rbp-80], rax            ; nunca o slot: spanva+o seria auto-ref!)
+    ; flush db [seg,o) — vazio se seg==o
+    mov eax, r14d
+    cmp eax, r15d
+    je .wsp_hit_nodb
+    mov rcx, rbx
+    lea rdx, [r12+r15]
+    mov r8d, r14d
+    sub r8d, r15d
+    cmp rsi, 1
+    jne .wsp_hit_ndb
+    mov r9, rdi                  ; curlab na 1ª peça
+    jmp .wsp_hit_dbgo
+.wsp_hit_ndb:
+    mov r9, -1
+.wsp_hit_dbgo:
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .wsp_fail
+    mov rsi, 0                   ; first=0
+.wsp_hit_nodb:
+    ; span começa com ponteiro? label solta antes do dq
+    cmp rsi, 1
+    jne .wsp_hit_dq
+    cmp rdi, -1
+    je .wsp_hit_dq
+    mov rcx, rbx
+    mov rdx, rdi
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .wsp_fail
+    mov rsi, 0
+.wsp_hit_dq:
+    ; "    dq label_<hexVA>\r\n" (VA alvo em [rbp-80]; mesmo hex do label)
+    lea rdx, [rel s_dqpre]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wsp_fail
+    lea rdx, [rel s_lab]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wsp_fail
+    mov rcx, rbx
+    mov rdx, [rbp-80]
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .wsp_fail
+    lea rdx, [rel s_crlf2]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wsp_fail
+    mov eax, r14d
+    add eax, 8
+    mov r15d, eax                ; seg = o+8
+    mov r14d, eax                ; o += 8 (guloso: slots não sobrepõem)
+    jmp .wsp_l
+.wsp_next:
+    inc r14d
+    jmp .wsp_l
+.wsp_flush:
+    mov eax, r13d
+    cmp eax, r15d
+    je .wsp_done
+    mov rcx, rbx
+    lea rdx, [r12+r15]
+    mov r8d, r13d
+    sub r8d, r15d
+    cmp rsi, 1
+    jne .wsp_fl_ndb
+    mov r9, rdi
+    jmp .wsp_fl_dbgo
+.wsp_fl_ndb:
+    mov r9, -1
+.wsp_fl_dbgo:
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .wsp_fail
+.wsp_done:
+    xor eax, eax
+    jmp .wsp_epi
+.wsp_fail:
+    mov eax, 1
+    jmp .wsp_epi
+.wsp_db:
+    mov rcx, rbx
+    mov rdx, r12
+    mov r8d, r13d
+    mov r9, rdi
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+.wsp_epi:
+    add rsp, 56
+    pop rsi
+    pop rdi
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
     ret
 
 ; .emit_qstr — rcx=buf, rdx=ptr, r8d=len -> '    db "...", 0' (escapa ")

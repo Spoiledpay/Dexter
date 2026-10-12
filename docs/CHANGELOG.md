@@ -2,6 +2,29 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — 3b dq-pointer (2026-10-12)
+
+### Adicionado
+
+- Pré-scan `.collect_strs` (`src/gen/rebuild.asm`, só `-native -strings`):
+  starts de string-runs + alvos de ponteiros (qword com valor VA em
+  seção de dados emitida) entram em g_symR (lookup unificado R U runs
+  U ptrs; espelha o conjunto emitido na direção segura).
+- Emissor `.wds_emit_span` (no caminho chunks `-native`, mesmos args de
+  `dex_emit_data`): slots de 8B com alvo validado (`.ptr_tgt_ok`
+  compartilhado: rejeita código, `.reloc` skipada, fora-do-eff) saem
+  `dq label_<VA>`; sem hit é bit-idêntico ao `db` (default intocado).
+- Efeito: `s_tab` do strings virou tabela simbólica (`dq label_s1`…;
+  `s1/s2/s3` ganharam labels); round-trip `-native -strings` comporta-
+  mentalmente idêntico; `[21]` (5 checks) na suíte; golden
+  `tests/ref_native/ref_strings.asm` regenerado (só adições).
+
+### Corrigido (bug real, pego pelo teste novo antes do fix)
+
+- `.wds_emit_span` emitia a VA do slot (`spanva+o`, auto-ref) em vez da
+  VA alvo (`base+rva`): `dq label_14000204D` apontava p/ si mesmo.
+  Fix: alvo = `base+rva` preservado através da validação.
+
 ## [Unreleased] — R-7.5 `--doctor` (2026-10-12)
 
 ### Adicionado

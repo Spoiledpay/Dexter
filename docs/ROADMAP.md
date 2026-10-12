@@ -89,6 +89,10 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   e fiel; regenerar só se preciso)
 - [ ] R-5.4 strings em code-flow, jump tables, SEH/unwind reemitido,
   fuzzy corpus expandido, `tests\fuzz_pe.py`
+  (PARCIAL 1.2.250, 3b: pré-scan `.collect_strs` insere starts de runs +
+  alvos de ponteiros em g_symR; `.wds_emit_span` emite `dq label_` em
+  `-native`, `s_tab` simbólica, round-trip strings provado, `[21]` verde;
+  RESTA: jump-to-code, loads indexados `[rbx+n]`, `.str_run` com `\r\n`)
 
 ## Fase 6 — AST / Lexer / Geração de código nativo (nova, incremental `[ ]`)
 
@@ -311,3 +315,10 @@ no corpus simples; PEs complexos continuam em `-m bin`.
    único (2026-10-11, latente: funciona em todos os testes — hex
    correto, RBP/RSP íntegros no chamador; NÃO mexer sem prova +
    suite; auditar com `.lst` antes de simplificar).
+- D-17 Regra do pré-scan unificado (2026-10-12, 3b `.collect_strs`):
+   pré-scan que alimenta g_symR DEVE espelhar o conjunto emitido
+   (skip `.reloc`, filtro `-s`, trim-wide pdata/xdata) sempre na direção
+   segura (na dúvida NÃO insere → `db` fallback, nunca símbolo
+   indefinido); validador compartilhado `.ptr_tgt_ok` rejeita código
+   (labels incertas), `.reloc` skipada e fora-do-eff; `dq` só p/ VA com
+   label garantida (chunks fatia em todo R do range).

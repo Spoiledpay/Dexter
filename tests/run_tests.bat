@@ -468,6 +468,21 @@ if errorlevel 1 ( echo "  FALHA: -q suprimiu doctor" & set /a FAIL+=1 ) else ( e
 "%DX%" tests\hello.exe --doctor -o tests\out\should_not6.asm -q >nul 2>&1
 if exist tests\out\should_not6.asm ( echo "  FALHA: doctor escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )
 
+echo === [21] -strings refs (dq pointer p/ R em -native) ===
+"%DX%" tests\strings.exe -o tests\out\strptr.asm -native -strings -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate strptr exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: generate strptr exit 0" & set /a PASS+=1 )
+findstr /c:"dq label_" tests\out\strptr.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem dq label_" & set /a FAIL+=1 ) else ( echo "  OK: dq label_" & set /a PASS+=1 )
+"%DX%" tests\strings.exe -o tests\out\strptr.asm -r -O tests\out\strptr_rt.exe -native -strings -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild strptr exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: rebuild strptr exit 0" & set /a PASS+=1 )
+tests\out\strptr_rt.exe > tests\out\strptr_new.txt 2>&1
+tests\strings.exe > tests\out\strptr_orig.txt 2>&1
+fc /b tests\out\strptr_orig.txt tests\out\strptr_new.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
+"%DX%" tests\strings.exe -o tests\out\strptr_db.asm -strings -q >nul 2>&1
+findstr /c:"dq label_" tests\out\strptr_db.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: default sem dq (db fiel)" & set /a PASS+=1 ) else ( echo "  FALHA: default com dq label_" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

@@ -34,7 +34,7 @@ Versão atual sempre via `-ver` (lida de `version.bin` no build;
 | `-nop-pad` | Bytes `0x90`/`0xCC` em código saem como `nop`/`int3` reais (mesmos bytes) em vez de `db` |
 | `-no-imports` | Não processa imports (afeta `-v`; rebuild por cópia não precisa deles) |
 | `-no-relocs` | Não processa relocs e **omite a seção `.reloc`** do `.asm` |
-| `-strings` | Runs ASCII ≥8 + NUL em dados viram `db "...", 0` |
+| `-strings` | Runs ASCII ≥8 + NUL em dados viram `db "...", 0`; com `-native`, slots de 8 bytes com valor VA rotulada (R/runs/ponteiros) viram `dq label_` |
 | `-overview` | (inspect-only) resumo do PE em stdout (base, entry, seções, imports/exports/relocs); não escreve `.asm`, ignora `-r`; `-q` não suprime |
 | `-json` | Com `-overview`/`-func`/`-xrefs`/`-trace`: mesma informação em JSON compacto (1 linha, chaves estáveis, hex como string, counts decimais); sozinho é ignorado |
 | `-func <VA>` | (inspect-only) dossiê da função em VA: bounds (linear-sweep até ret/jmp/inválido/fim, sem CFG), calls e jmps com alvos (+`__imp_` se IAT) |

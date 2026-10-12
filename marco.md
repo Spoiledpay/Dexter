@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-12, Dexter 1.2.247)
+## 0. Onde estamos (2026-10-12, Dexter 1.2.250)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -12,13 +12,15 @@
 - [x] R-6.5 parcial `-ast-dump`
 - [x] R-6.4 fatias 1–3 (lift `DexIR` + codegen + R-labels + IAT `call|jmp [rel __imp_X]` — FECHADA 1.2.181, fix colisão `[rbp-100]`x`[rbp-96]` → `img` em `[rbp-104]`)
 - [x] R-7.1 `-overview`/`-json` + R-7.2 `-func`/`-xrefs`/`-trace` + R-7.3 `-rsrc` + R-7.4 `-snapshot`/`-compare` (texto+JSON válido, inspect-only)
-- Placar honesto: 155 passam, 0 falham (`tests\run_tests.bat → 155/155 OK` em 1.2.247). Detalhe: `docs/SESSAO-2026-10-11-R74.md`
+- [x] R-7.5 `--doctor` (1.2.248, `[20]`)
+- [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
+- Placar honesto: 168 passam, 0 falham (`tests\run_tests.bat → 168/168 OK` em 1.2.250). Detalhe: `docs/SESSAO-2026-10-11-R74.md`
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[19]`, 155 checks em 1.2.247)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[21]`, 168 checks em 1.2.250)
 - [x] Suite lenta: `tests\run_slow.bat` (round-trip `ld.lld.exe` 68 MB)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + negativos `var32/link/for` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -68,7 +70,10 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 
 - [x] `-overview` (base/entry/seções/imports/exports/relocs, texto + `--json`)
 - [x] `-func <VA>` / `-xrefs <VA>` / `-trace <VA>` (sobre `target_va`, com `truncated:true` honesto)
-- [ ] `-strings` ampliado (refs em code-flow viram labels)
+- [x] `-strings` ampliado (refs em code-flow viram labels: 1.2.250 — slots
+  de 8B com valor VA rotulada (R U runs U ptrs) saem `dq label_` em
+  `-native`; `s_tab` do strings virou tabela simbólica; round-trip
+  comportamental provado; loads indexados/jump-to-code = futuro)
 - [x] `-rsrc` (inspect_pe_resources: type/name/language + payload validado)
 - [x] `-snapshot` / `-compare a.exe b.exe` (hash FNV-1a + size + layout)
 - [x] `dexter --doctor` (nasm/link/kernel32/versão)
@@ -83,7 +88,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [ ] R-5.3 bin com import table regenerada (hoje: copiada, suficiente)
 - [ ] R-6.5 `-emit=db|native` + R-6.6 IR otimizável/backend próprio
 
-## 7. Dívida técnica (D-1–D-16, ver ROADMAP)
+## 7. Dívida técnica (D-1–D-17, ver ROADMAP)
 
 - [x] D-3 parcial: `sym_check` (`[15]`, golden `SYM n=5`) — falta `strpool`/`labels-imp` dedicado
 - [ ] D-7: reativar tabela D com estrutura adequada (intervalos/bitmap)
