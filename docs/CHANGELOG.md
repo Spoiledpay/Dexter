@@ -2,6 +2,18 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-7.5 `--doctor` (2026-10-12)
+
+### Adicionado
+
+- `src/diag/doctor.asm` (`dex_doctor(cfg,img) → 0`, inspect-only):
+  `Doctor: dexter M.m.p` + `nasm: <path> ok|missing` + `link: …` +
+  `kernel32: ok` + `input: valid PE x64`; existência via `dex_open_read`
+  (respeita `-N`/`-L`); aceita `-doctor` e `--doctor`; `-q` não suprime;
+  nunca escreve `.asm`, ignora `-r`; flag `DF_DOCTOR` + despacho em
+  `main.asm` (precedência overview > doctor > rsrc) + ajuda + seção
+  `[20]` (8 checks) na suíte.
+
 ## [Unreleased] — R-7.4 `-snapshot`/`-compare` (2026-10-11)
 
 ### Adicionado

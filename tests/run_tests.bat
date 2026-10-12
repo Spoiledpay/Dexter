@@ -450,6 +450,24 @@ if !errorlevel! EQU 3 ( echo "  OK: segundo invalido (3)" & set /a PASS+=1 ) els
 "%DX%" tests\hello.exe -snapshot tests\out\snap2.json -o tests\out\should_not5.asm -q >nul 2>&1
 if exist tests\out\should_not5.asm ( echo "  FALHA: query escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )
 
+echo === [20] --doctor (toolchain + versao, inspect-only) ===
+"%DX%" tests\hello.exe --doctor > tests\out\doctor.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: --doctor exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: --doctor exit 0" & set /a PASS+=1 )
+findstr /c:"Doctor:" tests\out\doctor.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem Doctor:" & set /a FAIL+=1 ) else ( echo "  OK: Doctor:" & set /a PASS+=1 )
+findstr /c:"nasm:" tests\out\doctor.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem nasm:" & set /a FAIL+=1 ) else ( echo "  OK: nasm:" & set /a PASS+=1 )
+findstr /c:"link:" tests\out\doctor.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem link:" & set /a FAIL+=1 ) else ( echo "  OK: link:" & set /a PASS+=1 )
+findstr /c:"kernel32: ok" tests\out\doctor.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem kernel32" & set /a FAIL+=1 ) else ( echo "  OK: kernel32: ok" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -doctor -q > tests\out\doctorq.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -doctor -q exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -doctor -q exit 0" & set /a PASS+=1 )
+findstr /c:"Doctor:" tests\out\doctorq.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -q suprimiu doctor" & set /a FAIL+=1 ) else ( echo "  OK: -q nao suprime" & set /a PASS+=1 )
+"%DX%" tests\hello.exe --doctor -o tests\out\should_not6.asm -q >nul 2>&1
+if exist tests\out\should_not6.asm ( echo "  FALHA: doctor escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

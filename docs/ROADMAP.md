@@ -216,9 +216,14 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   (gcc manifest `24/1/1033`, ld.lld version `16/1/1033`, vazio,
   2 corrompidos, inspect-only) + fuzz manual (subdir/data/nome:
   só 3 ou saída honesta, nunca crash/hang).
+- [x] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout;
+  FECHADO 1.2.245, `[19]` na suíte; linhas antigas abaixo mantidas p/
+  histórico)
 - [ ] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout)
-- [ ] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout)
-- [ ] R-7.5 `--doctor` (nasm/link/kernel32/versão)
+- [x] R-7.5 `--doctor` (nasm/link/kernel32/versão; FECHADO 1.2.248:
+  `src/diag/doctor.asm`, `dex_doctor(cfg,img) → 0`, inspect-only,
+  `-q` não suprime, existência via open (`ok`/`missing` honesto),
+  aceita `-doctor` e `--doctor`; `[20]` na suíte)
 
 ## Dívida técnica conhecida (honesta, com ID)
 

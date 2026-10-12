@@ -35,6 +35,7 @@
 %define DF_RSRC         0x8000
 %define DF_SNAP         0x10000
 %define DF_CMP          0x20000
+%define DF_DOCTOR       0x40000
 
 ; ---- DexConfig.mode ----
 %define DEX_MODE_WIN64   0

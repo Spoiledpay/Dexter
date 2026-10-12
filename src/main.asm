@@ -41,6 +41,7 @@ extern dex_func
 extern dex_xrefs
 extern dex_trace
 extern dex_rsrc_list
+extern dex_doctor
 extern dex_snapshot
 extern dex_compare
 
@@ -186,8 +187,18 @@ main:
     add rsp, 32
     jmp .done_ok
 .no_overview:
-    ; queries? (inspect-only: precedência overview > rsrc > func > xrefs
-    ; > trace; cada uma sai 0 após rodar)
+    ; queries? (inspect-only: precedência overview > doctor > rsrc > func
+    ; > xrefs > trace; cada uma sai 0 após rodar)
+    mov eax, [rel g_cfg+DexConfig.flags]
+    test eax, DF_DOCTOR
+    jz .q_no_doctor
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    sub rsp, 32
+    call dex_doctor
+    add rsp, 32
+    jmp .done_ok
+.q_no_doctor:
     mov eax, [rel g_cfg+DexConfig.flags]
     test eax, DF_RSRC
     jz .q_no_rsrc

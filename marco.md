@@ -71,7 +71,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [ ] `-strings` ampliado (refs em code-flow viram labels)
 - [x] `-rsrc` (inspect_pe_resources: type/name/language + payload validado)
 - [x] `-snapshot` / `-compare a.exe b.exe` (hash FNV-1a + size + layout)
-- [ ] `dexter --doctor` (nasm/link/kernel32/versão)
+- [x] `dexter --doctor` (nasm/link/kernel32/versão)
 - [ ] Goldens na suíte + geração byte-idêntica com/sem flag
 
 ## 6. Fase 4 — Robustez (sem regressão)

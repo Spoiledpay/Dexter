@@ -53,6 +53,7 @@ s_help_txt:
     db "  -rsrc                  Inventario de recursos PE (3 niveis)", 13, 10
     db "  -snapshot <arq.json>   Fingerprint (FNV-1a+size+layout) em arquivo", 13, 10
     db "  -compare <outro.exe>   Diff de dois binarios (identical/different)", 13, 10
+    db "  --doctor               Toolchain + versao (inspect-only)", 13, 10
     db "  -snapshot <arq.json>   Fingerprint (FNV-1a+size+layout) em arquivo", 13, 10
     db "  -compare <outro.exe>   Diff de dois binarios (identical/different)", 13, 10
     db 13, 10

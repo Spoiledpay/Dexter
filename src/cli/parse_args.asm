@@ -46,6 +46,8 @@ s_xrefs       db "-xrefs", 0
 s_trace       db "-trace", 0
 s_depth       db "-depth", 0
 s_rsrc        db "-rsrc", 0
+s_doctor      db "-doctor", 0
+s_doctor2     db "--doctor", 0
 s_snapshot    db "-snapshot", 0
 s_compare     db "-compare", 0
 s_v           db "-v", 0
@@ -515,6 +517,16 @@ dex_parse_args:
     call .eq
     test eax, eax
     jnz .c_rsrc
+    lea rcx, [rel s_doctor]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_doctor
+    lea rcx, [rel s_doctor2]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_doctor
     lea rcx, [rel s_snapshot]
     mov rdx, rbx
     call .eq
@@ -1078,6 +1090,17 @@ dex_parse_args:
     ret
 .c_rsrc:
     or dword [r15+DexConfig.flags], DF_RSRC
+    mov rdx, r12
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_doctor:
+    or dword [r15+DexConfig.flags], DF_DOCTOR
     mov rdx, r12
     xor eax, eax
     add rsp, 48
