@@ -2,6 +2,53 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-7.4 `-snapshot`/`-compare` (2026-10-11)
+
+### Adicionado
+
+- `src/diag/snapshot.asm` (`dex_snapshot(cfg,img) → 0|2`):
+  fingerprint em arquivo JSON (FNV-1a, size, base, entry, seções,
+  imports com escape, exports, relocs); flag `-snapshot <arq>` +
+  hook inspect-only + seção `[19]` (snapshot exit 0, arquivo criado,
+  `fnv1a`/`size` presentes, inspect-only).
+- `src/diag/compare.asm` (`dex_compare(cfg,imgA,pathB) → 0|2|3`):
+  diff A vs B em texto (`same`/`DIFF`, `+`/`-`/`~` por seção e
+  `dll!func`) e `-json` (`identical` true/false, JSON validado por
+  parse); B ilegível/inválido → 2/3; seção `[19]` (self, diff,
+  `-json` ambos, 2, 3, inspect-only).
+
+### Corrigido (bugs reais, todos reproduzidos)
+
+- Frame 8 pushes + `sub rsp, 320` punha `[rbp-384]` (jtmp) 8 bytes
+  ABAIXO do `[RSP]` real (`RSP=RBP-376`): `call .s_esc`/`.c_esc`
+  sem shadow empurrava o retaddr DENTRO do jtmp e a string o
+  sobrescrevia → `ret` p/ endereço ASCII → AV. Fix: `sub rsp, 328`
+  (frame 392; `[rbp-384]=[RSP]`; bônus: callees com entry alinhado).
+  (snapshot.asm + compare.asm; causa exata via VEH correto com
+  `ExceptionAddress`/`RIP=[ctx+0xF8]`/base via PEB + dump de GPRs.)
+- `.t_find_sec`/`.t_find_sec_a`: candidato em `rax` morria no
+  `dex_memcmp` → hit retornava 0 (tudo `-`/`+` espúrio). Fix:
+  `push`/`pop rax` por iteração (igual `.t_find_imp`).
+- `.tfi_hit_pop`: pops `rdi,r12` fora de ordem (push `rsi,rdi,r12`)
+  → trocava R12/RDI do chamador → bound do loop corrompido →
+  overrun + AV. Fix: ordem `r12,rdi,rsi`.
+- `.t_diff_secs`: `rcx`/`rdx` trocados na chamada `.t_find_sec`
+  (count como base). Fix.
+- JSON: `s_s_open` ×3, `DEX_VER_MAJOR`/`PATCH` nunca setados,
+  `call .s_str` sem `lea rdx` (2×: lixo do tmp-hex), `s_s_imps_e`
+  nunca emitido, `","num_sections"` preservado, first-flag de
+  vírgulas invertida, `]` do added + `"changed":[` ausentes,
+  `}` dos objetos ausentes (8× `s_j_cls`), `rsi` vs `rcx` no
+  `.c_esc` dos paths, `0x` duplicado (separador já tinha).
+
+### Conhecido (latente, sem efeito hoje; D-novas no ROADMAP)
+
+- `dex_console_write`: 5º arg (`lpOverlapped`) em `[rsp+32]` em vez
+  de `[rsp]` — funciona por sorte (lixo benigno); corrigir.
+- `asmbuf_append_u64_hex`: prólogo duplicado aparente com epílogo
+  único — funciona (hex correto em todos os testes); auditar com
+  `.lst` antes de simplificar.
+
 ## [Unreleased] — R-7.3 `-rsrc` (2026-10-11)
 
 ### Adicionado

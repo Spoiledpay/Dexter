@@ -33,6 +33,8 @@
 %define DF_XREFS        0x2000
 %define DF_TRACE        0x4000
 %define DF_RSRC         0x8000
+%define DF_SNAP         0x10000
+%define DF_CMP          0x20000
 
 ; ---- DexConfig.mode ----
 %define DEX_MODE_WIN64   0
@@ -66,6 +68,8 @@ struc DexConfig
     .has_trace      resb 1
     .has_depth      resb 1
     .pad_q          resd 1
+    .snapshot_path  resq 1   ; -snapshot <arq> (NULL = sem snapshot)
+    .compare_path   resq 1   ; -compare <arq> (NULL = sem compare)
 endstruc
 
 ; Estado do PE carregado (preenchido por dex_pe_load).

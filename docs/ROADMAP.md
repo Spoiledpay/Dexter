@@ -287,5 +287,19 @@ no corpus simples; PEs complexos continuam em `-m bin`.
    a 4 bytes no `.wds_chunks` corrompiam `va`/`img` mutuamente → AV em
    `dex_emit_imp_label`): slots qword SEMPRE em múltiplos de 8 dentro da
    área (`-72,-80,-88,-96,-104`, nunca `-100`); ao revisar frame, listar
-   todos os `[rbp-N]` e conferir pares com |Δ|<8; desconfiar de `mov`
+   todos os `[rbp-N]` e conferir pares com |…|<8; desconfiar de `mov`
    com disp8 `9C`/`A0` adjacentes no `.lst`.
+- D-14 Regra jtmp×RSP (2026-10-11, bug real R-7.4: frame 8 pushes +
+   `sub rsp, 320` ⇒ `RSP=RBP-376`, mas jtmp em `[rbp-384]=[RSP-8]`; todo
+   `call` leaf sem shadow empurrava o retaddr DENTRO do jtmp e o escape
+   o sobrescrevia → `ret` p/ ASCII → AV em `.s_esc`/`.c_esc`): buffers
+   de escrita NUNCA em `[RSP-8]`; frame atual 8 pushes + `sub rsp, 328`
+   = 392 ⇒ `[rbp-384]=[RSP]` exato; leaf-call sem shadow só toca
+   `[RSP-8]` (seguro); ao criar buffer local, provar `[base]≥[RSP]`.
+- D-15 `dex_console_write` com 5º arg (`lpOverlapped`) em `[rsp+32]`
+   em vez de `[rsp]` (2026-10-11, latente: funciona por lixo benigno).
+- D-16 `asmbuf_append_u64_hex` com prólogo duplicado aparente
+   (outer+inner, label `dex_append_u64_hex_tmp:` no meio) e epílogo
+   único (2026-10-11, latente: funciona em todos os testes — hex
+   correto, RBP/RSP íntegros no chamador; NÃO mexer sem prova +
+   suite; auditar com `.lst` antes de simplificar).

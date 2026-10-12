@@ -419,6 +419,37 @@ if !errorlevel! EQU 3 ( echo "  OK: count inflado rejeitado (3)" & set /a PASS+=
 "%DX%" tests\gcc.exe -rsrc -o tests\out\should_not3.asm -q >nul 2>&1
 if exist tests\out\should_not3.asm ( echo "  FALHA: rsrc escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: rsrc inspect-only" & set /a PASS+=1 )
 
+echo === [19] -snapshot/-compare (fingerprint FNV-1a + diff) ===
+"%DX%" tests\hello.exe -snapshot tests\out\snap.json -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -snapshot exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -snapshot exit 0" & set /a PASS+=1 )
+if not exist tests\out\snap.json ( echo "  FALHA: snap.json nao criado" & set /a FAIL+=1 ) else ( echo "  OK: snap.json existe" & set /a PASS+=1 )
+findstr /c:"\"fnv1a\":\"0x" tests\out\snap.json >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem fnv1a" & set /a FAIL+=1 ) else ( echo "  OK: fnv1a" & set /a PASS+=1 )
+findstr /c:"\"size\":" tests\out\snap.json >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem size" & set /a FAIL+=1 ) else ( echo "  OK: size" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -compare tests\hello.exe > tests\out\cmp_self.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -compare self exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -compare self exit 0" & set /a PASS+=1 )
+findstr /c:"identical" tests\out\cmp_self.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: self nao identical" & set /a FAIL+=1 ) else ( echo "  OK: self identical" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -compare tests\var64.exe -q > tests\out\cmp_diff.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -compare diff exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -compare diff exit 0" & set /a PASS+=1 )
+findstr /c:"different" tests\out\cmp_diff.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem different" & set /a FAIL+=1 ) else ( echo "  OK: different" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -compare tests\hello.exe -json -q > tests\out\cmpj_self.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -compare -json exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -compare -json exit 0" & set /a PASS+=1 )
+findstr /c:"\"identical\":true" tests\out\cmpj_self.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: identical!=true" & set /a FAIL+=1 ) else ( echo "  OK: identical true" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -compare tests\var64.exe -json -q > tests\out\cmpj_diff.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -compare diff -json exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -compare diff -json exit 0" & set /a PASS+=1 )
+findstr /c:"\"identical\":false" tests\out\cmpj_diff.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: identical!=false" & set /a FAIL+=1 ) else ( echo "  OK: identical false" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -compare tests\missing.exe -q >nul 2>&1
+if !errorlevel! EQU 2 ( echo "  OK: segundo ausente (2)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 2" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -compare tests\var32.exe -q >nul 2>&1
+if !errorlevel! EQU 3 ( echo "  OK: segundo invalido (3)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 3" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -snapshot tests\out\snap2.json -o tests\out\should_not5.asm -q >nul 2>&1
+if exist tests\out\should_not5.asm ( echo "  FALHA: query escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

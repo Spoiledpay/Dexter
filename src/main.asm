@@ -41,6 +41,8 @@ extern dex_func
 extern dex_xrefs
 extern dex_trace
 extern dex_rsrc_list
+extern dex_snapshot
+extern dex_compare
 
 section .rodata
 s_usage    db "Uso: dexter <input.exe> [opcoes]  (-h para ajuda)", 13, 10, 0
@@ -88,11 +90,11 @@ main:
     push r14
     push r15
     sub rsp, 56                ; 8 pushes -> rsp%16==8; 56 ok
-    ; zerar cfg (128) + img (128)
+    ; zerar cfg (144: DexConfig=142) + img (128)
     lea rdi, [rel g_cfg]
     xor eax, eax
-    mov ecx, 16
-    rep stosq                  ; 16*8 = 128
+    mov ecx, 18
+    rep stosq                  ; 18*8 = 144
     lea rdi, [rel g_img]
     mov ecx, 16
     rep stosq
@@ -198,6 +200,31 @@ main:
     jnz .err_rsrc_um
     jmp .done_ok
 .q_no_rsrc:
+    mov eax, [rel g_cfg+DexConfig.flags]
+    test eax, DF_SNAP
+    jz .q_no_snap
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    sub rsp, 32
+    call dex_snapshot
+    add rsp, 32
+    test eax, eax
+    jnz .err_q_um
+    jmp .done_ok
+.q_no_snap:
+    mov eax, [rel g_cfg+DexConfig.flags]
+    test eax, DF_CMP
+    jz .q_no_cmp
+    lea rcx, [rel g_cfg]
+    lea rdx, [rel g_img]
+    mov r8, [rel g_cfg+DexConfig.compare_path]
+    sub rsp, 32
+    call dex_compare
+    add rsp, 32
+    test eax, eax
+    jnz .err_q_um
+    jmp .done_ok
+.q_no_cmp:
     mov eax, [rel g_cfg+DexConfig.flags]
     test eax, DF_FUNC
     jz .q_no_func
@@ -355,6 +382,18 @@ main:
     call dex_console_print_err
     add rsp, 32
     mov ecx, 3
+    call ExitProcess
+.err_q_um:
+    mov r14d, eax                ; código 2|3 do dex_snapshot/compare
+    mov rcx, r13
+    sub rsp, 32
+    call dex_unmap
+    add rsp, 32
+    mov rcx, rbx
+    sub rsp, 32
+    call dex_close
+    add rsp, 32
+    mov ecx, r14d
     call ExitProcess
 .err_gen_um:
     mov rcx, r13

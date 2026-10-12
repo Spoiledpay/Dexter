@@ -46,6 +46,8 @@ s_xrefs       db "-xrefs", 0
 s_trace       db "-trace", 0
 s_depth       db "-depth", 0
 s_rsrc        db "-rsrc", 0
+s_snapshot    db "-snapshot", 0
+s_compare     db "-compare", 0
 s_v           db "-v", 0
 s_vv          db "-vv", 0
 s_q           db "-q", 0
@@ -513,6 +515,16 @@ dex_parse_args:
     call .eq
     test eax, eax
     jnz .c_rsrc
+    lea rcx, [rel s_snapshot]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_snapshot
+    lea rcx, [rel s_compare]
+    mov rdx, rbx
+    call .eq
+    test eax, eax
+    jnz .c_compare
     lea rcx, [rel s_v]
     mov rdx, rbx
     call .eq
@@ -1067,6 +1079,46 @@ dex_parse_args:
 .c_rsrc:
     or dword [r15+DexConfig.flags], DF_RSRC
     mov rdx, r12
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_snapshot:
+    call .next_val
+    test rax, rax
+    jz .c_errval
+    mov rcx, rax
+    sub rsp, 32
+    call .dup_str
+    add rsp, 32
+    test rax, rax
+    jz .c_oom
+    mov [r15+DexConfig.snapshot_path], rax
+    or dword [r15+DexConfig.flags], DF_SNAP
+    xor eax, eax
+    add rsp, 48
+    pop r12
+    pop r14
+    pop rbx
+    pop r15
+    pop rbp
+    ret
+.c_compare:
+    call .next_val
+    test rax, rax
+    jz .c_errval
+    mov rcx, rax
+    sub rsp, 32
+    call .dup_str
+    add rsp, 32
+    test rax, rax
+    jz .c_oom
+    mov [r15+DexConfig.compare_path], rax
+    or dword [r15+DexConfig.flags], DF_CMP
     xor eax, eax
     add rsp, 48
     pop r12

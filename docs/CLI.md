@@ -42,6 +42,8 @@ Versão atual sempre via `-ver` (lida de `version.bin` no build;
 | `-trace <VA>` | (inspect-only) cadeia de calls (first-call DFS até `-depth`); `end` ∈ `leaf/import/cycle/depth/outside` + `truncated`; jmp-out p/ import registra aresta |
 | `-depth <N>` | Profundidade do `-trace` (1..64 em hex `0x..`, padrão 8) |
 | `-rsrc` | (inspect-only) inventário de recursos PE em 3 níveis (tipo/nome/idioma); vazio honesto se ausente; corrompido → saída 3 |
+| `-snapshot <arq.json>` | (inspect-only) fingerprint do PE em arquivo JSON (FNV-1a, size, base, entry, seções, imports, exports, relocs); não escreve `.asm`, ignora `-r` |
+| `-compare <b.exe>` | (inspect-only) diff A (input) vs B em stdout: texto (`same`/`DIFF`, `+`/`-`/`~` por seção e `dll!func`) ou `-json` (`identical`); B ilegível/inválido → saída 2/3 |
 | `-native` | (R-6.1, opt-in) emite mnemônicos reais (`mov rax, rbx`, `[rel label]`) via `dex_emit_native` quando possível, com tamanho byte-exato garantido (`strict`, regras de forma); fallback `db` byte-exato quando não (inclui refs RIP/REL p/ dados, sem labels); default desligado (= `db` atual). Round-trip provado no corpus simples |
 | `-ast-dump` | (R-6.5, opt-in) após gerar o `.asm`, faz parse-back em memória e imprime em stdout o resumo `AST funcs=F blocks=B instrs=I succs=S db=D equ=E dir=R` (mesmo formato do golden de `tests/ast_check.asm`); a geração do `.asm` é inalterada (byte-idêntica com/sem a flag); falha de parse (`.asm` >16 MB ou OOM) = aviso em stderr, nunca erro (respeita `-q`) |
 
@@ -113,3 +115,18 @@ off=0x..` (nomes entre `"..."` com escape). Diretório ausente =
 inventário vazio (saída 0); malformado (fora de limites, forma
 inválida, payload não-mapeado, dir > 4MB) = saída 3 com motivo em
 stderr. Duplicatas de irmãos são listadas (anomalia visível).
+
+Chaves do `-snapshot` (arquivo): `tool`, `version`, `size`,
+`fnv1a`, `image_base`, `entry_rva` (strings `0x..`), `num_sections`,
+`sections[]` (`name`, `vaddr`, `vsize`, `raw_size`),
+`imports_count`, `imports[]` (`dll`, `func` — vazio se ordinal —
+`ordinal`, `is_ordinal`, `iat_rva`), `exports_count`,
+`relocs_count`. JSON validado por parse (`ConvertFrom-Json`).
+
+Chaves do `-compare -json`: `tool`, `version`, `a`, `b`,
+`size`/`fnv1a`/`base`/`entry` (`a`, `b`, `same` 0/1; hex como
+string `0x..`), `sections` (`a`, `b`, `added[]`, `removed[]`,
+`changed[]` com nomes), `imports` (`a`, `b`, `added[]`,
+`removed[]` como `dll!func` ou `dll!ordN`), `exports`/`relocs`
+(`a`, `b`, `same`), `identical` (true/false). Texto espelha o
+mesmo conteúdo (`same`/`DIFF`, `+`/`-`/`~`).
