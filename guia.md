@@ -149,6 +149,7 @@ tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 | `hello.asm` | Fonte golden (NASM) — a suíte monta `hello.exe` dele | round-trip win64 |
 | `tiny.exe` | Mínimo, 2 seções, exit 42 | round-trip |
 | `loop.exe` | Loops/branches, imprime `55` | round-trip |
+| `jtable.exe` | Switch com tabela absoluta (`dq`), `jmp rax`, imprime `2` | round-trip win64 + `-native` |
 | `strings.exe` | `.rdata` rico | round-trip + `-strings` |
 | `no_relocs.exe` | Sem tabela de relocs (`/FIXED`) | round-trip |
 | `var64.exe` | Real (mingw, 11 seções, TLS, 14 imports) | round-trip bin |

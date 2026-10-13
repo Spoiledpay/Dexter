@@ -1483,12 +1483,18 @@ dex_build_operands:
     add rsp, 32
     test eax, eax
     jnz .no
-    ; FF/6 push r/m16/64 (sem forma 32!): size 4 calculado → 8
+    ; FF /2 call, /4 jmp, /6 push: sem forma 32 em 64 bits (só 16/64;
+    ; 16 já caiu em db via .l1_ffck66). size 4 calculado aqui → 8.
     movzx eax, byte [rbx+Insn.modrm]
     shr eax, 3
     and eax, 7
     cmp eax, 6
+    je .l1_ff64
+    cmp eax, 2
+    je .l1_ff64
+    cmp eax, 4
     jne .ok
+.l1_ff64:
     cmp byte [rbx+Insn.op0+DexOp.size], 4
     jne .ok
     mov byte [rbx+Insn.op0+DexOp.size], 8

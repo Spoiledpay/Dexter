@@ -549,6 +549,33 @@ tests\hello.exe > tests\out\ni_orig.txt 2>&1
 fc /b tests\out\ni_orig.txt tests\out\ni_new.txt >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
 
+echo === [27] jump table absoluta (jtable switch + jmp rax) ===
+"%NASM%" -f win64 -o tests\out\jtable.obj tests\jtable.asm
+if errorlevel 1 ( echo "  FALHA: nasm jtable" & set /a FAIL+=1 ) else ( echo "  OK: nasm jtable" & set /a PASS+=1 )
+if exist tests\out\jtable.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\jtable.exe tests\out\jtable.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link jtable" & set /a FAIL+=1 ) else ( echo "  OK: link jtable" & set /a PASS+=1 )
+)
+tests\jtable.exe > tests\out\jt_orig.txt 2>&1
+findstr /c:"2" tests\out\jt_orig.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: jtable nao imprime 2" & set /a FAIL+=1 ) else ( echo "  OK: jtable imprime 2" & set /a PASS+=1 )
+"%DX%" tests\jtable.exe -o tests\out\jt.asm -r -O tests\out\jt_rt.exe -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native jtable" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native jtable" & set /a PASS+=1 )
+if exist tests\out\jt_rt.exe (
+    tests\out\jt_rt.exe > tests\out\jt_new.txt 2>&1
+    fc /b tests\out\jt_orig.txt tests\out\jt_new.txt >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem jt_rt.exe" & set /a FAIL+=1 )
+findstr /c:"lea rax, [rel label_" tests\out\jt.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: base da tabela sem label" & set /a FAIL+=1 ) else ( echo "  OK: base da tabela rotulada" & set /a PASS+=1 )
+"%DX%" tests\jtable.exe -o tests\out\jt_db.asm -r -O tests\out\jt_dbrt.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild db jtable" & set /a FAIL+=1 ) else ( echo "  OK: rebuild db jtable" & set /a PASS+=1 )
+if exist tests\out\jt_dbrt.exe (
+    tests\out\jt_dbrt.exe > tests\out\jt_dbnew.txt 2>&1
+    fc /b tests\out\jt_orig.txt tests\out\jt_dbnew.txt >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: db comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: db comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem jt_dbrt.exe" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

@@ -92,7 +92,9 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   (PARCIAL 1.2.250, 3b: pré-scan `.collect_strs` insere starts de runs +
   alvos de ponteiros em g_symR; `.wds_emit_span` emite `dq label_` em
   `-native`, `s_tab` simbólica, round-trip strings provado, `[21]` verde;
-  RESTA: jump-to-code, loads indexados `[rbx+n]`, `.str_run` com `\r\n`)
+  RESTA: jump-to-code (alvos), loads indexados `[rbx+n]`, `.str_run`
+  com `\r\n`; 1ª fatia 1.2.257: base rotulada via R + corpus
+  `jtable.asm` + `[27]` + fix `jmp/call r64` sem REX (`.l1_ffmem`))
 - [x] R-5.4-fuzz `tests\fuzz_pe.py` mínimo (1.2.253, determinístico por
   seed: flips + miradas em MZ/lfanew/seções/imports + truncamento;
   mutante nunca executado; passa = saída em {0,1,2,3,5}; `[22]` com

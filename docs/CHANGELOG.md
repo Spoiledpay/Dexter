@@ -2,6 +2,23 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — jump table + `jmp/call r64` (2026-10-12)
+
+### Adicionado
+
+- Corpus `tests/jtable.asm` (switch com tabela absoluta `dq`,
+  base via `lea [rel]`, `jmp rax`; imprime `2`, exit 0) + seção
+  `[27]` (8 checks: build do corpus, round-trip `-native` e `db`,
+  base rotulada).
+
+### Corrigido (bug bloqueador achado pelo corpus novo)
+
+- `jmp rax` (`FF E0`, sem REX) saía `jmp eax` — inválido em 64
+  bits, rebuild falhava (5): `.l1_ffmem` (`src/disasm/semantics.asm`)
+  assumia operando 32 por default; `call/jmp` não têm forma 32
+  (como `push`, já tratado). Fix espelha o do `push`: força
+  size 4→8 p/ `/2`/`/4` (16-bit já cai em `db`).
+
 ## [Unreleased] — lote D-2..D-6 + `-end` (2026-10-12)
 
 ### Corrigido (bug real achado em auditoria, com teste-primeiro)

@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-12, Dexter 1.2.256)
+## 0. Onde estamos (2026-10-12, Dexter 1.2.257)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -16,13 +16,13 @@
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
 - [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
 - [x] R-6.5 `-emit` (1.2.254, `[23]`) + lote rápido (1.2.254: `[24]`, D-1, tag `v1.2.254`)
-- Placar honesto: 191 passam, 0 falham (`tests\run_tests.bat → 191/191 OK` em 1.2.256). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
+- Placar honesto: 199 passam, 0 falham (`tests\run_tests.bat → 199/199 OK` em 1.2.257). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[26]`, 191 checks em 1.2.256)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[27]`, 199 checks em 1.2.257)
 - [x] Suite lenta: `tests\run_slow.bat` (round-trip `ld.lld.exe` 68 MB)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + negativos `var32/link/for` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -84,7 +84,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 ## 6. Fase 4 — Robustez (sem regressão)
 
 - [x] `tests\fuzz_pe.py` mínimo (muta bytes, nunca executa input; 20 casos seed 7 na suíte `[22]` + baterias manuais 200/300/50; meta: só saídas 0-3/5, nunca crash/hang — 1 hang real achado e corrigido em 1.2.253)
-- [ ] Jump tables + dados em code-flow
+- [x] Jump tables: base rotulada via R + corpus `jtable.asm` + round-trip (1.2.257, `[27]`); entradas continuam `db`, `jmp [idx]` opaco (futuro: resolução de alvos)
 - [ ] SEH/unwind reemitido (hoje: cópia/trim)
 - [ ] R-2.7 VEX/EVEX/x87 rotulado (hoje: `db` correto)
 - [ ] R-5.3 bin com import table regenerada (hoje: copiada, suficiente)
