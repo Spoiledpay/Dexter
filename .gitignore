@@ -16,7 +16,6 @@ tests/*.asm.sha256
 
 # Binários: ignorar por padrão, EXCETO o corpus de teste versionado
 *.exe
-!tests/for.exe
 !tests/var32.exe
 !tests/var64.exe
 !tests/link.exe

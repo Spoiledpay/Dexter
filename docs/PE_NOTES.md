@@ -1,11 +1,11 @@
 # Dexter — Notas de PE/COFF (achados de campo)
 
-## 1. `for.exe` (corpus): `OptionalHeader.Magic = 0x0000`
+## 1. `Magic = 0x0000` (negativo)
 
-PE x64 com `Magic` zerado (esperado `0x20B`). O Dexter rejeita com saída 3
-— comportamento correto por especificação. Observação: o Windows parece
-tolerar/rodar o arquivo mesmo assim (teste travou em loop — **não executar
-`for.exe` sem timeout; é tratado como corpus negativo/fuzz**).
+PE com `OptionalHeader.Magic` zerado (esperado `0x20B`/`0x10B`). O Dexter
+rejeita com saída 3 — comportamento correto por especificação. A suíte
+gera o fixture na hora (`tests\out\corrupt_mz.exe`, `hello.exe` com `MZ`
+zerado) e nunca o executa.
 Usado em `run_tests.bat` como teste de rejeição.
 
 ## 2. Arquivos de 32 bits (`var32.exe`, `link.exe` de tests)

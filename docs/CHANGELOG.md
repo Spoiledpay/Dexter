@@ -13,7 +13,7 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
   `inc/dec`); generate `bits 32` (sem `default rel`); `-native`
   recusado com 4, `-r` com 5 (Fases C/D futuras).
 - Seção `[30]` (overview/base/generate/bits-32/sem-rel/recusa 4);
-  `[6c]` virou aceite x32; `[19]` usa `for.exe` p/ saída 3.
+  `[6c]` virou aceite x32; `[19]` usa fixture `corrupt_mz` p/ saída 3.
 
 ### Corrigido (tabelas, valem p/ x64 e x32; achados via oráculo capstone)
 

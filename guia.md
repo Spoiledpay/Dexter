@@ -156,11 +156,9 @@ tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 | `gcc.exe` | GCC 15.2.0 real (2 MB) | round-trip bin + `--version` |
 | `ld.lld.exe` | LLD 21.1.3 real (68 MB) | dump rápido; round-trip em `run_slow.bat` |
 | `var32.exe`, `link.exe`, `Calculator.exe`, `Case.exe`, `Char.exe`, `color.exe`, `Color2.exe`, `Contador.exe` | 32-bit | desmonta em `bits 32` (`db` fiel; `-native`/`-r` em construção) |
-| `for.exe` | `Magic=0` (nem o Windows executa — erro 193) | teste de rejeição (saída 3) |
+| `Magic=0` (gerado na suíte a partir de `hello.exe`) | teste de rejeição (saída 3) |
 
-> Atenção: `for.exe` trava se executado (loop infinito aparente) — a suíte
-> nunca o executa, só verifica a rejeição. Programas que imprimem o próprio
-> nome (`gcc --version`) são comparados com o mesmo nome de arquivo (via
+> Programas que imprimem o próprio nome (`gcc --version`) são comparados com o mesmo nome de arquivo (via
 > cópia em `%TEMP%`), pois o output depende de `argv[0]`.
 
 ## 8. Erros comuns

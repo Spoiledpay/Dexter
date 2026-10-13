@@ -72,8 +72,9 @@ if not errorlevel 1 ( echo "  FALHA: --bogus deveria retornar 1" & set /a FAIL+=
 echo === [3] negativos (PE invalido - 3 - + x32 valido - 0 - ===
 "%DX%" tests\var32.exe -o tests\out\neg.asm -q >nul 2>&1
 if !errorlevel! EQU 0 ( echo "  OK: var32 x32 aceito (0)" & set /a PASS+=1 ) else ( echo "  FALHA: var32 deveria retornar 0" & set /a FAIL+=1 )
-"%DX%" tests\for.exe -o tests\out\neg2.asm -q >nul 2>&1
-if errorlevel 3 ( echo "  OK: for.exe (magic 0) rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: for.exe deveria retornar 3" & set /a FAIL+=1 )
+powershell -NoProfile -Command "$b=[IO.File]::ReadAllBytes('tests\hello.exe'); $b[0]=0x00; $b[1]=0x00; [IO.File]::WriteAllBytes('tests\out\corrupt_mz.exe', $b)"
+"%DX%" tests\out\corrupt_mz.exe -o tests\out\neg2.asm -q >nul 2>&1
+if errorlevel 3 ( echo "  OK: magic 0 rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: magic 0 deveria retornar 3" & set /a FAIL+=1 )
 "%DX%" tests\link.exe -o tests\out\neg3.asm -q >nul 2>&1
 if !errorlevel! EQU 0 ( echo "  OK: link.exe x32 aceito (0)" & set /a PASS+=1 ) else ( echo "  FALHA: link.exe deveria retornar 0" & set /a FAIL+=1 )
 
@@ -447,7 +448,7 @@ findstr /c:"\"identical\":false" tests\out\cmpj_diff.txt >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: identical!=false" & set /a FAIL+=1 ) else ( echo "  OK: identical false" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -compare tests\missing.exe -q >nul 2>&1
 if !errorlevel! EQU 2 ( echo "  OK: segundo ausente (2)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 2" & set /a FAIL+=1 )
-"%DX%" tests\hello.exe -compare tests\for.exe -q >nul 2>&1
+"%DX%" tests\hello.exe -compare tests\out\corrupt_mz.exe -q >nul 2>&1
 if !errorlevel! EQU 3 ( echo "  OK: segundo invalido (3)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 3" & set /a FAIL+=1 )
 "%DX%" tests\hello.exe -snapshot tests\out\snap2.json -o tests\out\should_not5.asm -q >nul 2>&1
 if exist tests\out\should_not5.asm ( echo "  FALHA: query escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )

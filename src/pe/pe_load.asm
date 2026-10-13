@@ -4,7 +4,7 @@
 ;
 ; Requisitos atendidos: R-1.x (MZ, PE00, x64 0x8664 / x32 0x14C,
 ; opt 0x20B / 0x10B, seções)
-; Testes: dexter tests\for.exe -v (lista seções); var32.exe abre (x32)
+; Testes: Magic=0 via fixture gerado (saída 3); var32.exe abre (x32)
 ; Autor: Dexter Engineer
 ;=============================================================================
 bits 64
