@@ -68,6 +68,22 @@
 %define OH64_DATA_DIR            112
 %define SIZEOF_OPT_HDR64         240
 
+; IMAGE_OPTIONAL_HEADER32 (PE32, base = nt_hdrs + 4 + 20). Só os campos
+; que o loader usa; offsets da spec (ImageBase u32 em 28!).
+%define OH32_MAGIC               0
+%define OH32_ENTRY_POINT         16
+%define OH32_BASE_OF_CODE       20
+%define OH32_BASE_OF_DATA       24
+%define OH32_IMAGE_BASE          28
+%define OH32_SECTION_ALIGN       32
+%define OH32_FILE_ALIGN          36
+%define OH32_SIZE_OF_IMAGE       56
+%define OH32_SIZE_OF_HEADERS     60
+%define OH32_SUBSYSTEM           68
+%define OH32_NUM_RVA_SIZES       92
+%define OH32_DATA_DIR            96
+%define SIZEOF_OPT_HDR32        224
+
 ; IMAGE_SECTION_HEADER (40 bytes cada)
 %define SH_NAME            0
 %define SH_VSIZE           8

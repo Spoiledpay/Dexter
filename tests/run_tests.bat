@@ -69,13 +69,13 @@ if errorlevel 1 ( echo "  FALHA: banner sem opcoes" & set /a FAIL+=1 ) else ( ec
 "%DX%" --bogus -q >nul 2>&1
 if not errorlevel 1 ( echo "  FALHA: --bogus deveria retornar 1" & set /a FAIL+=1 ) else ( echo "  OK: --bogus retorna 1" & set /a PASS+=1 )
 
-echo === [3] negativos (PE invalido - 3 - ===
+echo === [3] negativos (PE invalido - 3 - + x32 valido - 0 - ===
 "%DX%" tests\var32.exe -o tests\out\neg.asm -q >nul 2>&1
-if errorlevel 3 ( echo "  OK: var32 rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: var32 deveria retornar 3" & set /a FAIL+=1 )
+if !errorlevel! EQU 0 ( echo "  OK: var32 x32 aceito (0)" & set /a PASS+=1 ) else ( echo "  FALHA: var32 deveria retornar 0" & set /a FAIL+=1 )
 "%DX%" tests\for.exe -o tests\out\neg2.asm -q >nul 2>&1
 if errorlevel 3 ( echo "  OK: for.exe (magic 0) rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: for.exe deveria retornar 3" & set /a FAIL+=1 )
 "%DX%" tests\link.exe -o tests\out\neg3.asm -q >nul 2>&1
-if errorlevel 3 ( echo "  OK: link.exe (32-bit) rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: link.exe deveria retornar 3" & set /a FAIL+=1 )
+if !errorlevel! EQU 0 ( echo "  OK: link.exe x32 aceito (0)" & set /a PASS+=1 ) else ( echo "  FALHA: link.exe deveria retornar 0" & set /a FAIL+=1 )
 
 echo === [4] generate win64 (hello) ===
 "%DX%" tests\hello.exe -o tests\out\hello.asm -q
@@ -123,11 +123,13 @@ if exist tests\out\gcc_bin.exe (
     echo "  FALHA: gcc_bin.exe nao criado" & set /a FAIL+=1
 )
 
-echo === [6c] 32-bit extras (rejeicao limpa - exit 3)
+echo === [6c] 32-bit extras (x32 validos: generate 0 + bits 32)
 for %%X in (Calculator Case Char color Color2 Contador) do (
-    "%DX%" tests\%%X.exe -o tests\out\neg_%%X.asm -q >nul 2>&1
-    if !errorlevel! EQU 3 ( echo "  OK: %%X rejeitado -3-" & set /a PASS+=1 ) else ( echo "  FALHA: %%X retornou !errorlevel!" & set /a FAIL+=1 )
+    "%DX%" tests\%%X.exe -o tests\out\x32_%%X.asm -q >nul 2>&1
+    if !errorlevel! EQU 0 ( echo "  OK: %%X x32 aceito (0)" & set /a PASS+=1 ) else ( echo "  FALHA: %%X retornou !errorlevel!" & set /a FAIL+=1 )
 )
+findstr /c:"bits 32" tests\out\x32_Calculator.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: x32 sem bits 32" & set /a FAIL+=1 ) else ( echo "  OK: x32 com bits 32" & set /a PASS+=1 )
 
 echo === [6d] ld.lld 68MB (dump rapido; round-trip completo em run_slow.bat)
 "%DX%" tests\ld.lld.exe -o tests\out\ldlld.asm -v > tests\out\ldlld_v.log 2>&1
@@ -445,7 +447,7 @@ findstr /c:"\"identical\":false" tests\out\cmpj_diff.txt >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: identical!=false" & set /a FAIL+=1 ) else ( echo "  OK: identical false" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -compare tests\missing.exe -q >nul 2>&1
 if !errorlevel! EQU 2 ( echo "  OK: segundo ausente (2)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 2" & set /a FAIL+=1 )
-"%DX%" tests\hello.exe -compare tests\var32.exe -q >nul 2>&1
+"%DX%" tests\hello.exe -compare tests\for.exe -q >nul 2>&1
 if !errorlevel! EQU 3 ( echo "  OK: segundo invalido (3)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 3" & set /a FAIL+=1 )
 "%DX%" tests\hello.exe -snapshot tests\out\snap2.json -o tests\out\should_not5.asm -q >nul 2>&1
 if exist tests\out\should_not5.asm ( echo "  FALHA: query escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )

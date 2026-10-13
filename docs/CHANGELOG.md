@@ -2,6 +2,25 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — x32 fases A+B: detectar + desmontar (2026-10-13)
+
+### Adicionado
+
+- Loader PE32 (`Machine 0x14C` + `Magic 0x10B`, `ImageBase` u32,
+  `PeImage.arch`); diretórios arch-aware (imports stride 4/bit31,
+  exports/relocs/resources); decoder 32-bit (`addr_mode` no `Insn`:
+  sem REX, addr32 default, addr16, sem RIP, `moffs`, `arpl`,
+  `inc/dec`); generate `bits 32` (sem `default rel`); `-native`
+  recusado com 4, `-r` com 5 (Fases C/D futuras).
+- Seção `[30]` (overview/base/generate/bits-32/sem-rel/recusa 4);
+  `[6c]` virou aceite x32; `[19]` usa `for.exe` p/ saída 3.
+
+### Corrigido (tabelas, valem p/ x64 e x32; achados via oráculo capstone)
+
+- `0F AF` (imul) sem `F_MODRM`; `CMOVcc` 40-43 ausentes; x87
+  (D8-DF) sem ModRM; acumulador-imm ignorava `66` (ex `66 25 iw`
+  lido como imm32).
+
 ## [Unreleased] — var64 `-native` montável + D-7 bitmap (2026-10-13)
 
 ### Corrigido (saída 5 `nasm failed` no var64 `-native`, com teste-primeiro)

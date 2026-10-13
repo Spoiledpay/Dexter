@@ -50,11 +50,22 @@ dex_pe_parse_imports:
     mov rax, [rbx+PeImage.opt_header]
     test rax, rax
     jz .zero
+    ; base dos diretórios: opt+112 (x64) / opt+96 (x32); count em +108/+92
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .dir32
     mov ecx, [rax+ OH64_NUM_RVA_SIZES]
     cmp ecx, 2
     jb .zero
     mov ecx, [rax+ OH64_DATA_DIR + 8*1]      ; import rva
     mov edx, [rax+ OH64_DATA_DIR + 8*1 + 4]  ; import size
+    jmp .dir_ok
+.dir32:
+    mov ecx, [rax+ OH32_NUM_RVA_SIZES]
+    cmp ecx, 2
+    jb .zero
+    mov ecx, [rax+ OH32_DATA_DIR + 8*1]      ; import rva
+    mov edx, [rax+ OH32_DATA_DIR + 8*1 + 4]  ; import size
+.dir_ok:
     test ecx, ecx
     jz .zero
     test edx, edx
@@ -130,6 +141,8 @@ dex_pe_parse_imports:
     mov rcx, rax               ; off_int
 .walk:
     mov rdx, rcx
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .walk32
     add rdx, 8
     cmp rdx, r12
     ja .cth_next
@@ -139,6 +152,17 @@ dex_pe_parse_imports:
     cmp r13d, DEX_MAX_IMPORTS
     jae .cth_done
     add rcx, 8
+    jmp .walk
+.walk32:                         ; x32: thunks u32, stride 4
+    add rdx, 4
+    cmp rdx, r12
+    ja .cth_next
+    cmp dword [rsi+rcx], 0
+    je .cth_next
+    inc r13d
+    cmp r13d, DEX_MAX_IMPORTS
+    jae .cth_done
+    add rcx, 4
     jmp .walk
 .cth_next:
     inc r10d
@@ -218,6 +242,8 @@ dex_pe_parse_imports:
     mov [rbp-72], r10d         ; spill di
     xor r9d, r9d               ; k
 .thunk2:
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .thunk32
     mov rcx, [rbp-112]
     mov eax, r9d
     shl rax, 3
@@ -229,6 +255,20 @@ dex_pe_parse_imports:
     mov rax, [rsi+rcx]         ; thunk u64
     test rax, rax
     jz .thunk_end
+    jmp .thunk_val
+.thunk32:                        ; x32: thunks u32, stride 4
+    mov rcx, [rbp-112]
+    mov eax, r9d
+    shl rax, 2
+    add rcx, rax               ; off_thunk
+    mov rdx, rcx
+    add rdx, 4
+    cmp rdx, r12
+    jae .thunk_end
+    mov eax, [rsi+rcx]         ; thunk u32 (zero-estendido em rax)
+    test eax, eax
+    jz .thunk_end
+.thunk_val:
     cmp r11d, r13d
     jae .thunk_end
     mov ecx, r11d
@@ -237,7 +277,13 @@ dex_pe_parse_imports:
     mov rcx, [rbp-96]
     mov [r10+0], rcx           ; dll_name
     mov rdx, rax
-    shr rdx, 63                ; bit63
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .ord32
+    shr rdx, 63                ; bit63 (x64)
+    jmp .ord_tst
+.ord32:
+    shr rdx, 31                ; bit31 (x32)
+.ord_tst:
     test edx, edx
     jz .byname2
     mov qword [r10+8], 0       ; func_name = NULL
@@ -277,7 +323,13 @@ dex_pe_parse_imports:
 .iat2:
     mov eax, [rbp-88]          ; iat_base_rva
     mov ecx, r9d
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .iat32
     shl rcx, 3
+    jmp .iat_add
+.iat32:                          ; x32: stride 4
+    shl rcx, 2
+.iat_add:
     add rax, rcx
     mov [r10+24], eax          ; iat_rva
     mov dword [r10+28], 0

@@ -51,6 +51,7 @@ s_err_io   db "dexter: cannot open/read input file", 13, 10, 0
 s_err_pe   db "dexter: invalid or unsupported PE file", 13, 10, 0
 s_err_rsrc db "dexter: corrupt resource directory", 13, 10, 0
 s_err_gen  db "dexter: failed to generate asm", 13, 10, 0
+s_err_nat32 db "dexter: -native indisponivel p/ x32 (Fase D)", 13, 10, 0
 s_ok_gen   db "OK: asm written", 13, 10, 0
 s_ok_rb    db "OK: rebuild done", 13, 10, 0
 s_v_base   db "ImageBase: 0x", 0
@@ -285,6 +286,8 @@ main:
     sub rsp, 32
     call dex_generate_asm
     add rsp, 32
+    cmp eax, 4
+    je .err_gen4_um
     test eax, eax
     jnz .err_gen_um
     mov eax, [rel g_cfg+DexConfig.quiet]
@@ -420,6 +423,21 @@ main:
     call dex_console_print_err
     add rsp, 32
     mov ecx, 2
+    call ExitProcess
+.err_gen4_um:
+    mov rcx, r13
+    sub rsp, 32
+    call dex_unmap
+    add rsp, 32
+    mov rcx, rbx
+    sub rsp, 32
+    call dex_close
+    add rsp, 32
+    lea rcx, [rel s_err_nat32]
+    sub rsp, 32
+    call dex_console_print_err
+    add rsp, 32
+    mov ecx, 4
     call ExitProcess
 .exit5_um:
     mov r14, rax

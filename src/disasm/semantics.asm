@@ -109,6 +109,8 @@ dex_build_operands:
     test rcx, rcx
     jz .no
     mov rbx, rcx               ; insn
+    cmp byte [rbx+Insn.addr_mode], 1
+    je .no                    ; Fase x32: db fiel (Fase D: nativo x32)
     mov r10d, [rbx+Insn.opcode]
     mov r11d, [rbx+Insn.opcode_len]
     cmp r11d, 1

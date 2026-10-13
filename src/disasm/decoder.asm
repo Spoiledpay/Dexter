@@ -76,6 +76,11 @@ dex_disasm_one:
     mov [r15+144], rax
     mov [r15+152], rax
     mov [r15+Insn.address], r14
+    ; modo de endereço (Fase x32): 0 = 64 bits, 1 = 32 bits.
+    ; Prefixos/ModRM/operandos consultam Insn.addr_mode (sem REX nem
+    ; RIP-rel em x32). build_operands recusa x32 (db fiel).
+    mov eax, [rbx+PeImage.arch]
+    mov [r15+Insn.addr_mode], al
     mov rax, [rbx+PeImage.image_base]
     cmp r14, rax
     jb .fail
@@ -184,6 +189,16 @@ dex_disasm_one:
     mov dword [r15+Insn.opcode_len], 3
     mov dword [rbp-104], 3
 .got_op:
+    ; x32: 0x63 é arpl com ModRM (não movsxd); sem mne fiel → db.
+    ; (flag F_MODRM já está certa; só o mnemônico mente.)
+    cmp byte [r15+Insn.addr_mode], 1
+    jne .got_op_ok
+    cmp dword [r15+Insn.opcode_len], 1
+    jne .got_op_ok
+    cmp dword [r15+Insn.opcode], 0x63
+    jne .got_op_ok
+    mov qword [r15+Insn.mne], 0
+.got_op_ok:
     mov eax, [rbp-80]
     and eax, 1
     mov [r15+Insn.has_modrm], al

@@ -553,6 +553,8 @@ dex_xrefs:
 ; (rax preservado na pratica: so lido.)
 ;-----------------------------------------------------------------------------
 .xrip_t:
+    cmp byte [rax+Insn.addr_mode], 1
+    je .xrt_no                   ; x32: disp32-abs, não RIP
     cmp byte [rax+Insn.has_modrm], 0
     je .xrt_no
     cmp byte [rax+Insn.disp_size], 4

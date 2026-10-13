@@ -45,11 +45,21 @@ dex_pe_parse_exports:
     mov rax, [rbx+PeImage.opt_header]
     test rax, rax
     jz .zero_e
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .edir32
     mov ecx, [rax+ OH64_NUM_RVA_SIZES]
     test ecx, ecx
     jz .zero_e
     mov ecx, [rax+ OH64_DATA_DIR + 8*0]       ; export rva
     mov edx, [rax+ OH64_DATA_DIR + 8*0 + 4]   ; export size
+    jmp .edir_ok
+.edir32:
+    mov ecx, [rax+ OH32_NUM_RVA_SIZES]
+    test ecx, ecx
+    jz .zero_e
+    mov ecx, [rax+ OH32_DATA_DIR + 8*0]       ; export rva
+    mov edx, [rax+ OH32_DATA_DIR + 8*0 + 4]   ; export size
+.edir_ok:
     test ecx, ecx
     jz .zero_e
     test edx, edx

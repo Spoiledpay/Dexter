@@ -731,6 +731,8 @@ dex_trace:
 ; .t_rip_tgt a?? rax=g_tinsn -> rdx=slotVA ou 0. Leaf. Clobber: rax?,rcx,rdx.
 ;-----------------------------------------------------------------------------
 .t_rip_tgt:
+    cmp byte [rax+Insn.addr_mode], 1
+    je .trt_no                   ; x32: disp32-abs, não RIP
     cmp byte [rax+Insn.has_modrm], 0
     je .trt_no
     cmp byte [rax+Insn.disp_size], 4

@@ -99,11 +99,21 @@ dex_rsrc_list:
     mov rax, [r15+PeImage.opt_header]
     test rax, rax
     jz .empty
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
+    je .sdir32
     mov ecx, [rax+OH64_NUM_RVA_SIZES]
     cmp ecx, 3
     jb .empty                    ; sem entrada de recursos: vazio honesto
     mov edx, [rax+OH64_DATA_DIR+16]   ; rsrc rva (entrada 2)
     mov eax, [rax+OH64_DATA_DIR+20]   ; rsrc size
+    jmp .sdir_ok
+.sdir32:
+    mov ecx, [rax+OH32_NUM_RVA_SIZES]
+    cmp ecx, 3
+    jb .empty
+    mov edx, [rax+OH32_DATA_DIR+16]   ; rsrc rva (entrada 2)
+    mov eax, [rax+OH32_DATA_DIR+20]   ; rsrc size
+.sdir_ok:
     test eax, eax
     jz .empty                    ; size 0: sem recursos
     test edx, edx

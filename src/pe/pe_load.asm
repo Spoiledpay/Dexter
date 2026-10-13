@@ -2,8 +2,9 @@
 ; Dexter/src/pe/pe_load.asm
 ; dex_pe_load — valida DOS/NT headers e preenche PeImage + tabela de seções.
 ;
-; Requisitos atendidos: R-1.x (MZ, PE00, x64 0x8664, opt 0x20B, seções)
-; Testes: dexter tests\for.exe -v (deve listar seções); var32.exe -> erro 3
+; Requisitos atendidos: R-1.x (MZ, PE00, x64 0x8664 / x32 0x14C,
+; opt 0x20B / 0x10B, seções)
+; Testes: dexter tests\for.exe -v (lista seções); var32.exe abre (x32)
 ; Autor: Dexter Engineer
 ;=============================================================================
 bits 64
@@ -23,6 +24,8 @@ section .text
 ;         rdx = filebuf (mapeado, legível)
 ;         r8  = filesize
 ; Ret:    rax = 0 OK, 3 PE inválido
+; Fase x32: aceita Machine I386 (0x14C) + Magic 0x10B (PE32); preenche
+; PeImage.arch (0=x64, 1=x32); ImageBase u32 zero-estendida.
 ; Clobber: rax, rcx, rdx, r8-r11
 ; Preserva: rbx, rbp, rdi, rsi, r12-r15
 ; Segurança: todo campo do PE é validado contra filesize antes do uso.
@@ -62,32 +65,55 @@ dex_pe_load:
     ; PE\0\0
     cmp dword [r14], IMAGE_NT_SIGNATURE
     jne .bad
-    ; Machine == AMD64 (rejeita I386 e outros com erro 3 limpo)
+    ; Machine == AMD64 ou I386 (outros: erro 3 limpo)
     movzx eax, word [r14+4+ FH_MACHINE]
     cmp eax, IMAGE_FILE_MACHINE_AMD64
+    je .mach64
+    cmp eax, IMAGE_FILE_MACHINE_I386
     jne .bad
+    mov dword [rbx+PeImage.arch], DEX_ARCH_X32
+    jmp .mach_ok
+.mach64:
+    mov dword [rbx+PeImage.arch], DEX_ARCH_X64
+.mach_ok:
     ; NumberOfSections 1..96
     movzx edi, word [r14+4+ FH_NUMBER_OF_SECTIONS]
     test edi, edi
     jz .bad
     cmp edi, DEX_MAX_SECTIONS
     ja .bad
-    ; SizeOfOptionalHeader
+    ; SizeOfOptionalHeader (mínimo: 240 x64 / 224 x32)
     movzx r10d, word [r14+4+ FH_SIZE_OF_OPT_HDR]
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .opt32
     cmp r10d, SIZEOF_OPT_HDR64
     jb .bad
+    mov eax, SIZEOF_OPT_HDR64
+    jmp .opt_szb
+.opt32:
+    cmp r10d, SIZEOF_OPT_HDR32
+    jb .bad
+    mov eax, SIZEOF_OPT_HDR32
+.opt_szb:
     ; opt = nt + 4 + 20
     lea r11, [r14+24]          ; opt_header
-    ; opt bounds: opt + 240 <= size?
-    mov rax, r11
-    sub rax, rsi               ; off_opt
-    add rax, SIZEOF_OPT_HDR64
-    cmp rax, r12
+    ; opt bounds: opt + mínimo <= size?
+    mov rcx, r11
+    sub rcx, rsi               ; off_opt
+    add rcx, rax
+    cmp rcx, r12
     ja .bad
-    ; Magic == 0x20B
+    ; Magic == 0x20B (x64) / 0x10B (x32); offset 0 comum
     movzx eax, word [r11+ OH64_MAGIC]
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .mag32
     cmp eax, IMAGE_NT_OPTIONAL_HDR64_MAGIC
     jne .bad
+    jmp .mag_ok
+.mag32:
+    cmp eax, IMAGE_NT_OPTIONAL_HDR32_MAGIC
+    jne .bad
+.mag_ok:
     ; SectionAlignment / FileAlignment != 0
     mov eax, [r11+ OH64_SECTION_ALIGN]
     test eax, eax
@@ -118,8 +144,15 @@ dex_pe_load:
     ; Preencher PeImage
     mov [rbx+PeImage.file_buffer], rsi
     mov [rbx+PeImage.file_size], r12
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .base32
     mov rax, [r11+ OH64_IMAGE_BASE]
     mov [rbx+PeImage.image_base], rax
+    jmp .base_ok
+.base32:
+    mov eax, [r11+ OH32_IMAGE_BASE]    ; u32 zero-estendida em rax
+    mov [rbx+PeImage.image_base], rax
+.base_ok:
     mov eax, [r11+ OH64_ENTRY_POINT]
     mov [rbx+PeImage.entry_point], rax
     mov [rbx+PeImage.num_sections], edi

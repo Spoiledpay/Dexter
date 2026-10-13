@@ -155,7 +155,7 @@ tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 | `var64.exe` | Real (mingw, 11 seções, TLS, 14 imports) | round-trip bin |
 | `gcc.exe` | GCC 15.2.0 real (2 MB) | round-trip bin + `--version` |
 | `ld.lld.exe` | LLD 21.1.3 real (68 MB) | dump rápido; round-trip em `run_slow.bat` |
-| `var32.exe`, `link.exe`, `Calculator.exe`, `Case.exe`, `Char.exe`, `color.exe`, `Color2.exe`, `Contador.exe` | 32-bit | teste de rejeição (saída 3) |
+| `var32.exe`, `link.exe`, `Calculator.exe`, `Case.exe`, `Char.exe`, `color.exe`, `Color2.exe`, `Contador.exe` | 32-bit | desmonta em `bits 32` (`db` fiel; `-native`/`-r` em construção) |
 | `for.exe` | `Magic=0` (nem o Windows executa — erro 193) | teste de rejeição (saída 3) |
 
 > Atenção: `for.exe` trava se executado (loop infinito aparente) — a suíte
@@ -167,7 +167,7 @@ tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 
 | Sintoma | Causa provável |
 |---|---|
-| `dexter: invalid or unsupported PE file` (3) | Arquivo 32-bit, corrompido ou `Magic != 0x20B` — use `-v` para inspecionar |
+| `dexter: invalid or unsupported PE file` (3) | Arquivo corrompido ou `Magic` inválido — use `-v` para inspecionar |
 | `dexter: cannot open/read input file` (2) | Caminho errado ou sem permissão de leitura |
 | `dexter: nasm failed` (5) | `nasm.exe` não achado (use `-N`) ou `.asm` inválido |
 | `dexter: link failed` (5) | `link.exe` não achado (use `-L`); ver saída do link acima |
@@ -176,7 +176,7 @@ tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 
 ## 9. Limitações honestas (ver `docs/ROADMAP.md`)
 
-- Só PE **x64** (32-bit retorna 3; não há plano de decoder 32-bit).
+- PE **x64** completo (round-trip) + PE **x32** em `bits 32` (`db` fiel, inspect-only total; `-native`/`-r` x32 em construção — Fases C/D).
 - VEX/EVEX/x87 saem como `db` byte-exato (correto em bytes).
 - Modo win64 garante round-trip comportamental em PEs simples; para PEs
   reais complexos, `-m bin` é o caminho fiel (byte-idêntico).

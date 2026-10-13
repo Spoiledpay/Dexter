@@ -51,7 +51,9 @@ dex_decode_modrm:
     cmp cl, 3
     je .done_m                 ; mod==11: só registradores
     cmp byte [r8+Insn.legacy67], 0
-    jne .addr32
+    jne .leg67
+    cmp byte [r8+Insn.addr_mode], 1
+    je .addr32                 ; x32 sem 0x67: endereçamento 32 (mesma forma)
     ; ---- addr64 ----
     cmp bl, 4
     je .sib64
@@ -84,7 +86,9 @@ dex_decode_modrm:
     je .disp32
     jmp .done_m                ; mod==0 (rm!=4/5): sem disp
 .addr32:
-    ; ---- addr32 (0x67): SIB se rm==4; disp32 se (mod==0 && rm==5) ----
+    ; ---- addr32 (0x67 em x64; default em x32): SIB se rm==4;
+    ; disp32 se (mod==0 && rm==5). Em x32 o disp32 é ABSOLUTO
+    ; (sem semântica RIP; build_operands recusa x32 de todo modo).
     cmp bl, 4
     je .sib32
     cmp bl, 5
@@ -92,6 +96,32 @@ dex_decode_modrm:
     cmp cl, 0
     jne .mod_disp64
     jmp .disp32
+.leg67:
+    cmp byte [r8+Insn.addr_mode], 1
+    je .addr16                 ; x32 com 0x67: endereçamento 16 (sem SIB)
+    jmp .addr32                ; x64 com 0x67: forma 32
+.addr16:
+    ; mod==0: rm==6 ? disp16 : sem disp; mod==1: disp8; mod==2: disp16.
+    cmp cl, 1
+    je .disp8
+    cmp cl, 2
+    je .disp16
+    test cl, cl
+    jnz .done_m                ; mod==3 já saiu acima; defensivo
+    cmp bl, 6
+    je .disp16
+    jmp .done_m
+.disp16:
+    mov rdx, r12
+    sub rdx, rsi
+    cmp rdx, 2
+    jb .oob_r
+    movsx ebx, word [rsi]       ; com sinal (como disp8/disp32)
+    mov [r8+Insn.disp], rbx
+    mov byte [r8+Insn.disp_size], 2
+    add rsi, 2
+    add rax, 2
+    jmp .done_m
 .sib32:
     cmp rsi, r12
     jae .oob_r

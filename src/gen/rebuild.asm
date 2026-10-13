@@ -76,6 +76,11 @@ s_hdr1  db "; ==================================================================
         db "; Rebuild: nasm -f win64 + link /BASE:idem /DYNAMICBASE:NO", 13, 10
         db "; ===================================================================", 13, 10
         db "bits 64", 13, 10, "default rel", 13, 10, 13, 10, 0
+s_hdr32 db "; ===================================================================", 13, 10
+        db "; Gerado por Dexter v0.2 (nasm/win32) - nao editar manualmente", 13, 10
+        db "; x32: db fiel; -native e -r em construcao (Fase C/D)", 13, 10
+        db "; ===================================================================", 13, 10
+        db "bits 32", 13, 10, 13, 10, 0
 s_global db "global ", 0
 s_sect  db "section ", 0
 s_code  db " code", 13, 10, 0
@@ -91,6 +96,11 @@ s_bin_hdr db "; ================================================================
           db "; Rebuild byte-fiel: headers + secoes + overlay", 13, 10
           db "; ===================================================================", 13, 10
           db "bits 64", 13, 10, 13, 10, 0
+s_bin_hdr32 db "; ===================================================================", 13, 10
+          db "; Gerado por Dexter v0.2 -m bin (nasm -f bin) - nao editar", 13, 10
+          db "; Rebuild byte-fiel: headers + secoes + overlay (x32)", 13, 10
+          db "; ===================================================================", 13, 10
+          db "bits 32", 13, 10, 13, 10, 0
 s_bin_warn db "dexter: warning: disasm options ignored in bin mode", 13, 10, 0
 s_times db "    times 0x", 0
 s_db0   db " db 0", 13, 10, 0
@@ -128,6 +138,7 @@ e_gen_m db "dexter: out of memory (generate)", 13, 10, 0
 e_rb_n  db "dexter: nasm failed", 13, 10, 0
 e_rb_l  db "dexter: link failed", 13, 10, 0
 e_rb_c  db "dexter: cannot spawn child process", 13, 10, 0
+e_rb_x32 db "dexter: x32 rebuild em construcao (Fase C: nasm -f win32 + link X86)", 13, 10, 0
 e_astdump db "dexter: warning: -ast-dump skipped (asm too large or out of memory)", 13, 10, 0
 s_imp_colon db ":", 13, 10, 0
 
@@ -150,7 +161,9 @@ g_spanflags: resq 1                ; bit0 nodq: span sai db puro (.reloc: verbat
 section .text
 
 ;-----------------------------------------------------------------------------
-; dex_generate_asm — rcx=cfg, rdx=img -> rax=0 ok, 2 io, 6 oom
+; dex_generate_asm — rcx=cfg, rdx=img -> rax=0 ok, 2 io, 4 x32+native, 6 oom
+; Fase x32: -native recusado com 4 (Fase D); rebuild x32 recusado no
+; dex_rebuild com 5 (Fase C).
 ;-----------------------------------------------------------------------------
 dex_generate_asm:
     push rbp
@@ -163,6 +176,24 @@ dex_generate_asm:
     push r14
     push r15
     sub rsp, 88
+    ; x32 + -native? (arch só conhecido aqui, pós-pe_load)
+    mov eax, [rcx+DexConfig.flags]
+    test eax, DF_NATIVE
+    jz .gen_archok
+    cmp dword [rdx+PeImage.arch], DEX_ARCH_X32
+    jne .gen_archok
+    mov eax, 4
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rdi
+    pop rbx
+    pop rbp
+    ret
+.gen_archok:
     mov eax, [rcx+DexConfig.mode]
     cmp eax, DEX_MODE_BIN
     je .gen_bin
@@ -199,8 +230,14 @@ dex_generate_asm:
     test rax, rax
     jz .oom
     mov r14, rax               ; buf
-    ; header
+    ; header (bits 64 + default rel, ou bits 32 em x32)
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
+    je .hdr32
     lea rdx, [rel s_hdr1]
+    jmp .hdr_go
+.hdr32:
+    lea rdx, [rel s_hdr32]
+.hdr_go:
     mov rcx, r14
     sub rsp, 32
     call asmbuf_append_str
@@ -814,8 +851,11 @@ dex_generate_asm:
     jae .cs_rip
     bts [rax], rcx               ; set bit (single-thread, sem lock)
 .cs_rip:
-    ; RIP-ref em dados? (disp32, sem 67, rm==101, sem SIB)
+    ; RIP-ref em dados? (só modo 64: disp32, sem 67, rm==101, sem SIB.
+    ; Em x32, mod00+rm101+disp32 é ABSOLUTO, não RIP.)
     lea rax, [rel g_insn]
+    cmp byte [rax+Insn.addr_mode], 1
+    je .cs_adv
     cmp byte [rax+Insn.has_modrm], 0
     je .cs_adv
     cmp byte [rax+Insn.disp_size], 4
@@ -2568,6 +2608,8 @@ dex_generate_asm:
 ;-----------------------------------------------------------------------------
 ; dex_rebuild — rcx=cfg, rdx=img -> rax=0 ok, 5 falha
 ; Ownership: paths derivados vazam p/ o processo (exit em seguida).
+; Fase x32: rebuild recusado com 5 + mensagem (Fase C: nasm -f win32
+; + link /MACHINE:X86 + kernel32.lib x86).
 ;-----------------------------------------------------------------------------
 dex_rebuild:
     push rbp
@@ -2582,6 +2624,24 @@ dex_rebuild:
     sub rsp, 88
     mov rbx, rcx               ; cfg
     mov r15, rdx               ; img
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
+    jne .rb_archok
+    lea rcx, [rel e_rb_x32]
+    sub rsp, 32
+    call dex_console_print_err
+    add rsp, 32
+    mov eax, 5
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rdi
+    pop rbx
+    pop rbp
+    ret
+.rb_archok:
     mov eax, [rcx+DexConfig.mode]
     cmp eax, DEX_MODE_BIN
     je .rb_bin
@@ -3325,7 +3385,13 @@ dex_generate_bin:
     test rax, rax
     jz .gb_oom
     mov r14, rax               ; buf
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
+    je .gb_hdr32
     lea rdx, [rel s_bin_hdr]
+    jmp .gb_hdr_go
+.gb_hdr32:
+    lea rdx, [rel s_bin_hdr32]
+.gb_hdr_go:
     mov rcx, r14
     sub rsp, 32
     call asmbuf_append_str

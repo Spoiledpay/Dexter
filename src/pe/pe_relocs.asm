@@ -45,11 +45,21 @@ dex_pe_parse_relocs:
     mov rax, [rbx+PeImage.opt_header]
     test rax, rax
     jz .zero_r
+    cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
+    je .rdir32
     mov ecx, [rax+ OH64_NUM_RVA_SIZES]
     cmp ecx, 6
     jb .zero_r
     mov ecx, [rax+ OH64_DATA_DIR + 8*5]       ; reloc rva
     mov edx, [rax+ OH64_DATA_DIR + 8*5 + 4]   ; reloc size
+    jmp .rdir_ok
+.rdir32:
+    mov ecx, [rax+ OH32_NUM_RVA_SIZES]
+    cmp ecx, 6
+    jb .zero_r
+    mov ecx, [rax+ OH32_DATA_DIR + 8*5]       ; reloc rva
+    mov edx, [rax+ OH32_DATA_DIR + 8*5 + 4]   ; reloc size
+.rdir_ok:
     test ecx, ecx
     jz .zero_r
     test edx, edx

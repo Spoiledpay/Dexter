@@ -46,10 +46,10 @@ out/ obj/        artefatos de build (ignorados no git)
 |---|---|
 | `tests\hello.asm` | Fonte golden (NASM) — a suíte monta `hello.exe` a partir dele |
 | `tests\var64.exe` | x64 real (mingw, 11 seções, TLS, 14 imports) — round-trip bin |
-| `tests\var32.exe`, `tests\link.exe` | 32-bit — rejeição limpa (saída 3) |
+| `tests\var32.exe`, `tests\link.exe`, `Calculator/Case/Char/color/Color2/Contador.exe` | 32-bit — desmonta em `bits 32` (`[30]`, `[6c]`) |
 | `tests\for.exe` | `Magic=0` — rejeição limpa (saída 3); **não executar sem timeout** |
 
-## Estado atual (v1.2.257 + R-6.4 fechado + R-7.5)
+## Estado atual (v1.2.271 + R-6.4 fechado + R-7.5 + x32 A/B)
 
 - [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 199/199 OK
   (R-6.4.3 fechado em 2026-10-11 — ver

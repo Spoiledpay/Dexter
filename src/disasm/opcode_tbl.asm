@@ -320,7 +320,8 @@ dex_tbl1_flag:
     db 0, F_I8, 0, 0                                               ; CC (CD int imm8)
     db F_MODRM|F_GRP, F_MODRM|F_GRP, F_MODRM|F_GRP, F_MODRM|F_GRP  ; D0 shifts
     db F_I8, F_I8, 0, 0                                            ; D4 (D4/D5 aam/aad)
-    db 0, 0, 0, 0, 0, 0, 0, 0                                      ; D8 x87
+    db F_MODRM, F_MODRM, F_MODRM, F_MODRM                          ; D8 x87 (só LDE;
+    db F_MODRM, F_MODRM, F_MODRM, F_MODRM                          ; DC  mne segue 0=db)
     db F_R8, F_R8, F_R8, F_R8                                      ; E0 loop/jrcxz
     db F_I8, F_I8, F_I8, F_I8                                      ; E4 in/out imm8
     db F_R32, F_R32, 0, F_R8                                       ; E8 (E8 call,E9 jmp,EB jmp)
@@ -340,7 +341,8 @@ dex_tbl1_mne:
     dq s_sub, s_sub, s_sub, s_sub, s_sub, s_sub, 0, 0
     dq s_xor, s_xor, s_xor, s_xor, s_xor, s_xor, 0, 0
     dq s_cmp, s_cmp, s_cmp, s_cmp, s_cmp, s_cmp, 0, 0
-    times 16 dq 0
+    dq s_inc,s_inc,s_inc,s_inc,s_inc,s_inc,s_inc,s_inc    ; 40 (x32; REX em x64)
+    dq s_dec,s_dec,s_dec,s_dec,s_dec,s_dec,s_dec,s_dec    ; 48 (x32; REX em x64)
     dq s_push,s_push,s_push,s_push,s_push,s_push,s_push,s_push
     dq s_pop,s_pop,s_pop,s_pop,s_pop,s_pop,s_pop,s_pop
     dq 0, 0, 0, s_movsxd, 0, 0, 0, 0
@@ -387,7 +389,7 @@ dex_tbl2_flag:
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; 2C
     db 0, 0, 0, 0, 0, 0, 0, 0                                ; 30 sys
     db 0, 0, 0, 0, 0, 0, 0, 0                                ; 38? NÃO: 38/3A são escapes
-    db 0, 0, 0, 0, F_MODRM, F_MODRM, F_MODRM, F_MODRM        ; 40 cmov
+    db F_MODRM, F_MODRM, F_MODRM, F_MODRM, F_MODRM, F_MODRM, F_MODRM, F_MODRM        ; 40 cmov
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; 44
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; 48
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; 4C
@@ -413,7 +415,7 @@ dex_tbl2_flag:
     db 0, 0, 0, F_MODRM                                      ; A0 (A3 bt)
     db F_MODRM|F_I8, F_MODRM, F_MODRM, F_MODRM               ; A4 (A4 shld)
     db 0, 0, 0, F_MODRM                                      ; A8 (AB bts)
-    db F_MODRM|F_I8, F_MODRM, 0, 0                           ; AC (AC shrd)
+    db F_MODRM|F_I8, F_MODRM, 0, F_MODRM                     ; AC (AC shrd; AF imul)
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; B0
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; B4
     db F_MODRM, F_MODRM, F_MODRM|F_GRP, F_MODRM              ; B8 (BA grupo 8)
@@ -443,14 +445,14 @@ dex_tbl2_mne:
     times 16 dq s_sse
     times 8 dq 0
     dq 0,0,0,0, s_cmov,s_cmov,s_cmov,s_cmov
-    times 8 dq s_cmov
+    dq s_cmov,s_cmov,s_cmov,s_cmov,s_cmov,s_cmov,s_cmov,s_cmov
     times 32 dq s_sse
     times 8 dq s_sse
     dq s_jcc,s_jcc,s_jcc,s_jcc, s_jcc,s_jcc,s_jcc,s_jcc
     dq s_jcc,s_jcc,s_jcc,s_jcc, s_jcc,s_jcc,s_jcc,s_jcc
     times 16 dq s_setcc
     dq 0,0,s_cpuid,s_bt, s_shld,s_shld,0,0
-    dq 0,0,0,s_bt, s_shrd,s_shrd,0,0
+    dq 0,0,0,s_bt, s_shrd,s_shrd,0,s_imul
     dq s_cmpx,s_cmpx,0,s_bt, 0,0,s_movzx,s_movzx
     dq 0,0,0,s_bt, s_bsf,s_bsr,s_movsx,s_movsx
     dq s_xadd,s_xadd,0,0, 0,0,0,0

@@ -107,6 +107,9 @@ dex_decode_prefixes:
 .rex_try:
     cmp rsi, rdx
     jae .done
+    ; Fase x32: 0x40-0x4F são inc/dec (nunca REX) — não consumir.
+    cmp byte [r8+Insn.addr_mode], 1
+    je .done
     movzx ecx, byte [rsi]
     cmp cl, 0x40
     jb .done

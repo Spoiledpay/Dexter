@@ -126,10 +126,19 @@ dex_decode_operands:
     je .imm8                   ; 83 = imm8 estendido
     jmp .imm_v                 ; 81 = imm v
 .moffs:
-    ; A0-A3: offset = 8 (addr64) ou 4 (addr32/0x67)
+    ; A0-A3: offset = 8 (addr64), 4 (addr32/0x67 em x64; default em x32)
+    ; ou 2 (addr16: x32 com 0x67).
+    cmp byte [r15+Insn.addr_mode], 1
+    je .moffs32
     cmp byte [r15+Insn.legacy67], 0
     jne .moffs4
     jmp .imm64m
+.moffs32:
+    cmp byte [r15+Insn.legacy67], 0
+    jne .moffs16
+    jmp .imm32u
+.moffs16:
+    jmp .imm16s
 .moffs4:
     jmp .imm32u
 .c6:
@@ -158,7 +167,22 @@ dex_decode_operands:
     test r11d, 0x04            ; IV
     jnz .imm_v
     test r11d, 0x08            ; I32
-    jnz .imm32u
+    jz .ck_i64
+    ; acumulador-imm com 66? (05..3D passo 8 + A9 test): imm16,
+    ; não imm32 (ex: 66 25 iw tem 2 bytes de imm, não 4).
+    cmp byte [r15+Insn.legacy66], 0
+    je .imm32u
+    mov eax, r13d
+    and eax, 0xFF
+    cmp eax, 0xA9
+    je .imm16s
+    cmp eax, 0x40
+    jae .imm32u
+    and eax, 7
+    cmp eax, 5
+    je .imm16s
+    jmp .imm32u
+.ck_i64:
     test r11d, 0x10            ; I64
     jnz .imm64u
     test r11d, 0x20            ; R8

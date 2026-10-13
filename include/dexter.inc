@@ -93,7 +93,13 @@ struc PeImage
     .nt_headers     resq 1   ; -> IMAGE_NT_HEADERS64 no file_buffer
     .is_valid       resd 1
     .pad_v          resd 1
+    .arch           resd 1   ; 0 = x64 (PE32+), 1 = x32 (PE32): ver DEX_ARCH_*
+    .pad_arch       resd 1
 endstruc
+
+; PeImage.arch (Fase x32: loader preenche; decoder/emissor consultam).
+%define DEX_ARCH_X64   0
+%define DEX_ARCH_X32   1
 
 ; Entrada de seção normalizada (copiada do PE, validada).
 struc PeSection
@@ -168,7 +174,8 @@ struc Insn
     .target_va      resq 1   ; VA alvo (branch/call) ou 0
     .raw            resb 15  ; bytes originais (p/ emitter db)
     .segprefix      resb 1   ; 0=nenhum 1=es..6=gs (R-4.5; prefixes.asm preenche)
-    .pad2           resb 20
+    .addr_mode      resb 1   ; 0 = 64 bits, 1 = 32 bits (Fase x32; dex_disasm_one preenche)
+    .pad2           resb 19
     .op0            resb 16  ; DexOp (R-4.5; ver layout acima)
     .op1            resb 16
     .op2            resb 16

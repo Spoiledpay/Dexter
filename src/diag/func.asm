@@ -782,6 +782,8 @@ dex_func:
 ; Leaf. Clobber: rax?, rcx, rdx.
 ;-----------------------------------------------------------------------------
 .f_rip_tgt:
+    cmp byte [rax+Insn.addr_mode], 1
+    je .frt_no                   ; x32: disp32-abs, não RIP
     cmp byte [rax+Insn.has_modrm], 0
     je .frt_no
     cmp byte [rax+Insn.disp_size], 4
