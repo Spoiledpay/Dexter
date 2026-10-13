@@ -84,16 +84,16 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 ## 6. Fase 4 — Robustez (sem regressão)
 
 - [x] `tests\fuzz_pe.py` mínimo (muta bytes, nunca executa input; 20 casos seed 7 na suíte `[22]` + baterias manuais 200/300/50; meta: só saídas 0-3/5, nunca crash/hang — 1 hang real achado e corrigido em 1.2.253)
-- [x] Jump tables: base rotulada via R + corpus `jtable.asm` + round-trip (1.2.257, `[27]`); entradas continuam `db`, `jmp [idx]` opaco (futuro: resolução de alvos)
+- [x] Jump tables: base rotulada via R + corpus `jtable.asm` + round-trip (1.2.257, `[27]`); entradas `dq label_` p/ código via D-7 (1.2.266, `[28]` com guarda `-s`), `jmp [idx]` opaco (futuro: índice simbólico)
 - [ ] SEH/unwind reemitido (hoje: cópia/trim)
 - [ ] R-2.7 VEX/EVEX/x87 rotulado (hoje: `db` correto)
 - [ ] R-5.3 bin com import table regenerada (hoje: copiada, suficiente)
-- [x] R-6.5 `-emit=db|native` (1.2.254, `[23]`) + R-6.6 IR otimizável/backend próprio (futuro)
+- [x] R-6.5 `-emit=db|native` (1.2.254, `[23]`) + var64 `-native` montável (1.2.266, `[29]`: disp com `0x`, disp32-curto→`db` em 32 bits, jcc32 com `op0=REL`, `movzx/movsx` com `byte/word`, imm32 negativo como `-0x`, gates R/D) + R-6.6 IR otimizável/backend próprio (futuro)
 
 ## 7. Dívida técnica (D-1–D-17, ver ROADMAP)
 
 - [x] D-3 parcial: `sym_check` (`[15]`, golden `SYM n=5`) — falta `strpool`/`labels-imp` dedicado
-- [ ] D-7: reativar tabela D com estrutura adequada (intervalos/bitmap)
+- [x] D-7: tabela D reativada como bitmap (1.2.266: 1 bit/RVA, 1 malloc; leitores: jump-table p/ código `[28]`, gates R/D no walker que convertem refs sem label em `db` — sem eles o var64 `-native` não montava)
 - [x] D-1: convenção ADR estabelecida (`docs/adr/0001-ast-lexer-codegen.md` numerado; novas decisões seguem `NNNN-<título>.md`)
 - [x] D-2: `.bss` sai vazia no win64 (link dimensiona sem o vsize: var64 tem 0xB90 referenciados; rebuild win64 roda mas imprime vazio × original — limitação R-4.4 confirmada; caminho fiel: `-m bin`; contramedida futura: `resb vsize` nobits)
 - [x] D-4: I/O posicional removido de vez (externs mortos `dex_file_read_at/write_at` extirpados de `rebuild.asm`; `mmap_rw` é o desenho; falha 87 histórica não reincide)

@@ -136,7 +136,8 @@ align 16
 g_insn:    resb 160
 g_secname: resb 16
 g_impname: resb 512
-g_symD:    resq 1                  ; symtab de VAs decodificadas (R-4.5)
+g_coded:   resq 1                  ; bitmap D (D-7): 1 bit/RVA decodificada
+g_coded_n: resq 1                  ; nº de bits (0 = desligado, degrada p/ db)
 g_symR:    resq 1                  ; symtab de alvos RIP em dados (R-4.5)
 g_liftctx: resq 1                  ; DexLiftCtx.img (R-6.4; setado por seção)
 g_ir:      resb 24                 ; DexIR scratch do walker (R-6.4)
@@ -239,14 +240,12 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .oom_free
-    ; ---- símbolos R-4.5: tabelas D (VAs decodificadas) e R (RIP→dados)
-    mov ecx, 256
+    ; ---- símbolos: bitmap D (VAs decodificadas, D-7) e R (RIP→dados)
+    ; D = 1 bit/RVA, 1 malloc; OOM/desligado => db (legado), sem erro.
+    mov rcx, r15
     sub rsp, 32
-    call symtab_new
+    call .coded_alloc
     add rsp, 32
-    test rax, rax
-    jz .oom_free
-    mov [rel g_symD], rax
     mov ecx, 256
     sub rsp, 32
     call symtab_new
@@ -255,6 +254,9 @@ dex_generate_asm:
     jz .oom_free
     mov [rel g_symR], rax
     ; ---- passada 1: coleta alvos (sem emitir)
+    ; g_spancfg ANTES: .collect_syms já usa .ptr_tgt_ok (via gate R),
+    ; que lê flags/NO_RELOCS da cfg.
+    mov [rel g_spancfg], rbx       ; cfg p/ validadores (vale p/ o generate)
     mov rcx, rbx
     mov rdx, r15
     sub rsp, 32
@@ -262,13 +264,13 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .oom_free
-    mov [rel g_spancfg], rbx       ; cfg p/ validador dq (vale p/ o generate)
-    ; ---- 3b: starts de string-runs em g_symR (só -native -strings;
-    ; lookup unificado R U strings p/ dq-pointer, uma busca binária)
+    ; ---- 3b/D-7: alimenta g_symR (só -native; lookup unificado
+    ; R U runs U ptrs U code p/ dq-pointer, uma busca binária).
+    ; Passada A (runs) exige -strings; passada B (ponteiros p/ dados
+    ; E código decodificado) vale p/ todo -native (jump-tables).
     mov eax, [rbx+DexConfig.flags]
-    and eax, DF_NATIVE|DF_STRINGS
-    cmp eax, DF_NATIVE|DF_STRINGS
-    jne .no_cstr
+    test eax, DF_NATIVE
+    jz .no_cstr
     mov rcx, rbx
     mov rdx, r15
     sub rsp, 32
@@ -395,10 +397,10 @@ dex_generate_asm:
     inc r13d
     jmp .sect
 .free_syms:
-    ; libera tabelas da passada 1 (existem aqui)
-    mov rcx, [rel g_symD]
+    ; libera bitmap D + tabela R da passada 1 (existem aqui)
+    mov rcx, [rel g_coded]
     sub rsp, 32
-    call symtab_free
+    call dex_free                ; NULL-safe
     add rsp, 32
     mov rcx, [rel g_symR]
     sub rsp, 32
@@ -408,7 +410,8 @@ dex_generate_asm:
     sub rsp, 32
     call dex_free                ; NULL-safe; array R-6.4 2b (ou 0)
     add rsp, 32
-    mov qword [rel g_symD], 0
+    mov qword [rel g_coded], 0
+    mov qword [rel g_coded_n], 0
     mov qword [rel g_symR], 0
     mov qword [rel g_rarr], 0
     mov qword [rel g_rn], 0
@@ -487,14 +490,15 @@ dex_generate_asm:
     sub rsp, 32
     call asmbuf_free
     add rsp, 32
-    ; libera symtabs se existirem (cobre falha parcial)
-    mov rcx, [rel g_symD]
+    ; libera bitmap D + symtabs se existirem (cobre falha parcial)
+    mov rcx, [rel g_coded]
     test rcx, rcx
     jz .oom_freenor
     sub rsp, 32
-    call symtab_free
+    call dex_free                ; NULL-safe
     add rsp, 32
-    mov qword [rel g_symD], 0
+    mov qword [rel g_coded], 0
+    mov qword [rel g_coded_n], 0
 .oom_freenor:
     mov rcx, [rel g_symR]
     test rcx, rcx
@@ -799,11 +803,17 @@ dex_generate_asm:
     test eax, eax
     jz .cs_adv1b
     mov [rbp-112], eax         ; len
-    ; D DESLIGADO (2026-10-07): insert por-VA com 2 HeapAllocs + lookup
-    ; O(n^2/256) trava binários grandes (.text 45MB do ld.lld = horas) e a
-    ; tabela D não tem nenhum leitor hoje (verificado: só insert/free).
-    ; R-6.4 vai reconstruir code-vs-data com estrutura adequada (intervalos).
-    ; g_symD continua alocada/liberada (infra pronta, custo ~0). R continua.
+    ; D-7 (bitmap, 1 bit/RVA, O(1)): marca o início da instrução
+    ; decodificada. Sem heap por VA (o hash antigo travava o ld.lld).
+    ; Leitor: .code_tgt_ok (jump-tables p/ código em dq label_).
+    mov rax, [rel g_coded]
+    test rax, rax
+    jz .cs_rip
+    mov ecx, [rbp-96]            ; rva = índice do bit ([rbp-96] intacto;
+    cmp rcx, [rel g_coded_n]     ; disasm não escreve no nosso frame)
+    jae .cs_rip
+    bts [rax], rcx               ; set bit (single-thread, sem lock)
+.cs_rip:
     ; RIP-ref em dados? (disp32, sem 67, rm==101, sem SIB)
     lea rax, [rel g_insn]
     cmp byte [rax+Insn.has_modrm], 0
@@ -836,6 +846,18 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .cs_adv                ; em código: D cobre
+    ; R só p/ dados ROTULÁVEIS: o validador compartilhado exige seção
+    ; emitida com bytes (raw>0, eff, trim, .reloc). .bss (raw 0),
+    ; fora-de-seção e trimado caem em db no walker (label nunca
+    ; existiria => símbolo indefinido + cascata no nasm).
+    mov rdx, [rbp-120]         ; trva
+    mov rcx, rdx
+    mov rdx, r15               ; img (rdi-base intacto: sem rdi abaixo)
+    sub rsp, 32
+    call .ptr_tgt_ok
+    add rsp, 32
+    test eax, eax
+    jz .cs_adv
     ; R[trva] = .
     mov rcx, [rel g_symR]
     mov rdx, [rbp-120]
@@ -1158,6 +1180,62 @@ dex_generate_asm:
     jnz .wcs_emit_db             ; nome impossível: db honesto
     lea r9, [rel g_impname]
 .wcs_cg:
+    ; tkind DATA só vira nativo com o alvo em R (label garantido pela
+    ; passada 1 + spans; fora => db byte-exato, nunca símbolo
+    ; indefinido). Busca binária como .wsp_hit (só voláteis, sem calls).
+    mov eax, [rel g_ir+DexIR.tkind]
+    cmp eax, IRT_DATA
+    jne .wcs_cg_code
+    mov rax, [rel g_ir+DexIR.tva]   ; VA alvo
+    mov rdx, [r15+PeImage.image_base]
+    cmp rax, rdx
+    jb .wcs_emit_db
+    sub rax, rdx                    ; rva
+    mov rdx, rax
+    shr rdx, 32
+    jnz .wcs_emit_db               ; fora de 32 bits: nunca em R
+    mov r8, [rel g_rarr]
+    test r8, r8
+    jz .wcs_emit_db
+    mov r9, [rel g_rn]
+    test r9, r9
+    jz .wcs_emit_db
+    xor r10d, r10d                  ; lo
+    mov r11, r9                     ; hi
+.wcs_rbs:
+    cmp r10, r11
+    jae .wcs_emit_db               ; miss => db
+    lea rcx, [r10+r11]
+    shr rcx, 1                      ; mid
+    mov rdx, [r8+rcx*8]             ; key
+    cmp rax, rdx
+    je .wcs_cg_go
+    jb .wcs_rbhi
+    lea r10, [rcx+1]                ; lo = mid+1
+    jmp .wcs_rbs
+.wcs_rbhi:
+    mov r11, rcx                    ; hi = mid
+    jmp .wcs_rbs
+.wcs_cg_code:
+    ; Tkind CODE: o alvo precisa ser INÍCIO decodificado (bit D).
+    ; Sem isso, refs p/ meio de instrução (ex: branch após fallback
+    ; x87/VEX, que decodifica bytes soltos) virariam label indefinido.
+    ; Bitmap desligado => comportamento legado (sem gate).
+    cmp eax, IRT_CODE
+    jne .wcs_cg_go
+    mov rax, [rel g_coded]
+    test rax, rax
+    jz .wcs_cg_go
+    mov rcx, [rel g_ir+DexIR.tva]   ; VA alvo
+    mov rdx, [r15+PeImage.image_base]
+    cmp rcx, rdx
+    jb .wcs_emit_db
+    sub rcx, rdx                    ; rva = índice do bit
+    cmp rcx, [rel g_coded_n]
+    jae .wcs_emit_db
+    bt [rax], rcx
+    jnc .wcs_emit_db
+.wcs_cg_go:
     mov rcx, r14
     lea rdx, [rel g_insn]
     lea r8, [rel g_ir]
@@ -1718,10 +1796,11 @@ dex_generate_asm:
 
 ;-----------------------------------------------------------------------------
 ; .collect_strs — rcx=cfg, rdx=img -> eax=0 ok, 1 oom
-; Pré-passada 3b (só -native -strings): alimenta g_symR com
-;  (A) starts de string-runs e
-;  (B) alvos de ponteiros (qword com valor VA em seção de dados emitida)
-; das seções que .walk_data_sec emite. Lookup unificado R U runs U ptrs:
+; Pré-passada 3b/D-7 (só -native): alimenta g_symR com
+;  (A) starts de string-runs (só com -strings) e
+;  (B) alvos de ponteiros (qword com valor VA em seção de dados emitida
+;      OU em código decodificado — D-7, jump-tables) das seções que
+;      .walk_data_sec emite. Lookup unificado R U runs U ptrs U code:
 ; chunks fatia nesses pontos (labels reais) e .wds_emit_span vira os slots
 ; em `dq label_`. Espelha o conjunto emitido (skip .reloc, filtro -s em
 ; código, trim pdata/xdata pelo min) na direção segura: na dúvida NÃO
@@ -1816,7 +1895,10 @@ dex_generate_asm:
     mov rcx, [r15+PeImage.file_buffer]
     add rax, rcx
     mov [rbp-80], rax            ; fptr
-    ; ---- passada A: starts de runs ----
+    ; ---- passada A: starts de runs (só com -strings; sem ela, p/ B) ----
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_STRINGS
+    jz .css_passb
     xor r13d, r13d               ; k
 .css_ka:
     mov eax, [rbp-88]
@@ -1878,7 +1960,17 @@ dex_generate_asm:
     call .ptr_tgt_ok
     add rsp, 32
     test eax, eax
+    jnz .css_ins
+    ; D-7: alvo em código decodificado? (jump-table; entra no mesmo g_symR)
+    mov rax, [rbp-64]            ; rva (r15=img intacto: não-volátil)
+    mov rcx, rax
+    mov rdx, r15
+    sub rsp, 32
+    call .code_tgt_ok
+    add rsp, 32
+    test eax, eax
     jz .css_kb1
+.css_ins:
     mov rax, [rbp-64]            ; rva
     mov rcx, [rel g_symR]
     mov rdx, rax
@@ -2028,6 +2120,183 @@ dex_generate_asm:
     ret
 
 ;-----------------------------------------------------------------------------
+; .coded_alloc — rcx=img -> eax=0 (bitmap pronto ou desligado, sem erro).
+; D-7: 1 bit por RVA até max(vaddr+raw_size) das seções, 1 malloc zerado.
+; Falha/OOM/0 seções/teto => g_coded=0 (degrada p/ db = legado).
+; Frame: 5 pushes (40B) + sub 32 = 72 ≡ 8: calls ok.
+;-----------------------------------------------------------------------------
+.coded_alloc:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 32
+    mov rbx, rcx                 ; img (não-volátil: vive no loop)
+    mov qword [rel g_coded], 0
+    mov qword [rel g_coded_n], 0
+    mov r12d, [rbx+PeImage.num_sections]
+    test r12d, r12d
+    jz .ca_done
+    cmp r12d, 96                 ; cap do rva_to_offset: além disso desliga
+    ja .ca_done
+    mov rax, [rbx+PeImage.sections_ptr]
+    test rax, rax
+    jz .ca_done
+    xor r13, r13                 ; max_end
+    xor r14d, r14d               ; i
+.ca_l:
+    cmp r14d, r12d
+    jae .ca_sz
+    mov ecx, r14d
+    imul ecx, SIZEOF_PE_SECTION
+    lea rcx, [rax+rcx]           ; sec (rax base intacto: sem calls no loop)
+    mov edx, [rcx+PeSection.vaddr]
+    mov esi, [rcx+PeSection.raw_size]
+    add rdx, rsi                 ; end (64b, sem overflow: u32+u32)
+    cmp rdx, r13
+    jbe .ca_nx
+    mov r13, rdx
+.ca_nx:
+    inc r14d
+    jmp .ca_l
+.ca_sz:
+    test r13, r13
+    jz .ca_done
+    mov rax, r13
+    shr rax, 33                  ; max_end/8GiB: !=0 => bitmap >= 1GiB: desliga
+    test eax, eax                ; (dex_malloc barraria; evita conta gigante)
+    jnz .ca_done
+    mov rax, r13
+    add rax, 7
+    shr rax, 3                   ; bytes
+    mov [rel g_coded_n], r13     ; n bits (>0 aqui)
+    mov rcx, rax
+    sub rsp, 32
+    call dex_malloc              ; zerado; 0 em OOM/tamanho inválido
+    add rsp, 32
+    test rax, rax
+    jz .ca_oom
+    mov [rel g_coded], rax
+    jmp .ca_done
+.ca_oom:
+    mov qword [rel g_coded_n], 0 ; desliga: db legado, sem erro
+.ca_done:
+    xor eax, eax
+    add rsp, 32
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .code_tgt_ok — rcx=rva, rdx=img -> eax=1 se rva é início de instrução
+; DECODIFICADA (bit D) em seção de CÓDIGO emitida como código.
+; Espelha o walker (.walk_code_sec): filtro -s + range -start/-end;
+; fora disso a VA sai em lote db sem label => 0 (direção segura: db).
+; Frame: 7 pushes (56B) + sub 32 = 88 ≡ 8 (igual .ptr_tgt_ok).
+; Slots: [rbp-64]=rva, [rbp-72]=sections_ptr.
+;-----------------------------------------------------------------------------
+.code_tgt_ok:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 32
+    mov [rbp-64], rcx            ; rva
+    mov rbx, rdx                 ; img (não-volátil: vive nos calls)
+    mov rax, [rel g_coded]
+    test rax, rax
+    jz .ct_no
+    mov rcx, [rbp-64]
+    cmp rcx, [rel g_coded_n]
+    jae .ct_no
+    bt [rax], rcx                ; bit D? (fora do mapa já barrado acima)
+    jnc .ct_no
+    mov rax, [rbx+PeImage.sections_ptr]
+    mov [rbp-72], rax
+    xor r12d, r12d               ; i
+.ct_scan:
+    mov eax, [rbx+PeImage.num_sections]
+    cmp r12d, eax
+    jae .ct_no
+    mov eax, r12d
+    imul eax, SIZEOF_PE_SECTION
+    mov rcx, [rbp-72]
+    lea r13, [rcx+rax]           ; tsec (não-volátil: vive nos calls)
+    mov eax, [r13+PeSection.vaddr]
+    mov ecx, [r13+PeSection.raw_size]
+    mov rdx, [rbp-64]            ; rva
+    cmp rdx, rax
+    jb .ct_next
+    sub rdx, rax                 ; off
+    cmp rdx, rcx
+    jae .ct_next
+    mov eax, [r13+PeSection.characterist]
+    test eax, IMAGE_SCN_CNT_CODE
+    jnz .ct_cfg
+    test eax, IMAGE_SCN_MEM_EXECUTE
+    jz .ct_next                  ; dados: leitor de dados cobre (.ptr_tgt_ok)
+.ct_cfg:
+    mov rax, [rel g_spancfg]     ; cfg (setado antes da passada 1)
+    test rax, rax
+    jz .ct_yes                   ; sem cfg: aceita (só em debug/teste)
+    mov rax, [rax+DexConfig.section_filter]
+    test rax, rax
+    jz .ct_range                 ; sem filtro: walker emite como código
+    mov rcx, rax
+    lea rdx, [r13+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jz .ct_no                    ; filtro não casa: saiu como db sem labels
+.ct_range:
+    mov rax, [rel g_spancfg]
+    cmp byte [rax+DexConfig.has_start], 0
+    je .ct_ck_e
+    mov edx, [rax+DexConfig.start_rva]
+    mov rcx, [rbp-64]
+    cmp rcx, rdx
+    jb .ct_no
+.ct_ck_e:
+    cmp byte [rax+DexConfig.has_end], 0
+    je .ct_yes
+    mov edx, [rax+DexConfig.end_rva]
+    mov rcx, [rbp-64]
+    cmp rcx, rdx
+    jae .ct_no
+.ct_yes:
+    mov eax, 1
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.ct_next:
+    inc r12d
+    jmp .ct_scan
+.ct_no:
+    xor eax, eax
+    add rsp, 32
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
 ; .wds_emit_span — rcx=buf, rdx=ptr, r8d=len, r9=curlab (-1 sem label)
 ; 3b: como dex_emit_data, mas slots de 8 bytes cujo valor é VA rotulada
 ; (R U runs U ptrs, cf. .collect_strs) saem `dq label_<VA>`; resto db.
@@ -2094,7 +2363,7 @@ dex_generate_asm:
     mov r11, rcx                 ; hi = mid
     jmp .wsp_bs
 .wsp_hit:
-    ; alvo tem label? (validador compartilhado; calls: estado em
+    ; alvo tem label? (validadores compartilhados; calls: estado em
     ; não-voláteis/slots sobrevive)
     mov rcx, [rbp-80]            ; rva
     mov rdx, [rel g_chunkimg]    ; img
@@ -2102,7 +2371,15 @@ dex_generate_asm:
     call .ptr_tgt_ok
     add rsp, 32
     test eax, eax
+    jnz .wsp_dook
+    mov rcx, [rbp-80]            ; rva
+    mov rdx, [rel g_chunkimg]    ; img
+    sub rsp, 32
+    call .code_tgt_ok            ; D-7: jump-table p/ código decodificado
+    add rsp, 32
+    test eax, eax
     jz .wsp_next
+.wsp_dook:
     mov rax, [rbp-80]            ; rva
     add rax, [rbp-72]            ; + base = VA alvo (é ela que o dq rotula;
     mov [rbp-80], rax            ; nunca o slot: spanva+o seria auto-ref!)

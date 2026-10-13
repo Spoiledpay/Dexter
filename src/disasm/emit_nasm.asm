@@ -1127,6 +1127,43 @@ dex_emit_native:
     ret
 .fo_im32:
     mov eax, eax               ; zera altos (low32)
+    cmp eax, 0x80000000
+    jb .fo_im32pos
+    ; negativo (ex -1 = 0xFFFFFFFF): "-0x<mag>" p/ strict dword
+    ; (0xFFFFFFFF nu dá warning e pode truncar; -0x1 é exato).
+    mov rcx, rbx
+    mov edx, '-'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    lea rdx, [rel s_0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov eax, [r13+DexOp.val]   ; recarrega (calls mataram rax!)
+    neg eax                    ; mag em 32 bits (0 - eax)
+    mov rcx, rbx
+    mov edx, eax
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    xor eax, eax
+    add rsp, 32
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.fo_im32pos:
     mov rcx, rbx
     mov rdx, rax
     xor r8d, r8d
@@ -1170,6 +1207,30 @@ dex_emit_native:
     movzx eax, byte [r12+Insn.opcode]
     cmp eax, 0x8D
     je .fo_membody             ; lea: nunca prefixo
+    ; movzx/movsx (0F B6/B7/BE/BF): fonte m8/m16 SEMPRE explícita
+    ; (destino REG suprime o prefixo geral; sem ele o nasm recusa:
+    ; "invalid operand sizes"). Tamanho-fonte em DexOp.size
+    ; (builder: B6/BE=1, B7/BF=2).
+    cmp dword [r12+Insn.opcode_len], 2
+    jne .fo_memregck
+    movzx eax, byte [r12+Insn.opcode]   ; low byte do escape 0F
+    cmp eax, 0xB6
+    je .fo_memzx
+    cmp eax, 0xB7
+    je .fo_memzx
+    cmp eax, 0xBE
+    je .fo_memzx
+    cmp eax, 0xBF
+    je .fo_memzx
+    jmp .fo_memregck
+.fo_memzx:
+    movzx eax, byte [r13+DexOp.size]
+    cmp eax, 1
+    je .fo_psz1
+    cmp eax, 2
+    je .fo_psz2
+    jmp .fo_no                       ; fonte inválida → db
+.fo_memregck:
     mov al, [r12+Insn.op0+DexOp.kind]
     cmp al, DEX_OP_REG
     je .fo_membody
@@ -1325,6 +1386,15 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .fo_fail
+    ; "0x" obrigatório: hex nu vira decimal/símbolo no nasm
+    ; ([rbp+5C] seria 5+símbolo C; [rsp+20] seria decimal 20, não 0x20)
+    lea rdx, [rel s_0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
     mov rcx, rbx
     mov rdx, [r13+DexOp.val]
     xor r8d, r8d
@@ -1339,6 +1409,13 @@ dex_emit_native:
     mov edx, '-'
     sub rsp, 32
     call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    lea rdx, [rel s_0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
     add rsp, 32
     test eax, eax
     jnz .fo_fail

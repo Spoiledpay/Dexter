@@ -25,3 +25,4 @@ Log de revisões (data, escopo, resultado). Toda revisão roda
 | 2026-10-12 | Lote rápido: `[24]` (flags de modo de saída não alteram `.asm`) + D-1 (convenção ADR; `0001` já numerado) + tag `v1.2.254`. Auditoria, sem código. | `run_tests.bat` **182/182 OK**. |
 | 2026-10-12 | Lote D-2..D-6 (`[25]` pro combo `-start`/`-end` + `[26]` pro combo `-no-imports`/`-native`; bug `-end` ignorado com `-start` corrigido em 2 linhas; externs D-4 removidos; D-2/D-5 auditados). | `build.bat` limpo (1.2.256) + `run_tests.bat` **191/191 OK**. |
 | 2026-10-12 | Jump tables 1ª fatia (corpus `jtable.asm` + `[27]`; fix `jmp/call r64` sem REX em `.l1_ffmem`). | `build.bat` limpo (1.2.257) + `run_tests.bat` **199/199 OK**. |
+| 2026-10-13 | D-7 bitmap + var64 -native montavel ([28] dq p/ codigo + [29] nasm var64; fixes: disp com 0x, disp32-curto em 32 bits, jcc32 op0=REL, movzx/movsx byte/word, imm32 neg -0x, gates R/D no walker). | build.bat limpo (1.2.266) + run_tests.bat 207/207 OK. |

@@ -255,11 +255,14 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   como documentado — MAIS bug real: `-end` ignorado com `-start`
   presente (`.wcs_oor_l` só conhecia `< start`, lote vazio reentrava
   como in-range); fix 2 linhas + `[25]` com round-trip.
-- D-7 Tabela D desligada (2026-10-07): insert por-VA com 2 `HeapAlloc` +
-  lookup O(n²/256) trava binários grandes (`.text` 45 MB do `ld.lld` =
-  horas); D não tem nenhum leitor hoje (só `insert`/`free`) — R continua
-  (barata e necessária em R-6.4); `g_symD` segue alocada/liberada (custo
-  ~0); reativar com estrutura adequada (intervalos/bitmap) em R-6.4.
+- D-7 Tabela D REATIVADA como bitmap (1.2.266, fecha a dívida): 1 bit por
+  RVA até max(vaddr+raw) das seções, 1 `malloc` zerado, `bts`/`bt` O(1)
+  (o hash antigo — 2 `HeapAlloc` + lookup O(n²/256) — travava o `ld.lld`);
+  OOM/desligado degrada p/ `db` (legado), sem erro. Leitores reais:
+  jump-tables p/ código (`dq label_`, `[28]`) + gates no walker
+  (R-membership p/ DATA, bit-D p/ CODE convertem refs sem label em
+  `db`); sem eles o var64 `-native` não montava (símbolos `.bss`
+  indefinidos + cascata). `g_symD` (hash) extirpado.
 - D-8 Regra de slots de spill (2026-10-07, bugs reais desta sessão):
   `[rbp-8..-56]` num frame `8 pushes + sub rsp,88` são os registradores
   salvos (nunca usar como spill!); spills só em `[rbp-64..]` (dentro do

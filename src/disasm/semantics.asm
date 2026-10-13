@@ -1632,7 +1632,13 @@ dex_build_operands:
     mov [rbx+Insn.mne], rax
     jmp .ok
 .l2_jcc32:
-    jmp .ok                    ; op0=REL já; mne jcc genérico (emitter especializa)
+    ; 80-8F: op0 = REL (como .l1_rel do len1; aqui é explícito porque o
+    ; len2 não tem o pré-dispatch de branches). mne jcc genérico: o
+    ; emissor especializa via opcode&0xF. Sem isso saía `jl` nu.
+    mov byte [rbx+Insn.op0+DexOp.kind], DEX_OP_REL
+    mov rax, [rbx+Insn.target_va]
+    mov [rbx+Insn.op0+DexOp.val], rax
+    jmp .ok
 .l2_setcc:
     ; 90-9F: op0 = r/m8
     cmp byte [rbx+Insn.has_modrm], 0
@@ -2296,13 +2302,15 @@ dex_build_operands:
 ; .br_memret — retorno verificado p/ MEM com base (não-RIP, não-abs).
 ; disp32 com valor curto: o nasm otimiza p/ disp8 e muda o tamanho; sem
 ; strict p/ disp no nasm: db honesto. (RIP e SIB-abs retornam direto acima.)
+; Comparação em 32 BITS: val é a forma u32 zero-estendida (ex disp32
+; -8 = 0xFFFFFFF8); em 64 bits o +128 não envolve e o curto escapa.
 ;-----------------------------------------------------------------------------
 .br_memret:
     cmp byte [rbx+Insn.disp_size], 4
     jne .br_memok
-    mov rax, [rsi+DexOp.val]
-    add rax, 128
-    cmp rax, 255
+    mov eax, [rsi+DexOp.val]     ; low32: -128..127 vira 0..255
+    add eax, 128
+    cmp eax, 255
     jbe .br_memdb
 .br_memok:
     xor eax, eax

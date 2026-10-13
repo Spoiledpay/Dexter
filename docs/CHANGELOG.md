@@ -2,6 +2,28 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — var64 `-native` montável + D-7 bitmap (2026-10-13)
+
+### Corrigido (saída 5 `nasm failed` no var64 `-native`, com teste-primeiro)
+
+- Disp sem `0x` (`.fo_disp`): hex nu vira símbolo/decimal no nasm
+  (`[rbp+FFFFFFE8]`, `[rax+5C]`); agora `+0x`/`-0x` sempre.
+- `disp32`-curto escapava ao `db` (`.br_memret` comparava em 64 bits;
+  `0xFFFFFFF8+128` não envolve): comparação em 32 bits.
+- jcc32 (`0F 80-8F`) saía sem operando (`.l2_jcc32` confiava em
+  `op0=REL` que só o len1 setava): set explícito via `target_va`.
+- `movzx/movsx` sem tamanho (`movzx eax, [rax]`): prefixo `byte`/`word`
+  da fonte (builder já guardava em `DexOp.size`).
+- `strict dword 0xFFFFFFFF` (warning): forma `-0x1`.
+- Refs sem label (`.bss` vazia, meio-de-instrução pós-x87): gate R
+  (DATA) + bit-D (CODE) no walker → `db` byte-exato.
+
+### Adicionado
+
+- D-7 reativada como bitmap: 1 bit/RVA, 1 malloc, O(1); leitores:
+  jump-table p/ código (`dq label_`, `[28]`) + gates acima.
+- Seção `[29]`: var64 `-native` monta (`nasm -f win64` exit 0).
+
 ## [Unreleased] — jump table + `jmp/call r64` (2026-10-12)
 
 ### Adicionado
