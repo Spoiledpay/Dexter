@@ -592,6 +592,14 @@ if exist tests\out\jt_drt.exe (
 findstr /c:"dq label_" tests\out\jt_dfilter.asm >nul 2>&1
 if errorlevel 1 ( echo "  OK: com -s .rdata sem dq (codigo fora do range)" & set /a PASS+=1 ) else ( echo "  FALHA: dq com codigo nao emitido" & set /a FAIL+=1 )
 
+echo === [29] native montavel em PE real (var64: disp sempre com 0x) ===
+"%DX%" tests\var64.exe -o tests\out\v64nat.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native var64" & set /a FAIL+=1 ) else ( echo "  OK: generate -native var64" & set /a PASS+=1 )
+findstr /c:"mov " tests\out\v64nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem mnemonicos nativos" & set /a FAIL+=1 ) else ( echo "  OK: mnemonicos nativos" & set /a PASS+=1 )
+"%NASM%" -f win64 -o tests\out\v64nat.obj tests\out\v64nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm var64 -native" & set /a FAIL+=1 ) else ( echo "  OK: nasm var64 -native" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
