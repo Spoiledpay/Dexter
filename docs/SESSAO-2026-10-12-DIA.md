@@ -75,3 +75,44 @@ D-2/D-4..D-7, D-15/D-16 latentes, tag.
 `[10]` já cobria `-ast-dump`) + D-1 fechada como superada
 (`adr/0001` numerado; convenção `NNNN-*.md`) + tag `v1.2.254`
 anotada. Suíte **182/182 OK** (commit `595c865`).
+
+## 9. Continuação (mesmo dia, 1.2.254 → 1.2.257, 182/182 → 199/199)
+
+Lote D-2..D-6 (commit `e5c7861`, 1.2.256, `[25]`+`[26]`, 191/191):
+
+- D-6 com bug real: `-end` ignorado com `-start` presente
+  (`.wcs_oor_l` só estendia o lote abaixo do `start`; acima do `end`
+  fechava vazio e reentrava como in-range → saída idêntica ao full).
+  Fix 2 linhas (cair no check do `end`). `[25]` falhou pré-fix
+  (`combo igual ao full`) e passa + round-trip `hi` pós-fix.
+  Collect (`.collect_syms`) já tratava ambos os bounds — só o
+  walker tinha o defeito.
+- D-5: `-no-imports` × `-native` seguro (fallback `db`, 0 `__imp_`,
+  rebuild `hi`); `[26]` trava o combo.
+- D-4: externs mortos `dex_file_read_at`/`write_at` extirpados de
+  `rebuild.asm` (declarados, nunca chamados).
+- D-2: `.bss` sai vazia no win64; var64 tem 0xB90 referenciados e o
+  rebuild win64 roda mas imprime vazio (R-4.4 confirmada p/ PEs
+  complexos); caminho fiel `-m bin`; contramedida futura anotada
+  (`resb` vsize nobits).
+
+Jump tables 1ª fatia (commit `d622310`, 1.2.257, `[27]` 8 checks):
+
+- Corpus `tests/jtable.asm` (switch absoluto `dq`, base via
+  `lea [rel]`, `jmp rax`; imprime `2`, exit 0; com marcador
+  FONTE SAGRADA e build na suíte como `[1]`).
+- Bug bloqueador achado pelo corpus: `jmp rax` (`FF E0`, sem REX)
+  saía `jmp eax` — inválido em 64 bits, rebuild falhava (5).
+  Causa: `.l1_ffmem` assumia operando 32 por default; `call/jmp`
+  não têm forma 32 (como `push`, já tratado). Fix espelha o do
+  `push` (força size 4→8 em `/2`/`/4`; `/0`/`/1` intocados).
+- Base da tabela já era rotulada via R (`lea [rel label_…]`
+  confirmado); entradas (VAs em código) seguem `db` — validador
+  3b as rejeita por desenho; resolução de alvos = futuro.
+- Quirk de bancada: labels locais NASM (`.c0`) colidem com a label
+  da tabela na mesma linha (`jtab.c0`) — corpus usa nomes
+  file-scope (`jt_c0`).
+
+Resta: SEH/unwind reemitido, VEX/EVEX/x87 rotulado, R-6.6 backend
+próprio, `bin` com imports regenerada, D-3 resto (`strpool`/labels),
+D-7 tabela D, D-15/D-16 latentes, tag (atual: `v1.2.254`).
