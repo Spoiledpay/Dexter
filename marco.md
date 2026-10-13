@@ -15,7 +15,7 @@
 - [x] R-7.5 `--doctor` (1.2.248, `[20]`)
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
 - [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
-- [x] R-6.5 `-emit` (1.2.254, `[23]`) + lote rápido (1.2.254: `[24]`, D-1, tag `v1.2.254`)
+- [x] R-6.5 `-emit` (1.2.254, `[23]`) + lote rápido (1.2.254: `[24]`, D-1, tag `v1.2.254`) + lote D-2..D-6 (1.2.256: `[25]`, `[26]`) + jtable 1ª fatia (1.2.257: `[27]`, tag `v1.2.257`)
 - Placar honesto: 199 passam, 0 falham (`tests\run_tests.bat → 199/199 OK` em 1.2.257). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
 
 ## 1. Build / Testes / Uso (resumo)

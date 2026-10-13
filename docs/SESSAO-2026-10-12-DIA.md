@@ -1,4 +1,4 @@
-# Sessão 2026-10-12 — dia inteiro (155/155 → 178/178)
+# Sessão 2026-10-12 — dia inteiro (155/155 → 199/199)
 
 > Leitura: `skill.md` → `marco.md` → `docs/ROADMAP.md` → este arquivo.
 > Binário ao fechar: Dexter 1.2.254 (`build.bat` limpo + `run_tests.bat`

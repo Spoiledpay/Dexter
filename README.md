@@ -22,7 +22,7 @@ out\dexter.exe tests\hello.exe -o tests\out\hello.asm -r -O tests\out\hello_rt.e
 tests\out\hello_rt.exe            &:: imprime "hi"
 out\dexter.exe tests\var64.exe -o tests\out\var64_bin.asm -m bin -r -O tests\out\var64_bin.exe
 fc /b tests\var64.exe tests\out\var64_bin.exe   &:: iguais
-tests\run_tests.bat               &:: suíte completa (140/140)
+tests\run_tests.bat               &:: suíte completa (199/199)
 ```
 
 Flags e códigos de retorno: `docs/CLI.md`. Arquitetura e decisões:
@@ -49,14 +49,19 @@ out/ obj/        artefatos de build (ignorados no git)
 | `tests\var32.exe`, `tests\link.exe` | 32-bit — rejeição limpa (saída 3) |
 | `tests\for.exe` | `Magic=0` — rejeição limpa (saída 3); **não executar sem timeout** |
 
-## Estado atual (v1.2.187 + R-6.4 fechado + R-7.3)
+## Estado atual (v1.2.257 + R-6.4 fechado + R-7.5)
 
-- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 140/140 OK
+- [x] Fases 0–4 + `bin`: build sem warnings, `run_tests.bat` 199/199 OK
   (R-6.4.3 fechado em 2026-10-11 — ver
-  `docs/SESSAO-2026-10-11-R643.md`).
+  `docs/SESSAO-2026-10-11-R643.md`; lote atual em
+  `docs/SESSAO-2026-10-12-DIA.md`).
 - [x] R-7.1: `-overview`/`-json` inspect-only (texto + JSON validado).
 - [x] R-7.2: `-func`/`-xrefs`/`-trace` (+`-depth`) inspect-only.
 - [x] R-7.3: `-rsrc` inspect-only (texto + JSON validado + fuzz).
+- [x] R-7.4: `-snapshot`/`-compare` inspect-only (texto + JSON válido).
+- [x] R-7.5: `--doctor` inspect-only (toolchain + versão).
+- [x] R-6.5: `-ast-dump` + `-emit db|native` (last-wins).
+- [x] D-2..D-6 + jtable 1ª fatia (`[25]`-`[27]`, 199/199).
 - [x] R-6.4 fatias 1–3: lift (`DexIR`) + codegen (rollback) + R-labels
   (`lea [rel label_]` nativo com round-trip) + rewrite IAT
   (`call|jmp [rel __imp_X]` + labels, round-trip) + drivers de teste.
@@ -65,5 +70,5 @@ out/ obj/        artefatos de build (ignorados no git)
   tiny, loop, strings, no_relocs) + fixes (hang collect, D O(n²),
   dispatch C0+, mov-SIB, `.cs_in_code`, spill `[rbp-56]`).
 - [x] R-6.2: `dex_lex_one` (`src/front/lexer.asm`, 17 kinds) + driver
-  `tests/lex_check.asm` (golden 166 tokens, 0 unknowns).
-- [ ] R-2.7 (VEX/EVEX), R-5.3+, R-6.5 resto (`-emit`), R-6.6 — ver ROADMAP + `docs/adr/0001-ast-lexer-codegen.md`.
+  `tests/lex_check.asm` (golden 164 tokens, 0 unknowns).
+- [ ] R-2.7 (VEX/EVEX), R-5.3+, R-6.6, D-7, SEH/unwind — ver ROADMAP + `docs/adr/0001-ast-lexer-codegen.md`.

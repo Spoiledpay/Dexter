@@ -138,7 +138,7 @@ fc /b original.exe clone.exe
 **Testar tudo de uma vez:**
 
 ```bat
-tests\run_tests.bat         &:: rápido: 140 checagens (saída 0 = tudo OK)
+tests\run_tests.bat         &:: rápido: 199 checagens (saída 0 = tudo OK)
 tests\run_slow.bat          &:: lento: round-trip do ld.lld de 68 MB
 ```
 
