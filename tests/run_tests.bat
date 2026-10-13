@@ -600,6 +600,20 @@ if errorlevel 1 ( echo "  FALHA: sem mnemonicos nativos" & set /a FAIL+=1 ) else
 "%NASM%" -f win64 -o tests\out\v64nat.obj tests\out\v64nat.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: nasm var64 -native" & set /a FAIL+=1 ) else ( echo "  OK: nasm var64 -native" & set /a PASS+=1 )
 
+echo === [30] x32: detectar + desmontar (db fiel, sem -native) ===
+"%DX%" tests\var32.exe -overview -q > tests\out\ov32.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -overview x32" & set /a FAIL+=1 ) else ( echo "  OK: -overview x32" & set /a PASS+=1 )
+findstr /c:"ImageBase: 0x400000" tests\out\ov32.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: base x32" & set /a FAIL+=1 ) else ( echo "  OK: base x32" & set /a PASS+=1 )
+"%DX%" tests\Calculator.exe -o tests\out\calc32.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate x32" & set /a FAIL+=1 ) else ( echo "  OK: generate x32" & set /a PASS+=1 )
+findstr /c:"bits 32" tests\out\calc32.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem bits 32" & set /a FAIL+=1 ) else ( echo "  OK: bits 32" & set /a PASS+=1 )
+findstr /c:"default rel" tests\out\calc32.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: sem default rel (x32)" & set /a PASS+=1 ) else ( echo "  FALHA: default rel em x32" & set /a FAIL+=1 )
+"%DX%" tests\Calculator.exe -o NUL -native -q >nul 2>&1
+if !errorlevel! EQU 4 ( echo "  OK: -native x32 recusado (4)" & set /a PASS+=1 ) else ( echo "  FALHA: -native x32 deveria retornar 4" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
