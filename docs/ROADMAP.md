@@ -236,16 +236,23 @@ no corpus simples; PEs complexos continuam em `-m bin`.
 - D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
   existe e numerado; dívida original ("sem ADRs numerados") superada;
   novas decisões seguem `NNNN-<título>.md`.
-- D-2 `.bss` no modo win64 sai como seção vazia (link dimensiona; checar VA
-  em binário com `.bss` referenciada — var64 passou no comportamento).
+- D-2 `.bss` auditada (2026-10-12): win64 emite seção vazia (link
+  dimensiona SEM o vsize); var64 tem 0xB90 referenciados e o rebuild
+  win64 roda mas imprime vazio (limitação R-4.4 confirmada p/ PEs
+  complexos); caminho fiel `-m bin`; contramedida futura: `resb`
+  vsize nobits.
 - D-3 `symtab`/`strpool`/`labels-imp` implementados e linkados mas sem uso
   no generate atual (biblioteca p/ R-3.3/R-4.5; cobertos por build, sem teste
   dedicado — adicionar teste unitário).
-- D-4 `dex_file_seek`/`read_at`/`write_at` REMOVIDOS (falhavam com 87 neste
-  ambiente; I/O posicional = `mmap_rw`). Reinvestigar causa WinAPI um dia.
-- D-5 `-no-imports` hoje só afeta parse/`-v` (rebuild por cópia não precisa
-  de imports). Manter + documentar até R-3.3.
-- D-6 `-start`/`-end` valem p/ código; dados saem inteiros (documentado).
+- D-4 I/O posicional removido de vez (2026-10-12): externs mortos
+  `dex_file_read_at`/`dex_file_write_at` extirpados de `rebuild.asm`
+  (declarados, nunca chamados); `mmap_rw` é o desenho.
+- D-5 `-no-imports` × `-native` seguro (2026-10-12): sem parse cai em
+  `db` (0 `__imp_`, rebuild `hi`); `[26]` trava o combo.
+- D-6 `-start`/`-end` auditados (2026-10-12): dados sempre inteiros,
+  como documentado — MAIS bug real: `-end` ignorado com `-start`
+  presente (`.wcs_oor_l` só conhecia `< start`, lote vazio reentrava
+  como in-range); fix 2 linhas + `[25]` com round-trip.
 - D-7 Tabela D desligada (2026-10-07): insert por-VA com 2 `HeapAlloc` +
   lookup O(n²/256) trava binários grandes (`.text` 45 MB do `ld.lld` =
   horas); D não tem nenhum leitor hoje (só `insert`/`free`) — R continua

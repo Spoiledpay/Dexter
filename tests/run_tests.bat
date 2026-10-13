@@ -522,6 +522,33 @@ if errorlevel 1 ( echo "  FALHA: -v altera .asm" & set /a FAIL+=1 ) else ( echo 
 fc /b tests\out\flag_base.asm tests\out\flag_vv.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: -vv altera .asm" & set /a FAIL+=1 ) else ( echo "  OK: -vv byte-identico" & set /a PASS+=1 )
 
+echo === [25] -start+-end combinados (D-6, walker honra ambos) ===
+"%DX%" tests\hello.exe -o tests\out\rng_combo.asm -start 0x1000 -end 0x1010 -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: combo exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: combo exit 0" & set /a PASS+=1 )
+fc /b tests\out\flag_base.asm tests\out\rng_combo.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: combo difere do full (range honrado)" & set /a PASS+=1 ) else ( echo "  FALHA: combo igual ao full (-end ignorado)" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -o tests\out\rng_combo.asm -r -O tests\out\rng_rt.exe -start 0x1000 -end 0x1010 -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild combo exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: rebuild combo exit 0" & set /a PASS+=1 )
+tests\out\rng_rt.exe > tests\out\rng_new.txt 2>&1
+tests\hello.exe > tests\out\rng_orig.txt 2>&1
+fc /b tests\out\rng_orig.txt tests\out\rng_new.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -o tests\out\rng_scombo.asm -s .text -start 0x1000 -end 0x1010 -q >nul 2>&1
+fc /b tests\out\rng_combo.asm tests\out\rng_scombo.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -s muda o range" & set /a FAIL+=1 ) else ( echo "  OK: -s consistente" & set /a PASS+=1 )
+
+echo === [26] -no-imports x -native (D-5: fallback db seguro) ===
+"%DX%" tests\hello.exe -o tests\out\ni_nat.asm -no-imports -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: combo exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: combo exit 0" & set /a PASS+=1 )
+findstr /c:"__imp_" tests\out\ni_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: sem __imp_ (fallback db)" & set /a PASS+=1 ) else ( echo "  FALHA: __imp_ sem imports" & set /a FAIL+=1 )
+"%DX%" tests\hello.exe -o tests\out\ni_nat.asm -r -O tests\out\ni_rt.exe -no-imports -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: rebuild exit 0" & set /a PASS+=1 )
+tests\out\ni_rt.exe > tests\out\ni_new.txt 2>&1
+tests\hello.exe > tests\out\ni_orig.txt 2>&1
+fc /b tests\out\ni_orig.txt tests\out\ni_new.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

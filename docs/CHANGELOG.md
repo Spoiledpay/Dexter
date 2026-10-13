@@ -2,6 +2,28 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — lote D-2..D-6 + `-end` (2026-10-12)
+
+### Corrigido (bug real achado em auditoria, com teste-primeiro)
+
+- `-end` ignorado quando `-start` presente: `.wcs_oor_l`
+  (`src/gen/rebuild.asm`) só estendia o lote `db` abaixo do `start`;
+  acima do `end` fechava o lote vazio e reentrava como in-range
+  (saída idêntica ao full). Fix 2 linhas (cair no check do `end`;
+  sem `end` o comportamento é o de antes). Prova: `[25]` falhou
+  (`combo igual ao full`) antes e passa depois + round-trip `hi`.
+
+### Auditoria (sem mudar comportamento)
+
+- D-2: `.bss` sai vazia no win64; var64 (0xB90 referenciados)
+  rebuilda (exit 0) mas roda vazio — R-4.4 confirmada; fiel: `-m bin`.
+- D-4: externs mortos `dex_file_read_at`/`write_at` removidos de
+  `rebuild.asm` (declarados, nunca chamados).
+- D-5: `-no-imports` × `-native` cai em `db` com segurança; `[26]`
+  trava o combo (generate + rebuild `hi`).
+- D-6: dados sempre inteiros com `-start`/`-end` (só código é
+  fatiado); `[25]` trava o combo.
+
 ## [Unreleased] — R-6.5 `-emit` (2026-10-12)
 
 ### Adicionado

@@ -55,8 +55,6 @@ extern dex_write_all
 extern dex_file_size
 extern dex_mmap_rw
 extern dex_unmap
-extern dex_file_write_at
-extern dex_file_read_at
 extern dex_close
 extern dex_pe_find_section
 extern dex_console_print_cstr
@@ -1003,12 +1001,14 @@ dex_generate_asm:
     je .wcs_oor_ck_e
     cmp eax, [rbx+DexConfig.start_rva]
     jb .wcs_oor_nx
-    jmp .wcs_oor_e
+    ; rva_j >= start: só reentra se abaixo do end (cai no check abaixo;
+    ; antes, um `jmp .wcs_oor_e` aqui ignorava o end com start presente).
 .wcs_oor_ck_e:
     cmp byte [rbx+DexConfig.has_end], 0
-    je .wcs_oor_nx             ; sem filtros? não deveria estar aqui; sai
+    je .wcs_oor_e              ; sem end: reentrou mesmo → termina lote
     cmp eax, [rbx+DexConfig.end_rva]
-    jb .wcs_oor_e
+    jb .wcs_oor_e              ; abaixo do end → termina lote
+    jmp .wcs_oor_nx            ; acima do end → continua o lote
 .wcs_oor_nx:
     inc r10d
     ; limitar lote a 256 bytes por chamada
