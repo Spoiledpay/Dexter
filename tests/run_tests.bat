@@ -576,6 +576,22 @@ if exist tests\out\jt_dbrt.exe (
     if errorlevel 1 ( echo "  FALHA: db comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: db comportamento identico" & set /a PASS+=1 )
 ) else ( echo "  FALHA: sem jt_dbrt.exe" & set /a FAIL+=1 )
 
+echo === [28] D bitmap: entradas da jump-table p/ codigo viram dq label_ ===
+"%DX%" tests\jtable.exe -o tests\out\jt_d.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native jtable" & set /a FAIL+=1 ) else ( echo "  OK: generate -native jtable" & set /a PASS+=1 )
+findstr /c:"dq label_" tests\out\jt_d.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: entradas da tabela sem dq label_" & set /a FAIL+=1 ) else ( echo "  OK: entradas da tabela com dq label_" & set /a PASS+=1 )
+"%DX%" tests\jtable.exe -o tests\out\jt_d.asm -r -O tests\out\jt_drt.exe -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native jtable dq" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native jtable dq" & set /a PASS+=1 )
+if exist tests\out\jt_drt.exe (
+    tests\out\jt_drt.exe > tests\out\jt_dnew.txt 2>&1
+    fc /b tests\out\jt_orig.txt tests\out\jt_dnew.txt >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: dq comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: dq comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem jt_drt.exe" & set /a FAIL+=1 )
+"%DX%" tests\jtable.exe -o tests\out\jt_dfilter.asm -s .rdata -native -q >nul 2>&1
+findstr /c:"dq label_" tests\out\jt_dfilter.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: com -s .rdata sem dq (codigo fora do range)" & set /a PASS+=1 ) else ( echo "  FALHA: dq com codigo nao emitido" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
