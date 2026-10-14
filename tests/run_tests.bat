@@ -684,6 +684,24 @@ if errorlevel 1 ( echo "  FALHA: sem cmp byte" & set /a FAIL+=1 ) else ( echo " 
 "%NASM%" -f win64 -o tests\out\memsz_nat.obj tests\out\memsz_nat.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: nasm memsz -native" & set /a FAIL+=1 ) else ( echo "  OK: nasm memsz -native" & set /a PASS+=1 )
 
+echo === [35] bss nobits (R-8.1: resb + labels, var64 behavior) ===
+"%DX%" tests\var64.exe -o tests\out\v64bss.asm -native -r -O tests\out\v64bss.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native var64" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native var64" & set /a PASS+=1 )
+findstr /c:"resb 0x" tests\out\v64bss.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem resb na .bss" & set /a FAIL+=1 ) else ( echo "  OK: resb na .bss" & set /a PASS+=1 )
+findstr /c:"label_1400110" tests\out\v64bss.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem labels na .bss" & set /a FAIL+=1 ) else ( echo "  OK: labels na .bss" & set /a PASS+=1 )
+if exist tests\out\v64bss.exe (
+    "%NASM%" -f win64 -o tests\out\v64bss.obj tests\out\v64bss.asm >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: nasm v64bss" & set /a FAIL+=1 ) else ( echo "  OK: nasm v64bss" & set /a PASS+=1 )
+    findstr /c:"dq label_140011" tests\out\v64bss.asm >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: sem dq p/ .bss" & set /a FAIL+=1 ) else ( echo "  OK: dq p/ .bss" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem v64bss.exe" & set /a FAIL+=1 )
+"%DX%" tests\gcc.exe -o tests\out\gccbss.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native gcc" & set /a FAIL+=1 ) else ( echo "  OK: generate -native gcc" & set /a PASS+=1 )
+findstr /c:"resb 0x" tests\out\gccbss.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem resb no gcc" & set /a FAIL+=1 ) else ( echo "  OK: resb no gcc" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

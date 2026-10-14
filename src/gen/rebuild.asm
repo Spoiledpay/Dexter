@@ -104,6 +104,7 @@ s_bin_hdr32 db "; ==============================================================
 s_bin_warn db "dexter: warning: disasm options ignored in bin mode", 13, 10, 0
 s_times db "    times 0x", 0
 s_db0   db " db 0", 13, 10, 0
+s_resb  db "    resb 0x", 0
 s_secpre db 13, 10, "; ---- ", 0
 s_bssnote db " (bss: sem bytes no arquivo)", 13, 10, 0
 s_ovl   db 13, 10, "; ---- overlay ----", 13, 10, 0
@@ -1425,6 +1426,7 @@ dex_generate_asm:
     mov r15, rdx               ; img
     mov r14, r8                ; buf
     mov r12, r9                ; sec
+    mov [rbp-64], r9           ; spill sec (R-8.1: ramo bss; slot livre aqui)
     mov rsi, [r15+PeImage.file_buffer]
     mov rdi, [r15+PeImage.image_base]
     mov eax, [r12+PeSection.vaddr]
@@ -1696,7 +1698,7 @@ dex_generate_asm:
 .wds_plain:
     mov eax, [rbp-80]
     test eax, eax
-    jz .wds_ok
+    jz .wds_empty               ; sem bytes: ramo bss (R-8.1) ou nada
     mov ecx, [rbx+DexConfig.flags]
     test ecx, DF_NATIVE
     jz .wds_plain_db            ; sem -native: byte-idêntico ao legado
@@ -1716,6 +1718,22 @@ dex_generate_asm:
     mov [rel g_chunkimg], rax
     sub rsp, 32
     call .wds_chunks
+    add rsp, 32
+    test eax, eax
+    jnz .wds_fail
+    jmp .wds_ok
+.wds_empty:
+    ; R-8.1: seção sem bytes no arquivo. Com vsize>0 (bss) reserva com
+    ; resb + labels nos alvos R (.wds_bss); com vsize==0, como antes (nada).
+    mov rax, [rbp-64]            ; sec (spill da entrada)
+    mov eax, [rax+PeSection.vsize]
+    test eax, eax
+    jz .wds_ok
+    mov rcx, r14                 ; buf
+    mov rdx, r15                 ; img
+    mov r8, [rbp-64]             ; sec
+    sub rsp, 32
+    call .wds_bss
     add rsp, 32
     test eax, eax
     jnz .wds_fail
@@ -1751,6 +1769,164 @@ dex_generate_asm:
     pop r12
     pop rsi
     pop rdi
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .wds_bss — rcx=buf, rdx=img, r8=sec -> eax=0 ok | 1 oom.
+; O quê: emite seção sem bytes no arquivo e com vsize>0 (bss) como label
+;   do início + `resb` fatiado nos alvos R dentro do range (label em cada).
+; Por quê: sem isso o link derruba a seção e refs RIP p/ ela caem em db
+;   com disp obsoleto (D-2: var64 -native imprimia vazio). Requisito R-8.1.
+; Contrato: sec com vsize>0; R contém só VAs validadas (.ptr_tgt_ok);
+;   sem heap; nunca emite label duplicada (alvo == início é pulado).
+; Como testar: tests\run_tests.bat [35] (resb + labels + dq p/ .bss).
+; Frame: 7 pushes + sub 32 = 88 ≡ 8. Slot: [rbp-64]=key (qword, alinhado).
+;-----------------------------------------------------------------------------
+.wds_bss:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rdi
+    push rsi                     ; 7 pushes (56B) + sub 32 = 88 ≡ 8
+    sub rsp, 32
+    mov rbx, rcx                 ; buf
+    mov r13, r8                  ; sec
+    mov rax, [rdx+PeImage.image_base]
+    mov r12, rax                 ; base
+    mov r15d, [r13+PeSection.vaddr] ; vaddr (dword -> zero-estende)
+    mov r14d, [r13+PeSection.vsize] ; vsize (dword -> zero-estende)
+    mov r13, rdx                 ; img (p/ dex_emit_imp_label; sec já lida)
+    xor edi, edi                 ; cur = 0
+    xor esi, esi                 ; idx = 0
+    mov rcx, rbx
+    mov rdx, r12
+    add rdx, r15                 ; va do início
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+.wb_l:
+    mov rax, [rel g_rn]
+    cmp rsi, rax
+    jae .wb_tail
+    mov rcx, [rel g_rarr]
+    mov rax, [rcx+rsi*8]         ; key (trva, ordenado crescente)
+    cmp rax, r15
+    jb .wb_next                  ; antes do range
+    mov rcx, r15
+    add rcx, r14                 ; end = vaddr+vsize
+    cmp rax, rcx
+    jae .wb_tail                 ; resto fora
+    cmp rax, r15
+    je .wb_next                  ; == início: label já emitido
+    mov [rbp-64], rax            ; spill key (calls matam voláteis)
+    mov rcx, rbx
+    mov rdx, [rbp-64]
+    add rdx, r12                 ; va do alvo (p/ __imp_)
+    mov r8, r13                  ; img
+    sub rsp, 32
+    call dex_emit_imp_label      ; nada se não for slot (igual .wcc)
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+    mov rdx, [rbp-64]
+    sub rdx, r15
+    sub rdx, rdi                 ; gap = key-vaddr-cur (>0; keys únicas)
+    jz .wb_lab
+    mov rcx, rbx
+    lea rdx, [rel s_resb]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+    mov rcx, rbx
+    mov rdx, [rbp-64]
+    sub rdx, r15
+    sub rdx, rdi                 ; gap (r15/rdi intactos: não-voláteis)
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+    mov rcx, rbx
+    lea rdx, [rel s_crlf2]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+.wb_lab:
+    mov rcx, rbx
+    mov rdx, [rbp-64]
+    add rdx, r12
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+    mov rax, [rbp-64]
+    sub rax, r15
+    mov rdi, rax                 ; cur = key-vaddr
+.wb_next:
+    inc rsi
+    jmp .wb_l
+.wb_tail:
+    mov rdx, r14
+    sub rdx, rdi                 ; tail = vsize-cur
+    jz .wb_done
+    mov rcx, rbx
+    lea rdx, [rel s_resb]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+    mov rcx, rbx
+    mov rdx, r14
+    sub rdx, rdi
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+    mov rcx, rbx
+    lea rdx, [rel s_crlf2]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wb_fail
+.wb_done:
+    xor eax, eax
+    add rsp, 32
+    pop rsi
+    pop rdi
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.wb_fail:
+    mov eax, 1
+    add rsp, 32
+    pop rsi
+    pop rdi
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     pop rbx
     pop rbp
     ret
@@ -2179,8 +2355,19 @@ dex_generate_asm:
     cmp rdx, rax                 ; (vaddr zero-estendido)
     jb .pt_next
     sub rdx, rax                 ; off
+    test ecx, ecx
+    jz .pt_bss                    ; sem bytes: ramo bss (R-8.1)
     cmp rdx, rcx                 ; (raw zero-estendido)
     jae .pt_next
+    jmp .pt_codechk
+.pt_bss:
+    ; R-8.1: vale off < vsize (emissor .wds_bss garante label+resb).
+    mov ecx, [r13+PeSection.vsize]
+    test ecx, ecx
+    jz .pt_next
+    cmp rdx, rcx
+    jae .pt_next
+.pt_codechk:
     ; não-código? (labels de código incertas p/ dq: rejeita)
     mov eax, [r13+PeSection.characterist]
     test eax, IMAGE_SCN_CNT_CODE
@@ -2201,6 +2388,12 @@ dex_generate_asm:
     jnz .pt_no
 .pt_eff:
     mov eax, [r13+PeSection.raw_size]
+    test eax, eax
+    jnz .pt_eff_raw
+    mov eax, [r13+PeSection.vsize]   ; R-8.1 bss: eff = vsize
+    mov [rbp-80], rax
+    jmp .pt_cmp
+.pt_eff_raw:
     mov [rbp-80], rax            ; eff = raw
     lea rcx, [rel s_pdata]
     lea rdx, [r13+PeSection.name]

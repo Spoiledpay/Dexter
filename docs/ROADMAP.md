@@ -233,6 +233,24 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `-q` não suprime, existência via open (`ok`/`missing` honesto),
   aceita `-doctor` e `--doctor`; `[20]` na suíte)
 
+## Fase 8 — Layout robusto (R-8.x, nova)
+
+> PEs reais têm `.bss`/`.tls`/seções que o path win64 (link.exe) não
+> preserva. N.1 (R-8.1) fecha o nível asm; comportamento em PE grande
+> pede R-8.2 (backend próprio). Detalhe e sondas em `docs/REVISAO.md`.
+
+- [x] R-8.1 `.bss` com `resb` + labels (`src/gen/rebuild.asm`: `.wds_bss`
+  (label do início + `resb` fatiado nos alvos R) + `.ptr_tgt_ok` que
+  aceita `off<vsize` se `raw==0` + `s_resb`; `[35]` com 7 checks
+  (resb/labels/`dq` no var64, resb no gcc)). Oráculo capstone: 24 VAs
+  interiores distintas referenciadas no var64 (start-label só não
+  bastava); soma `resb` == vsize exato (0xB90); monta com 0 erros.
+  Limite honesto: comportamento em PE grande segue pendente (D-19).
+- [ ] R-8.2 backend próprio com `.text` nativa (R-6.6): controle total
+  de layout (sem link.exe); prova = swap + `hello.c` → `hi` com o
+  binário `-native`. Caminho fiel hoje: `-m bin` (já prova compilador
+  funcional: `gcc_bin.exe` compilou `hello.c` → `hi`).
+
 ## Dívida técnica conhecida (honesta, com ID)
 
 - D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
@@ -353,3 +371,10 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `arch`; goldens viraram CALL/DATA sem IMPORT e a suíte pegou).
   Regra: todo `fake_*` em `tests/` deve espelhar o layout exato do
   `struc` (comparar campo a campo) + zerar `arch` (x64).
+- D-19 `link.exe` funde seções (2026-10-14, R-8.1: provado por 3 sondas
+  + `secdump` — `.bss`/`.tls`/`.xdata` do `.obj` somem no `.exe`,
+  conteúdo fundido em `.data`; `resb` no nasm vira zeros inicializados,
+  nunca nobits; `dex_patch_dirs` (R-4.3) copia RVAs cegamente e aponta
+  p/ seção errada após o remanejo — `imp`/`iat` do var64 caíram dentro
+  da `.reloc` nova). Consequência: rebuild `-native` via link só
+  garante comportamento em PEs simples; PEs reais pedem R-8.2.
