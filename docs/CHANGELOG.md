@@ -2,6 +2,17 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — x32 fase D1b+: allowlist ampla (2026-10-13)
+
+### Adicionado
+
+- Allowlist x32 ampliada: ALU/mov/test/xchg/lea (00-3D, 84-8D),
+  `test` acc, `ret` imm, `loop/jcxz`, `movzx/movsx/cmov/setcc`
+  (len2), `push/pop` reg; `jcxz` emite `jecxz` em x32; endereços
+  sempre `r32` (nunca `rbp`).
+- Calculator `-native`: 8.328 mnemônicos + monta + linka (PE32
+  válido, 15 seções).
+
 ## [Unreleased] — x32 fase D1b: nativo em PE real (2026-10-13)
 
 ### Adicionado

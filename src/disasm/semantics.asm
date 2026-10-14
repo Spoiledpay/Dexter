@@ -111,18 +111,44 @@ dex_build_operands:
     mov rbx, rcx               ; insn
     cmp byte [rbx+Insn.addr_mode], 1
     jne .bm64
-    ; x32 Fase D1: allowlist (resto: db fiel). Classes auditadas p/
-    ; semântica 32-bit (sem REX; formas com 66 caem em .no dentro).
-    ; x32+0x67 (endereços 16 bits, sem forma) sempre recusa.
+    ; x32 Fase D1b: allowlist (resto: db fiel). Classes auditadas p/
+    ; semântica 32-bit (sem REX; formas com 66 caem em .no dentro;
+    ; x32+0x67 sempre recusa — endereços 16 sem forma).
     cmp byte [rbx+Insn.legacy67], 0
     jne .no
+    movzx eax, byte [rbx+Insn.opcode]
+    cmp dword [rbx+Insn.opcode_len], 2
+    je .bm32_l2
     cmp dword [rbx+Insn.opcode_len], 1
     jne .no
-    movzx eax, byte [rbx+Insn.opcode]
-    cmp eax, 0x6A
-    je .bm32go                 ; push imm8
+    cmp eax, 0x3E
+    jb .bm32go                 ; 00-3D: ALU/mov/test (acc-imm incluso)
+    cmp eax, 0x50
+    jb .no
+    cmp eax, 0x60
+    jb .bm32go                 ; push/pop reg (size corrigido em .l1_pushr)
     cmp eax, 0x68
     je .bm32go                 ; push imm32
+    cmp eax, 0x6A
+    je .bm32go                 ; push imm8
+    cmp eax, 0x84
+    jb .no
+    cmp eax, 0x8C
+    jb .bm32go                 ; 84-8B: test/xchg/mov (8C Sreg fora)
+    cmp eax, 0x8D
+    je .bm32go                 ; lea
+    cmp eax, 0xA8
+    je .bm32go                 ; test al,imm8
+    cmp eax, 0xA9
+    je .bm32go                 ; test eAX,imm
+    cmp eax, 0xC2
+    je .bm32go                 ; ret imm16
+    cmp eax, 0xC3
+    je .bm32go                 ; ret
+    cmp eax, 0xE0
+    jb .no
+    cmp eax, 0xE4
+    jb .bm32go                 ; loop/jcxz
     cmp eax, 0xE8
     je .bm32go                 ; call rel
     cmp eax, 0xE9
@@ -133,12 +159,25 @@ dex_build_operands:
     je .bm32go                 ; inc/dec r/m8
     cmp eax, 0xFF
     je .bm32go                 ; inc/dec/call/jmp/push r/m (/3,/5,/7 caem em .no)
-    cmp eax, 0xC3
-    je .bm32go                 ; ret
-    cmp eax, 0x50
+    jmp .no
+.bm32_l2:
+    ; len2: movzx/movsx/cmov/setcc (handlers auditados; resto cai em .no)
+    cmp eax, 0x40
     jb .no
-    cmp eax, 0x60
-    jb .bm32go                 ; push/pop reg (size corrigido em .l1_pushr)
+    cmp eax, 0x50
+    jb .bm32go                 ; cmovcc
+    cmp eax, 0x90
+    jb .no
+    cmp eax, 0xA0
+    jb .bm32go                 ; setcc
+    cmp eax, 0xB6
+    je .bm32go                 ; movzx m8
+    cmp eax, 0xB7
+    je .bm32go                 ; movzx m16
+    cmp eax, 0xBE
+    je .bm32go                 ; movsx m8
+    cmp eax, 0xBF
+    je .bm32go                 ; movsx m16
     jmp .no
 .bm32go:
     ; cai no dispatch normal abaixo (paths com REX nunca tomados em x32)

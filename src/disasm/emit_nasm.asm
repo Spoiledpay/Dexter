@@ -715,7 +715,11 @@ dex_emit_native:
     jmp .en_ops
 .en_jcxz:
     cmp byte [r15+Insn.legacy67], 0
-    je .en_jrcxz
+    jne .en_jecxz_go
+    cmp byte [r15+Insn.addr_mode], 1
+    je .en_jecxz_go            ; x32 sem 67: contadores 32 (jecxz)
+    jmp .en_jrcxz
+.en_jecxz_go:
     lea rdx, [rel s_jecxz]
     mov rcx, rbx
     sub rsp, 32

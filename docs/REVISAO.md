@@ -30,3 +30,4 @@ Log de revisões (data, escopo, resultado). Toda revisão roda
 | 2026-10-13 | x32 fase C ([31] 6 checks: tiny32 exit 42 round-trip; rebuild -f win32 + patch_dirs arch-aware; sanitize /NNN; Calculator 15 secoes + 11 imports; r13-nao-sobrevive documentado em D-8). | build.bat limpo (1.2.293) + run_tests.bat 219/219 OK. |
 | 2026-10-13 | x32 fase D1 ([32] 4 checks: tiny32 -native exit 42; allowlist push/call/jmp/ret; IMPORT?db; D-18 fake_img). | build.bat limpo (1.2.295) + run_tests.bat 224/224 OK. |
 | 2026-10-13 | x32 fase D1b ([30] monta calc32n zero erros; regs endereco 32, push/pop 32, spans off x32). | build.bat limpo (1.2.297) + run_tests.bat 225/225 OK. |
+| 2026-10-13 | x32 fase D1b+ (allowlist ampla; jecxz; calc -native 8328 mnemonicos + link PE32). | build.bat limpo (1.2.298) + run_tests.bat 225/225 OK. |
