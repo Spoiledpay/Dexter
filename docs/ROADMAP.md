@@ -263,7 +263,12 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   (R-membership p/ DATA, bit-D p/ CODE convertem refs sem label em
   `db`); sem eles o var64 `-native` não montava (símbolos `.bss`
   indefinidos + cascata). `g_symD` (hash) extirpado.
-- D-8 Regra de slots de spill (2026-10-07, bugs reais desta sessão):
+- D-8 Regra de slots de spill (2026-10-07, bugs reais desta sessão; EXTENSÃO
+  2026-10-13, Fase C: `r13` não sobrevive a calls internos mesmo quando o
+  helper dá push nele (`asmbuf_append` preserva rbx/r12 mas o `len` em
+  r13d voltou lixo — provado por 8 builds de bisseção no sanitize de
+  seção; causa-raiz exata em aberto); regra prática: RECOMPUTAR valores
+  após calls em vez de confiar em não-voláteis (ver `.sn_relen`):
   `[rbp-8..-56]` num frame `8 pushes + sub rsp,88` são os registradores
   salvos (nunca usar como spill!); spills só em `[rbp-64..]` (dentro do
   frame, fora da shadow de calls aninhados); registradores não-voláteis

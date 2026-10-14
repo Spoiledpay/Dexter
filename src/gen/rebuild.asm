@@ -114,6 +114,7 @@ s_dq    db ": dq ", 0
 s_dqpre db "    dq ", 0
 s_reloc db ".reloc", 0
 s_lab    db "label_", 0
+s_uscore db "_", 0
 s_dotname db ".", 0
 s_csdbg  db "[cs] sec=", 0
 s_csdbg2 db " n=", 0
@@ -126,6 +127,7 @@ s_dot_rb db ".rebuild.exe", 0
 s_q     db '"', 0
 s_sp    db " ", 0
 s_nasm_args db " -f win64 -o ", 0
+s_nasm_args32 db " -f win32 -o ", 0
 s_bin_args  db " -f bin -o ", 0
 s_link_pre db " /NOLOGO /NODEFAULTLIB /DEBUG:NONE /SUBSYSTEM:", 0
 s_console db "CONSOLE", 0
@@ -138,7 +140,6 @@ e_gen_m db "dexter: out of memory (generate)", 13, 10, 0
 e_rb_n  db "dexter: nasm failed", 13, 10, 0
 e_rb_l  db "dexter: link failed", 13, 10, 0
 e_rb_c  db "dexter: cannot spawn child process", 13, 10, 0
-e_rb_x32 db "dexter: x32 rebuild em construcao (Fase C: nasm -f win32 + link X86)", 13, 10, 0
 e_astdump db "dexter: warning: -ast-dump skipped (asm too large or out of memory)", 13, 10, 0
 s_imp_colon db ":", 13, 10, 0
 
@@ -647,12 +648,48 @@ dex_generate_asm:
     add rsp, 32
     jmp .sn_done
 .sn_copy:
+    ; Fase C: nome começando com '/' vira '_' (COFF: "/NNN" é offset de
+    ; string-table; o link leria lixo e renomearia as seções — provado
+    ; com as seções /4../110 da Calculator). Layout/ordem preservados.
+    ; Regra empírica: r13 não sobrevive a calls internos (rbx/r12 sim);
+    ; por isso o len é RECOMPUTADO após o primeiro append.
+    movzx eax, byte [r12]
+    cmp al, '/'
+    jne .sn_copyraw
+    lea rdx, [rel s_uscore]
     mov rcx, rbx
-    mov rdx, r12
-    mov r8d, r13d
+    mov r8d, 1
     sub rsp, 32
     call asmbuf_append
     add rsp, 32
+    test eax, eax
+    jnz .sn_done
+    ; resto: recomputa len (r13 não sobrevive ao call acima; rbx/r12
+    ; sim — provado empiricamente). Loop idêntico ao .sn_len.
+    xor r13d, r13d
+.sn_relen:
+    cmp r13d, 8
+    jae .sn_regot
+    cmp byte [r12+r13], 0
+    je .sn_regot
+    inc r13d
+    jmp .sn_relen
+.sn_regot:
+    mov rcx, rbx
+    lea rdx, [r12+1]
+    mov r8d, r13d
+    dec r8d
+    jmp .sn_append
+.sn_copyraw:
+    mov rcx, rbx
+    mov rdx, r12
+    mov r8d, r13d
+    jmp .sn_append
+.sn_append:
+    sub rsp, 32
+    call asmbuf_append
+    add rsp, 32
+    jmp .sn_done
 .sn_done:
     add rsp, 40
     pop r13
@@ -2624,24 +2661,6 @@ dex_rebuild:
     sub rsp, 88
     mov rbx, rcx               ; cfg
     mov r15, rdx               ; img
-    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
-    jne .rb_archok
-    lea rcx, [rel e_rb_x32]
-    sub rsp, 32
-    call dex_console_print_err
-    add rsp, 32
-    mov eax, 5
-    add rsp, 88
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rsi
-    pop rdi
-    pop rbx
-    pop rbp
-    ret
-.rb_archok:
     mov eax, [rcx+DexConfig.mode]
     cmp eax, DEX_MODE_BIN
     je .rb_bin
@@ -2767,7 +2786,14 @@ dex_rebuild:
     call .cmd_quoted
     add rsp, 32
     mov r14, rax
+    ; -f win64 / -f win32 (Fase C; machine inferida do obj no link)
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
+    je .rb_nasm32
     lea rdx, [rel s_nasm_args]
+    jmp .rb_nasm_go
+.rb_nasm32:
+    lea rdx, [rel s_nasm_args32]
+.rb_nasm_go:
     mov rcx, r14
     sub rsp, 32
     call .cmd_appends
@@ -3250,42 +3276,65 @@ dex_patch_dirs:
     ja .pd_fail_um
     cmp dword [r12+rsi], 0x4550
     jne .pd_fail_um
+    ; arch (original) decide Machine/Magic/minopt e offsets (Fase C).
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
+    je .pd_m32
     cmp word [r12+rsi+4], 0x8664
     jne .pd_fail_um
+    movzx eax, word [r12+rsi+24]  ; Magic rebuildada
+    cmp eax, 0x20B
+    jne .pd_fail_um
+    mov r8d, 108                  ; num_off
+    mov r9d, 112                  ; dir_off
+    mov r11d, 240                 ; minopt
+    jmp .pd_mok
+.pd_m32:
+    cmp word [r12+rsi+4], 0x14C
+    jne .pd_fail_um
+    movzx eax, word [r12+rsi+24]
+    cmp eax, 0x10B
+    jne .pd_fail_um
+    mov r8d, 92
+    mov r9d, 96
+    mov r11d, 224
+.pd_mok:
     movzx eax, word [r12+rsi+20]  ; SizeOfOpt rebuild
-    cmp eax, 240
+    cmp eax, r11d
     jb .pd_fail_um
     lea rdi, [r12+rsi+24]      ; opt rebuildada
     mov rax, [r15+PeImage.opt_header]  ; opt original
     mov rsi, rax
-    mov eax, [rsi+108]         ; NumRva orig
+    mov eax, [rsi+r8]          ; NumRva orig
     cmp eax, 16
     ja .pd_fail_um
-    mov ecx, [rdi+108]         ; NumRva rebuild
+    mov ecx, [rdi+r8]          ; NumRva rebuild
     cmp ecx, 16
     ja .pd_fail_um
+    cmp eax, ecx
+    jbe .pd_minok
+    mov eax, ecx
+.pd_minok:
+    mov r11d, eax              ; min (limite único do loop)
+    add rsi, r9                ; dir orig base
+    add rdi, r9                ; dir rebuild base
     xor r10d, r10d             ; i
 .pd_l:
-    cmp r10d, 16
+    cmp r10d, r11d
     jae .pd_ok
     mov eax, r10d
-    cmp eax, [rsi+108]
-    jae .pd_next
-    cmp eax, [rdi+108]
-    jae .pd_next
     shl eax, 3                 ; i*8
-    mov ecx, [rsi+112+rax]     ; orig rva
-    mov edx, [rsi+112+rax+4]   ; orig size
+    mov ecx, [rsi+rax]         ; orig rva
+    mov edx, [rsi+rax+4]       ; orig size
     test ecx, ecx
     jz .pd_next
     test edx, edx
     jz .pd_next
-    cmp dword [rdi+112+rax], 0
+    cmp dword [rdi+rax], 0
     jne .pd_next
-    cmp dword [rdi+112+rax+4], 0
+    cmp dword [rdi+rax+4], 0
     jne .pd_next
-    mov [rdi+112+rax], ecx     ; patch direto na memória (rw)
-    mov [rdi+112+rax+4], edx
+    mov [rdi+rax], ecx         ; patch direto na memória (rw)
+    mov [rdi+rax+4], edx
 .pd_next:
     inc r10d
     jmp .pd_l

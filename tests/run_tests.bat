@@ -42,6 +42,7 @@ if exist "C:\Nasm\nasm.exe" ( set NASM=C:\Nasm\nasm.exe ) else ( set NASM=nasm.e
 "%NASM%" -f win64 -o tests\out\hello_g.obj tests\hello.asm
 if errorlevel 1 ( echo "  FALHA: nasm hello" & set /a FAIL+=1 ) else ( echo "  OK: nasm hello" & set /a PASS+=1 )
 set KLIB=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64\kernel32.lib
+set X86LIB=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x86\kernel32.lib
 if exist tests\out\hello_g.obj (
     "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\hello.exe tests\out\hello_g.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link hello" & set /a FAIL+=1 ) else ( echo "  OK: link hello" & set /a PASS+=1 )
@@ -616,6 +617,22 @@ findstr /c:"default rel" tests\out\calc32.asm >nul 2>&1
 if errorlevel 1 ( echo "  OK: sem default rel (x32)" & set /a PASS+=1 ) else ( echo "  FALHA: default rel em x32" & set /a FAIL+=1 )
 "%DX%" tests\Calculator.exe -o NUL -native -q >nul 2>&1
 if !errorlevel! EQU 4 ( echo "  OK: -native x32 recusado (4)" & set /a PASS+=1 ) else ( echo "  FALHA: -native x32 deveria retornar 4" & set /a FAIL+=1 )
+
+echo === [31] rebuild x32 (tiny32 exit 42, Fase C) ===
+"%NASM%" -f win32 -o tests\out\tiny32.obj tests\tiny32.asm
+if errorlevel 1 ( echo "  FALHA: nasm tiny32" & set /a FAIL+=1 ) else ( echo "  OK: nasm tiny32" & set /a PASS+=1 )
+if exist tests\out\tiny32.obj (
+    "C:\Nasm\link.exe" /nologo /nodefaultlib /subsystem:console /entry:start /out:tests\tiny32.exe tests\out\tiny32.obj "%X86LIB%"
+    if errorlevel 1 ( echo "  FALHA: link tiny32" & set /a FAIL+=1 ) else ( echo "  OK: link tiny32" & set /a PASS+=1 )
+)
+tests\tiny32.exe >nul 2>&1
+if !errorlevel! EQU 42 ( echo "  OK: tiny32 exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: tiny32 exit!=42" & set /a FAIL+=1 )
+"%DX%" tests\tiny32.exe -o tests\out\t32.asm -r -O tests\out\t32rt.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild x32 tiny32" & set /a FAIL+=1 ) else ( echo "  OK: rebuild x32 tiny32" & set /a PASS+=1 )
+if exist tests\out\t32rt.exe (
+    tests\out\t32rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rt exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: rt exit!=42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem t32rt.exe" & set /a FAIL+=1 )
 
 echo.
 echo =====================================================

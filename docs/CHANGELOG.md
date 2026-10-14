@@ -2,6 +2,24 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — x32 fase C: rebuild (2026-10-13)
+
+### Adicionado
+
+- Rebuild x32 (`nasm -f win32`, machine inferida do obj, `patch_dirs`
+  arch-aware validando `0x14C`/`0x10B` com dirs em 92/96); sanitize de
+  seção `/NNN`→`_NNN` (COFF lê `/NNN` como offset de string-table).
+- Corpus `tests/tiny32.asm` (exit 42, entry `start`, stdcall) + seção
+  `[31]` (build X86 com `X86LIB` + round-trip exit 42).
+- Calculator: linka (15 seções + 11 imports adotados; `.bss` fundida
+  como no x64).
+
+### Corrigido
+
+- Regra D-8 estendida: `r13` não sobrevive a calls internos (rbx/r12
+  sim) — `len` de seção é recomputado (`.sn_relen`); causa-raiz exata
+  do clobber em aberto.
+
 ## [Unreleased] — x32 fases A+B: detectar + desmontar (2026-10-13)
 
 ### Adicionado

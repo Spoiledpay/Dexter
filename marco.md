@@ -95,7 +95,8 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] D-3 parcial: `sym_check` (`[15]`, golden `SYM n=5`) — falta `strpool`/`labels-imp` dedicado
 - [x] D-7: tabela D reativada como bitmap (1.2.266: 1 bit/RVA, 1 malloc; leitores: jump-table p/ código `[28]`, gates R/D no walker que convertem refs sem label em `db` — sem eles o var64 `-native` não montava)
 - [x] R-6.1/x64 nativo em PE real (1.2.266, `[29]`: disp com `0x`, disp32-curto em 32 bits, jcc32 `op0=REL`, `movzx/movsx` com `byte/word`, imm32 negativo, gates R/D)
-- [x] x32 fases A+B (1.2.271, `[30]`+`[6c]`: loader PE32 + decoder 32-bit + `bits 32` db fiel; `-native`/`-r` recusados com 4/5; tabelas endireitadas p/ ambos os modos: imul AF, cmov 40-43, x87 ModRM, acumulador-imm 66)
+- [x] x32 fases A+B (1.2.271, `[30]`+`[6c]`: loader PE32 + decoder 32-bit + `bits 32` db fiel; tabelas endireitadas p/ ambos os modos: imul AF, cmov 40-43, x87 ModRM, acumulador-imm 66)
+- [x] x32 fase C (1.2.293, `[31]`: rebuild `nasm -f win32` + link X86 com `patch_dirs` arch-aware; sanitize `/NNN`→`_NNN` (COFF strtab); corpus `tiny32.asm` exit 42 round-trip; Calculator linka com 15 seções + 11 imports; `-native` x32 segue recusado com 4 — Fase D)
 - [x] D-1: convenção ADR estabelecida (`docs/adr/0001-ast-lexer-codegen.md` numerado; novas decisões seguem `NNNN-<título>.md`)
 - [x] D-2: `.bss` sai vazia no win64 (link dimensiona sem o vsize: var64 tem 0xB90 referenciados; rebuild win64 roda mas imprime vazio × original — limitação R-4.4 confirmada; caminho fiel: `-m bin`; contramedida futura: `resb vsize` nobits)
 - [x] D-4: I/O posicional removido de vez (externs mortos `dex_file_read_at/write_at` extirpados de `rebuild.asm`; `mmap_rw` é o desenho; falha 87 histórica não reincide)
