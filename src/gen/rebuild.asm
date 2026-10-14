@@ -876,10 +876,10 @@ dex_generate_asm:
     bts [rax], rcx               ; set bit (single-thread, sem lock)
 .cs_rip:
     ; RIP-ref em dados? (só modo 64: disp32, sem 67, rm==101, sem SIB.
-    ; Em x32, mod00+rm101+disp32 é ABSOLUTO, não RIP.)
+    ; Em x32, mod00+rm101+disp32 é ABSOLUTO, não RIP: ver .cs_abs32/D2.)
     lea rax, [rel g_insn]
     cmp byte [rax+Insn.addr_mode], 1
-    je .cs_adv
+    je .cs_abs32
     cmp byte [rax+Insn.has_modrm], 0
     je .cs_adv
     cmp byte [rax+Insn.disp_size], 4
@@ -923,6 +923,65 @@ dex_generate_asm:
     test eax, eax
     jz .cs_adv
     ; R[trva] = .
+    mov rcx, [rel g_symR]
+    mov rdx, [rbp-120]
+    lea r8, [rel s_dotname]
+    sub rsp, 32
+    call symtab_insert_va
+    add rsp, 32
+    test rax, rax
+    jz .cs_fail
+    jmp .cs_adv
+;-----------------------------------------------------------------------------
+; .cs_abs32 — D2: MEM absoluto x32 (mod00+rm101+disp32, sem 67/SIB) p/ slot
+; de import -> R. Estreito de propósito: garante `__imp_X:` no chunk de
+; dados sem rotular todo acesso absoluto (x32 não tem RIP; rotular tudo
+; seria churn no output). rax=&g_insn na entrada; rdi=base, r15=img,
+; [rbp-112]=len intactos. Fora de código + só iat_rva exato, senão .cs_adv.
+;-----------------------------------------------------------------------------
+.cs_abs32:
+    cmp byte [rax+Insn.has_modrm], 0
+    je .cs_adv
+    cmp byte [rax+Insn.disp_size], 4
+    jne .cs_adv
+    cmp byte [rax+Insn.legacy67], 0
+    jne .cs_adv                  ; addr16: rm101 = [DI], não absoluto
+    movzx ecx, byte [rax+Insn.modrm]
+    and ecx, 0xC7
+    cmp ecx, 0x05
+    jne .cs_adv
+    cmp byte [rax+Insn.has_sib], 0
+    jne .cs_adv
+    mov eax, [rax+Insn.disp]     ; VA alvo absoluta (low32; zero-estende)
+    cmp rax, rdi
+    jb .cs_adv                   ; abaixo da base: nunca IAT
+    sub rax, rdi                 ; trva
+    mov [rbp-120], rax           ; spill (calls matam voláteis)
+    mov rcx, r15
+    mov rdx, rax
+    sub rsp, 32
+    call .cs_in_code
+    add rsp, 32
+    test eax, eax
+    jnz .cs_adv                  ; em código: D cobre, R não
+    mov rax, [r15+PeImage.imports_ptr]
+    test rax, rax
+    jz .cs_adv                   ; sem imports: miss
+    mov ecx, [r15+PeImage.imports_count]
+    test ecx, ecx
+    jz .cs_adv
+    mov edx, [rbp-120]           ; trva32 (recarrega: call matou edx)
+    xor r8d, r8d                 ; i (sem calls neste loop)
+.cs_abs_l:
+    cmp r8d, ecx
+    jae .cs_adv                  ; miss: segue db como antes
+    mov r9d, r8d
+    imul r9d, SIZEOF_IMPORT_ENTRY
+    cmp dword [rax+r9+ImportEntry.iat_rva], edx
+    je .cs_abs_hit
+    inc r8d
+    jmp .cs_abs_l
+.cs_abs_hit:
     mov rcx, [rel g_symR]
     mov rdx, [rbp-120]
     lea r8, [rel s_dotname]
@@ -1589,7 +1648,9 @@ dex_generate_asm:
     jz .wds_gap_db              ; sem -native: legado
     mov rax, [rel g_liftctx]
     cmp dword [rax+PeImage.arch], DEX_ARCH_X64
-    jne .wds_gap_db             ; x32: spans 8B inválidos (db fiel)
+    je .wds_gap_chunks
+    mov qword [rel g_spanflags], 1   ; D2 x32: chunks p/ labels, corpos db
+.wds_gap_chunks:
     mov rcx, r14                ; buf
     mov rdx, [rbp-88]           ; fptr
     mov r8, [rbp-72]            ; va_base
@@ -1641,7 +1702,9 @@ dex_generate_asm:
     jz .wds_plain_db            ; sem -native: byte-idêntico ao legado
     mov rcx, [rel g_liftctx]     ; (ecx morto: flags já testadas)
     cmp dword [rcx+PeImage.arch], DEX_ARCH_X64
-    jne .wds_plain_db           ; x32: spans 8B inválidos (db fiel)
+    je .wds_plain_chunks
+    mov qword [rel g_spanflags], 1   ; D2 x32: chunks p/ labels, corpos db
+.wds_plain_chunks:
     ; R-6.4 2b: fatia [0,raw) nos alvos R (labels reais p/ refs RIP).
     mov rcx, r14                ; buf
     mov rdx, [rbp-88]           ; fptr

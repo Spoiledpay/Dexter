@@ -84,6 +84,8 @@ s_crlf       db 13, 10, 0
 s_colon_nl   db ":", 13, 10, 0
 s_call_rel   db "    call [rel ", 0
 s_jmp_rel    db "    jmp [rel ", 0
+s_call_abs   db "    call [", 0
+s_jmp_abs    db "    jmp [", 0
 s_rb         db "]", 0
 s_global     db "global ", 0
 
@@ -348,7 +350,13 @@ dex_emit_insn:
     je .do_jmp
     jmp .as_db                 ; kinds 3/4: não implementado nesta fase -> db
 .do_call:
+    cmp byte [r12+Insn.addr_mode], 1
+    je .do_call_abs
     lea rdx, [rel s_call_rel]
+    jmp .do_call_emit
+.do_call_abs:
+    lea rdx, [rel s_call_abs]
+.do_call_emit:
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str
@@ -371,7 +379,13 @@ dex_emit_insn:
     jnz .fail_i
     jmp .tail_mne
 .do_jmp:
+    cmp byte [r12+Insn.addr_mode], 1
+    je .do_jmp_abs
     lea rdx, [rel s_jmp_rel]
+    jmp .do_jmp_emit
+.do_jmp_abs:
+    lea rdx, [rel s_jmp_abs]
+.do_jmp_emit:
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str

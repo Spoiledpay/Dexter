@@ -2,6 +2,27 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — x32 fase D2: IAT absoluta (2026-10-14)
+
+### Adicionado
+
+- Rewrite IAT em x32: `call|jmp [abs]` p/ slot de import vira
+  `call|jmp [__imp_X]` absoluto (sem `rel`) + `__imp_X:` label-at-slot
+  no chunk de dados; fallback `db` se sem entry/nome.
+- `.collect_syms`: inserção R estreita em x32 (só `mod00+rm101+disp32`
+  sem SIB/67 cujo alvo é `iat_rva` exato fora de código).
+- Dados x32 com `-native` passam por `.wds_chunks` com `nodq`
+  (`g_spanflags=1`: corpos `db` puros + labels R + `__imp_X:`);
+  `dq` 8B continua desligado em x32.
+- Seção `[33]` (6 checks: rewrite + label + sem forma `rel` +
+  rebuild + exit 42 no tiny32).
+
+### Verificado
+
+- Calculator `-native`: 21 refs `[__imp_]` + 10 labels, `nasm -f win32`
+  zero erros (D1b+ preservado); default `db` x32 sem `__imp_`;
+  x64 intacto (3× `[rel __imp_]` no hello).
+
 ## [Unreleased] — x32 fase D1b+: allowlist ampla (2026-10-13)
 
 ### Adicionado

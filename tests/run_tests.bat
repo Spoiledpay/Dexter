@@ -650,6 +650,22 @@ if exist tests\out\t32nrt.exe (
     if !errorlevel! EQU 42 ( echo "  OK: rt-native exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: rt-native exit!=42" & set /a FAIL+=1 )
 ) else ( echo "  FALHA: sem t32nrt.exe" & set /a FAIL+=1 )
 
+echo === [33] IAT absoluta x32 (jmp [__imp_X], Fase D2) ===
+"%DX%" tests\tiny32.exe -o tests\out\i32.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native x32 IAT" & set /a FAIL+=1 ) else ( echo "  OK: generate -native x32 IAT" & set /a PASS+=1 )
+findstr /c:"jmp [__imp_" tests\out\i32.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem jmp [__imp_]" & set /a FAIL+=1 ) else ( echo "  OK: jmp [__imp_]" & set /a PASS+=1 )
+findstr /c:"__imp_KERNEL32_dll_ExitProcess:" tests\out\i32.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem label __imp_" & set /a FAIL+=1 ) else ( echo "  OK: label __imp_" & set /a PASS+=1 )
+findstr /c:"[rel __imp_" tests\out\i32.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: sem forma rel em x32 (absoluto)" & set /a PASS+=1 ) else ( echo "  FALHA: forma rel em x32" & set /a FAIL+=1 )
+"%DX%" tests\tiny32.exe -o tests\out\i32.asm -r -O tests\out\i32rt.exe -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native x32 IAT" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native x32 IAT" & set /a PASS+=1 )
+if exist tests\out\i32rt.exe (
+    tests\out\i32rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rt-native exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: rt-native exit!=42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem i32rt.exe" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
