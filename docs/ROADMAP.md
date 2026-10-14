@@ -246,10 +246,15 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   interiores distintas referenciadas no var64 (start-label só não
   bastava); soma `resb` == vsize exato (0xB90); monta com 0 erros.
   Limite honesto: comportamento em PE grande segue pendente (D-19).
-- [ ] R-8.2 backend próprio com `.text` nativa (R-6.6): controle total
-  de layout (sem link.exe); prova = swap + `hello.c` → `hi` com o
-  binário `-native`. Caminho fiel hoje: `-m bin` (já prova compilador
-  funcional: `gcc_bin.exe` compilou `hello.c` → `hi`).
+- [x] R-8.2 fatia 1 — bin com `.text` nativa em PE simples (1.2.308,
+  `[36]` 7 checks): `-m bin` + `-native` em x64 gera CODE via walker
+  (gate mesma-seção + imp→db; refs `dex_generate_asm.*` sem reescopo)
+  e DATA db-verbatim; prova: hello byte-idêntico + `hi` + AST 217
+  instrs, tiny exit 42 = original. Raiz do disp: sem `vstart`, labels
+  valem file-offset (sondas `rel`/`vstart` documentam).
+- [ ] R-8.2 fatia 2 — imports/relocs no backend próprio (IAT + `.reloc`
+  com VAs reais; prova: var64 `-native-bin` comportamental).
+- [ ] R-8.2 fatia 3 — PE grande (gcc `-native-bin` + swap + `hello.c`).
 
 ## Dívida técnica conhecida (honesta, com ID)
 

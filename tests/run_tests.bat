@@ -702,6 +702,24 @@ if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native gcc" & set /a FAIL+=1 ) 
 findstr /c:"resb 0x" tests\out\gccbss.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem resb no gcc" & set /a FAIL+=1 ) else ( echo "  OK: resb no gcc" & set /a PASS+=1 )
 
+echo === [36] bin nativo em PE simples (R-8.2 f1) ===
+"%DX%" tests\hello.exe -o tests\out\hello_nb.asm -m bin -native -r -O tests\out\hello_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native hello" & set /a PASS+=1 )
+fc /b tests\hello.exe tests\out\hello_nb.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: hello_nb difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: hello_nb byte-identico" & set /a PASS+=1 )
+findstr /r /c:"^    mov " tests\out\hello_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem mnemonicos nativos" & set /a FAIL+=1 ) else ( echo "  OK: mnemonicos nativos" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -o tests\out\hello_nb_ast.asm -m bin -native -ast-dump -q > tests\out\nb_ast.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: ast-dump bin-native" & set /a FAIL+=1 ) else ( echo "  OK: ast-dump bin-native" & set /a PASS+=1 )
+findstr /c:"instrs=0 " tests\out\nb_ast.out >nul 2>&1
+if errorlevel 1 ( echo "  OK: AST com instrs reais" & set /a PASS+=1 ) else ( echo "  FALHA: AST sem instrs" & set /a FAIL+=1 )
+"%DX%" tests\tiny.exe -o tests\out\tiny_nb.asm -m bin -native -r -O tests\out\tiny_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native tiny" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native tiny" & set /a PASS+=1 )
+if exist tests\out\tiny_nb.exe (
+    tests\out\tiny_nb.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: tiny_nb exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: tiny_nb exit!=42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem tiny_nb.exe" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

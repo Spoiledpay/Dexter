@@ -1289,6 +1289,10 @@ dex_generate_asm:
     xor r9d, r9d
     cmp dword [rel g_ir+DexIR.tkind], IRT_IMPORT
     jne .wcs_cg
+    ; R-8.2 f1: em bin, __imp_ não existe (slots db-verbatim) → db.
+    mov eax, [rbx+DexConfig.mode]
+    cmp eax, DEX_MODE_BIN
+    je .wcs_emit_db
     mov rax, [rel g_ir+DexIR.imp]
     test rax, rax
     jz .wcs_cg
@@ -1360,6 +1364,32 @@ dex_generate_asm:
     bt [rax], rcx
     jnc .wcs_emit_db
 .wcs_cg_go:
+    ; R-8.2 f1: em bin, label só vale dentro da própria seção (labels =
+    ; file-offsets sem vstart; disp cruzado sai errado). Fora => db.
+    ; Só tkinds com alvo simbólico passam pelo range (tva de plain
+    ; INSTR/RET pode estar obsoleto — codegen não o usa mesmo).
+    mov eax, [rbx+DexConfig.mode]
+    cmp eax, DEX_MODE_BIN
+    jne .wcs_cg_binok
+    mov eax, [rel g_ir+DexIR.tkind]
+    cmp eax, IRT_DATA
+    je .wcs_cg_binrng
+    cmp eax, IRT_CODE
+    jne .wcs_cg_binok
+.wcs_cg_binrng:
+    mov rax, [rel g_ir+DexIR.tva]
+    mov rdx, [r15+PeImage.image_base]
+    cmp rax, rdx
+    jb .wcs_emit_db
+    sub rax, rdx                    ; trva
+    mov ecx, [r12+PeSection.vaddr]   ; zero-estende
+    cmp rax, rcx
+    jb .wcs_emit_db
+    mov edx, [r12+PeSection.raw_size]
+    add rcx, rdx                     ; end (64-bit)
+    cmp rax, rcx
+    jae .wcs_emit_db
+.wcs_cg_binok:
     mov rcx, r14
     lea rdx, [rel g_insn]
     lea r8, [rel g_ir]
@@ -3658,7 +3688,16 @@ dex_generate_bin:
     call dex_emit_set_hex
     add rsp, 32
     mov eax, [rbx+DexConfig.flags]
-    and eax, DF_NOP_PAD | DF_NO_IMPORTS | DF_NO_RELOCS | DF_STRINGS | DF_NATIVE
+    and eax, DF_NOP_PAD | DF_NO_IMPORTS | DF_NO_RELOCS | DF_STRINGS
+    ; R-8.2 f1: -native em bin x64 tem efeito (sem warn); em x32 segue
+    ; avisado (db fiel, sem efeito).
+    mov ecx, [rbx+DexConfig.flags]
+    test ecx, DF_NATIVE
+    jz .gb_wmask_done
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    je .gb_wmask_done
+    or eax, DF_NATIVE
+.gb_wmask_done:
     jz .gb_noflagwarn
     cmp qword [rbx+DexConfig.section_filter], 0
     jne .gb_warn
@@ -3683,6 +3722,47 @@ dex_generate_bin:
     test rax, rax
     jz .gb_oom
     mov r14, rax               ; buf
+    ; ---- R-8.2 f1: setup nativo p/ bin x64 (espelha win64; sem
+    ; collect_strs: DATA segue db-verbatim, só R/D de refs de código).
+    ; O quê: -m bin + -native em x64 gera CODE via walker (gate mesma-
+    ;   seção); resto db-verbatim, offsets intactos.
+    ; Por quê: primeiro veículo de funcionamento completo sem link.exe.
+    ; Contrato: só x64+DF_NATIVE; bytes idênticos (tamanho exato ou db).
+    ; Como testar: tests\run_tests.bat [36] (hello/tiny -native-bin).
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_NATIVE
+    jz .gb_setup_done
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    jne .gb_setup_done
+    mov [rel g_liftctx], r15
+    mov [rel g_spancfg], rbx
+    mov rcx, r15
+    sub rsp, 32
+    call dex_generate_asm.coded_alloc   ; escopo win64 (D-12: sem reescopo)
+    add rsp, 32
+    mov ecx, 256
+    sub rsp, 32
+    call symtab_new
+    add rsp, 32
+    test rax, rax
+    jz .gb_oom_free
+    mov [rel g_symR], rax
+    mov rcx, rbx
+    mov rdx, r15
+    sub rsp, 32
+    call dex_generate_asm.collect_syms   ; escopo win64 (D-12: sem reescopo)
+    add rsp, 32
+    test eax, eax
+    jnz .gb_oom_free
+    mov rcx, [rel g_symR]
+    sub rsp, 32
+    call symtab_to_sorted
+    add rsp, 32
+    test rax, rax
+    jz .gb_oom_free
+    mov [rel g_rarr], rax
+    mov [rel g_rn], rdx
+.gb_setup_done:
     cmp dword [r15+PeImage.arch], DEX_ARCH_X32
     je .gb_hdr32
     lea rdx, [rel s_bin_hdr]
@@ -3813,6 +3893,32 @@ dex_generate_bin:
     add rsp, 32
     test eax, eax
     jnz .gb_oom_free
+    ; R-8.2 f1: bin+native em x64 — CODE via walker (gate mesma-seção
+    ; dentro do walker); DATA segue db-verbatim (.gb_db). O label VA
+    ; acima coincide com o do walker no início (mesmo valor: nasm aceita).
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_NATIVE
+    jz .gb_db
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    jne .gb_db
+    mov rax, [rbp-96]          ; sec
+    mov eax, [rax+PeSection.characterist]
+    test eax, IMAGE_SCN_CNT_CODE
+    jnz .gb_nb_code
+    test eax, IMAGE_SCN_MEM_EXECUTE
+    jz .gb_db
+.gb_nb_code:
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8, r14
+    mov r9, [rbp-96]
+    sub rsp, 32
+    call dex_generate_asm.walk_code_sec   ; escopo win64 (D-12: sem reescopo)
+    add rsp, 32
+    test eax, eax
+    jnz .gb_oom_free
+    jmp .gb_next
+.gb_db:
     ; db dos bytes
     mov rax, [rbp-96]
     mov ecx, [rax+PeSection.raw_ptr]
@@ -3880,6 +3986,26 @@ dex_generate_bin:
     add rsp, 32
     test eax, eax
     jnz .gb_oom_free
+    ; ---- R-8.2 f1: libera setup nativo (frees NULL-safe; legado nada alocou).
+    mov rcx, [rel g_coded]
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+    mov rcx, [rel g_symR]
+    sub rsp, 32
+    call symtab_free
+    add rsp, 32
+    mov rcx, [rel g_rarr]
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+    mov qword [rel g_coded], 0
+    mov qword [rel g_coded_n], 0
+    mov qword [rel g_symR], 0
+    mov qword [rel g_rarr], 0
+    mov qword [rel g_rn], 0
+    mov qword [rel g_spancfg], 0
+    mov qword [rel g_liftctx], 0
 .gb_write:
     mov rcx, [rbx+DexConfig.output_asm]
     sub rsp, 32
@@ -3947,6 +4073,25 @@ dex_generate_bin:
     pop rbp
     ret
 .gb_oom_free:
+    mov rcx, [rel g_coded]
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+    mov rcx, [rel g_symR]
+    sub rsp, 32
+    call symtab_free
+    add rsp, 32
+    mov rcx, [rel g_rarr]
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+    mov qword [rel g_coded], 0
+    mov qword [rel g_coded_n], 0
+    mov qword [rel g_symR], 0
+    mov qword [rel g_rarr], 0
+    mov qword [rel g_rn], 0
+    mov qword [rel g_spancfg], 0
+    mov qword [rel g_liftctx], 0
     mov rcx, r14
     sub rsp, 32
     call asmbuf_free

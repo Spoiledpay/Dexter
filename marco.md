@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-14, Dexter 1.2.301)
+## 0. Onde estamos (2026-10-14, Dexter 1.2.308)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -16,15 +16,18 @@
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
 - [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
 - [x] R-6.5 `-emit` (1.2.254, `[23]`) + lote rápido (1.2.254: `[24]`, D-1, tag `v1.2.254`) + lote D-2..D-6 (1.2.256: `[25]`, `[26]`) + jtable 1ª fatia (1.2.257: `[27]`, tag `v1.2.257`)
-- Placar honesto: 238 passam, 0 falham (`tests\run_tests.bat → 238/238 OK` em 1.2.301: base 231/231 D2 + `[34]` gcc-RIP com 7 checks). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
+- [x] R-8.1 `.bss` com `resb` + labels (1.2.303, `[35]`: soma `resb`==vsize, 100+ refs simbólicas, monta 0 erros; limite honesto D-19)
+- [x] R-8.2 f1 bin com `.text` nativa (1.2.308, `[36]`: hello byte-idêntico + `hi` + AST 217 instrs, tiny 42)
+- [ ] R-8.2 f2/f3 (imports/relocs próprias; PE grande — ordenadas na Fase 5)
+- Placar honesto: 252 passam, 0 falham (`tests\run_tests.bat → 252/252 OK` em 1.2.308: base 245/245 + `[36]` bin-native com 7 checks). Detalhe do dia: R-8.2 f1
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[34]`, 238 checks em 1.2.301)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[36]`, 252 checks em 1.2.308)
 - [x] Suite lenta: `tests\run_slow.bat` (round-trip `ld.lld.exe` 68 MB)
-- [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + negativos `var32/link/for` (saída 3)
+- [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + `var64/gcc` (`-native` monta 0 erros; comportamento em PE grande = R-8.2) + negativos `var32/link` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
 
 ## 2. Fase 0 — Retomada limpa (sem código novo)
@@ -88,12 +91,12 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [ ] SEH/unwind reemitido (hoje: cópia/trim)
 - [ ] R-2.7 VEX/EVEX/x87 rotulado (hoje: `db` correto)
 - [ ] R-5.3 bin com import table regenerada (hoje: copiada, suficiente)
-- [x] R-6.5 `-emit=db|native` (1.2.254, `[23]`) + var64 `-native` montável (1.2.266, `[29]`: disp com `0x`, disp32-curto→`db` em 32 bits, jcc32 com `op0=REL`, `movzx/movsx` com `byte/word`, imm32 negativo como `-0x`, gates R/D) + R-6.6 IR otimizável/backend próprio (futuro)
+- [x] R-6.5 `-emit=db|native` (1.2.254, `[23]`) + var64 `-native` montável (1.2.266, `[29]`: disp com `0x`, disp32-curto→`db` em 32 bits, jcc32 com `op0=REL`, `movzx/movsx` com `byte/word`, imm32 negativo como `-0x`, gates R/D) + R-6.6 IR otimizável/backend próprio (→ Fase 5 R-8.2)
 
-## 7. Dívida técnica (D-1–D-17, ver ROADMAP)
+## 7. Dívida técnica (D-1–D-19, ver ROADMAP)
 
 - [x] D2 IAT absoluta x32 (2026-10-14, backlog `SESSAO-2026-10-13-D1B.md` §4.1): `call|jmp [__imp_X]` + labels, `[33]` verde, suíte 231/231 (1.2.300). `mov`-from-IAT segue `db` (kinds 3/4 não existem); `dq` 8B segue off em x32 (`nodq`); próxima fila: `gcc -native` 62 erros.
-- [x] gcc-native prefixo RIP (2026-10-14, backlog §4.2 parcial): hoist `.fo_mem`→`.fo_memshape` (movzx/cmp com tamanho em `[rel]`/SIB-abs/abs32); 30 erros estáticos zerados; corpus `memsz.asm` + `[34]` verde; suíte 238/238 (1.2.301). `aad` fantasma extinto (0 ocorrências). Resta: `nasm -f win64` final do gcc (em fundo) + resto do backlog.
+- [x] gcc-native prefixo RIP (2026-10-14, backlog §4.2): hoist `.fo_mem`→`.fo_memshape` (movzx/cmp com tamanho em `[rel]`/SIB-abs/abs32); 30 erros estáticos zerados; corpus `memsz.asm` + `[34]` verde; `nasm -f win64` do gcc FECHADO com 0 erros (obj 10,5 MB) + link só com LNK4078; suíte 238/238 (1.2.301). `aad` fantasma extinto (0 ocorrências). Comportamento em PE grande → Fase 5 (D-19).
 
 - [x] D-3 parcial: `sym_check` (`[15]`, golden `SYM n=5`) — falta `strpool`/`labels-imp` dedicado
 - [x] D-7: tabela D reativada como bitmap (1.2.266: 1 bit/RVA, 1 malloc; leitores: jump-table p/ código `[28]`, gates R/D no walker que convertem refs sem label em `db` — sem eles o var64 `-native` não montava)
@@ -104,12 +107,26 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] x32 fase D1b (1.2.297, `[30]`: Calculator `-native` monta zero erros; regs de endereço 32, `push/pop` 32, spans/`dq` off em x32)
 - [x] x32 fase D1b+ (1.2.298: allowlist ampla — ALU/mov/lea/test/xchg/`test`-acc/`ret`-imm/`loop`/`movzx`/`cmov`/`setcc`; `jecxz`; Calculator `-native` com 8.328 mnemônicos, link PE32 válido)
 - [x] D-1: convenção ADR estabelecida (`docs/adr/0001-ast-lexer-codegen.md` numerado; novas decisões seguem `NNNN-<título>.md`)
-- [x] D-2: `.bss` sai vazia no win64 (link dimensiona sem o vsize: var64 tem 0xB90 referenciados; rebuild win64 roda mas imprime vazio × original — limitação R-4.4 confirmada; caminho fiel: `-m bin`; contramedida futura: `resb vsize` nobits)
+- [x] D-2: `.bss` com `resb` + labels (R-8.1 FECHADA 1.2.303: `.wds_bss` + `.ptr_tgt_ok` aceita `off<vsize`; soma `resb`==vsize, 100+ refs simbólicas no var64, monta 0 erros; `[35]` trava). Comportamento em PE grande pendente de layout (D-19 → R-8.2); caminho fiel segue `-m bin`.
 - [x] D-4: I/O posicional removido de vez (externs mortos `dex_file_read_at/write_at` extirpados de `rebuild.asm`; `mmap_rw` é o desenho; falha 87 histórica não reincide)
 - [x] D-5: `-no-imports` × `-native` seguro (sem parse → fallback `db`, 0 `__imp_`, rebuild `hi`; `[26]` trava o combo)
 - [x] D-6: `-start`/`-end` valem p/ código E dados saem inteiros — MAIS bug real achado e corrigido: `-end` ignorado com `-start` presente (scanner oor só conhecia `< start`; fix 2 linhas; `[25]` + round-trip `hi`)
+- [x] D-19: `link.exe` funde seções (R-8.1, 2026-10-14: 3 sondas + `secdump` — `.bss`/`.tls`/`.xdata` do `.obj` somem no `.exe`; `resb` vira zeros, nunca nobits; `dex_patch_dirs` copia RVAs cegamente e `imp`/`iat` caíram na `.reloc` nova). Rebuild `-native` via link só vale p/ PEs simples; PEs reais → R-8.2.
 
-## 8. Como marcar
+## 8. Fase 5 — Layout robusto (R-8.x, ORDEM DE EXECUÇÃO)
+
+> Meta: `-native` com funcionamento completo em PEs reais (o que falta
+> para o gcc/link/ld.lld recompilados funcionarem). Ordem fixa; só
+> avance com a fatia anterior verde (`tests\run_tests.bat`).
+
+- [x] R-8.1 `.bss` com `resb` + labels (1.2.303, `[35]` 7 checks, commit `dddeac4`). Nível asm exato; comportamento em PE grande pendente de layout.
+- [x] R-8.2 f1 bin com `.text` nativa (1.2.308, `[36]` 7 checks). Prova: hello byte-idêntico + `hi` + AST 217 instrs; tiny exit 42 = original.
+- [ ] R-8.2 fatia 2 — imports/relocs no backend próprio: IAT + `.reloc` regeneradas com VAs reais do layout; prova: var64 `-native-bin` imprime igual ao original.
+- [ ] R-8.2 fatia 2 — imports/relocs no backend próprio: IAT + `.reloc` regeneradas com VAs reais do layout; prova: var64 `-native-bin` imprime igual ao original.
+- [ ] R-8.2 fatia 3 — PE grande: gcc `-native-bin` + swap + `hello.c` → `hi`. Critério de aceite da Fase 5.
+- [ ] Resto ordenado (após R-8.2): SEH/unwind reemitido → R-2.7 VEX/EVEX/x87 rotulado → R-5.3 bin com import table regenerada (cai se R-8.2 f2 cobrir) → loads indexados/jump-to-code → `-s` + RIP.
+
+## 9. Como marcar
 
 - Só marque `[x]` com comando exato verde (ex: `tests\run_tests.bat → 80/80 OK`).
 - Cada `[x]` pede: commit Conventional (`Refs:` + `Testes:`) + linha em `docs/REVISAO.md`.
