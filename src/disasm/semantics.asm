@@ -113,6 +113,9 @@ dex_build_operands:
     jne .bm64
     ; x32 Fase D1: allowlist (resto: db fiel). Classes auditadas p/
     ; semântica 32-bit (sem REX; formas com 66 caem em .no dentro).
+    ; x32+0x67 (endereços 16 bits, sem forma) sempre recusa.
+    cmp byte [rbx+Insn.legacy67], 0
+    jne .no
     cmp dword [rbx+Insn.opcode_len], 1
     jne .no
     movzx eax, byte [rbx+Insn.opcode]
@@ -132,6 +135,10 @@ dex_build_operands:
     je .bm32go                 ; inc/dec/call/jmp/push r/m (/3,/5,/7 caem em .no)
     cmp eax, 0xC3
     je .bm32go                 ; ret
+    cmp eax, 0x50
+    jb .no
+    cmp eax, 0x60
+    jb .bm32go                 ; push/pop reg (size corrigido em .l1_pushr)
     jmp .no
 .bm32go:
     ; cai no dispatch normal abaixo (paths com REX nunca tomados em x32)
@@ -507,9 +514,12 @@ dex_build_operands:
     mov [rbx+Insn.op1+DexOp.val], rax
     jmp .ok
 .l1_pushr:
-    ; 50-57 push r64 / 58-5F pop r64 (+REX.B); 66 → 16 bits
+    ; 50-57 push r / 58-5F pop r (+REX.B em x64); 66 → 16 bits.
+    ; x32: sempre 32 bits (sem REX; r8-r15 não existem).
     movzx ecx, al
     and ecx, 7
+    cmp byte [rbx+Insn.addr_mode], 1
+    je .l1_pr32
     cmp byte [rbx+Insn.has_rex], 0
     je .l1_pr_nr
     test byte [rbx+Insn.rex], 1
@@ -519,6 +529,14 @@ dex_build_operands:
     mov byte [rbx+Insn.op0+DexOp.kind], DEX_OP_REG
     mov [rbx+Insn.op0+DexOp.reg], cl
     mov byte [rbx+Insn.op0+DexOp.size], 8
+    cmp byte [rbx+Insn.legacy66], 0
+    je .ok
+    mov byte [rbx+Insn.op0+DexOp.size], 2
+    jmp .ok
+.l1_pr32:
+    mov byte [rbx+Insn.op0+DexOp.kind], DEX_OP_REG
+    mov [rbx+Insn.op0+DexOp.reg], cl
+    mov byte [rbx+Insn.op0+DexOp.size], 4
     cmp byte [rbx+Insn.legacy66], 0
     je .ok
     mov byte [rbx+Insn.op0+DexOp.size], 2

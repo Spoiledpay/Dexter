@@ -289,9 +289,13 @@ dex_generate_asm:
     ; R U runs U ptrs U code p/ dq-pointer, uma busca binária).
     ; Passada A (runs) exige -strings; passada B (ponteiros p/ dados
     ; E código decodificado) vale p/ todo -native (jump-tables).
+    ; x32: spans são 8B (dq) — db fiel (fatia futura: spans 4B).
     mov eax, [rbx+DexConfig.flags]
     test eax, DF_NATIVE
     jz .no_cstr
+    mov rax, [rel g_liftctx]
+    cmp dword [rax+PeImage.arch], DEX_ARCH_X64
+    jne .no_cstr
     mov rcx, rbx
     mov rdx, r15
     sub rsp, 32
@@ -1583,6 +1587,9 @@ dex_generate_asm:
     mov eax, [rbx+DexConfig.flags]
     test eax, DF_NATIVE
     jz .wds_gap_db              ; sem -native: legado
+    mov rax, [rel g_liftctx]
+    cmp dword [rax+PeImage.arch], DEX_ARCH_X64
+    jne .wds_gap_db             ; x32: spans 8B inválidos (db fiel)
     mov rcx, r14                ; buf
     mov rdx, [rbp-88]           ; fptr
     mov r8, [rbp-72]            ; va_base
@@ -1632,6 +1639,9 @@ dex_generate_asm:
     mov ecx, [rbx+DexConfig.flags]
     test ecx, DF_NATIVE
     jz .wds_plain_db            ; sem -native: byte-idêntico ao legado
+    mov rcx, [rel g_liftctx]     ; (ecx morto: flags já testadas)
+    cmp dword [rcx+PeImage.arch], DEX_ARCH_X64
+    jne .wds_plain_db           ; x32: spans 8B inválidos (db fiel)
     ; R-6.4 2b: fatia [0,raw) nos alvos R (labels reais p/ refs RIP).
     mov rcx, r14                ; buf
     mov rdx, [rbp-88]           ; fptr

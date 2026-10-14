@@ -2,6 +2,20 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — x32 fase D1b: nativo em PE real (2026-10-13)
+
+### Adicionado
+
+- Emissor x32 com registradores de endereço 32 (`ebp`, nunca `rbp`);
+  `x32+0x67` recusa (sem forma); `push/pop reg` 32 bits; spans/`dq`
+  desligados em x32 (`db` fiel; 4B é trabalho futuro).
+- `[30]` agora monta `calc32n.asm` (`nasm -f win32` exit 0, zero erros).
+
+### Corrigido
+
+- Gate `wds_plain` usava `rax` com `len` vivo (regra D-8 de novo);
+  `rcx` (flags mortas) no lugar.
+
 ## [Unreleased] — x32 fase D1: nativo (2026-10-13)
 
 ### Adicionado

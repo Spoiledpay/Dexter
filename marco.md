@@ -98,6 +98,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] x32 fases A+B (1.2.271, `[30]`+`[6c]`: loader PE32 + decoder 32-bit + `bits 32` db fiel; tabelas endireitadas p/ ambos os modos: imul AF, cmov 40-43, x87 ModRM, acumulador-imm 66)
 - [x] x32 fase C (1.2.293, `[31]`: rebuild `nasm -f win32` + link X86 com `patch_dirs` arch-aware; sanitize `/NNN`→`_NNN` (COFF strtab); corpus `tiny32.asm` exit 42 round-trip; Calculator linka com 15 seções + 11 imports; `-native` x32 segue recusado com 4 — Fase D)
 - [x] x32 fase D1 (1.2.295, `[32]`: nativo x32 por allowlist com round-trip tiny32 exit 42; IMPORT→db até D2; D-18 fakes manuais)
+- [x] x32 fase D1b (1.2.297, `[30]`: Calculator `-native` monta zero erros; regs de endereço 32, `push/pop` 32, spans/`dq` off em x32)
 - [x] D-1: convenção ADR estabelecida (`docs/adr/0001-ast-lexer-codegen.md` numerado; novas decisões seguem `NNNN-<título>.md`)
 - [x] D-2: `.bss` sai vazia no win64 (link dimensiona sem o vsize: var64 tem 0xB90 referenciados; rebuild win64 roda mas imprime vazio × original — limitação R-4.4 confirmada; caminho fiel: `-m bin`; contramedida futura: `resb vsize` nobits)
 - [x] D-4: I/O posicional removido de vez (externs mortos `dex_file_read_at/write_at` extirpados de `rebuild.asm`; `mmap_rw` é o desenho; falha 87 histórica não reincide)

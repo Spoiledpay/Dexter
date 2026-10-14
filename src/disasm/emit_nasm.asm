@@ -1298,17 +1298,26 @@ dex_emit_native:
     test eax, eax
     jnz .fo_fail
 .fo_noseg:
-    ; base: registrador de ENDEREÇO (sempre 64; 32 com 0x67) — nunca 8/16!
-    ; (DexOp.size é o tamanho do OPERANDO; endereço tem tamanho próprio.)
+    ; base: registrador de ENDEREÇO (64 em x64; 32 em x32 ou x64+0x67)
+    ; — nunca 8/16! (DexOp.size é o tamanho do OPERANDO; endereço tem
+    ; tamanho próprio. x32+0x67 = endereços 16 bits sem forma → db.)
     movzx eax, byte [r13+DexOp.base]
     cmp eax, 0xFF
     je .fo_nobase              ; (só SIB-abs chega aqui; RIP já saiu)
     cmp byte [r12+Insn.legacy67], 0
-    je .fo_b64
+    je .fo_b3264
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_no                  ; x32+67: sem forma
     lea rdx, [rel dex_r32_names]
     jmp .fo_bemit
-.fo_b64:
+.fo_b3264:
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_b32                 ; x32: endereços 32
     lea rdx, [rel dex_r64_names]
+    jmp .fo_bemit
+.fo_b32:
+    lea rdx, [rel dex_r32_names]
+    jmp .fo_bemit
 .fo_bemit:
     mov ecx, eax
     mov rax, [rdx+rcx*8]
@@ -1333,11 +1342,19 @@ dex_emit_native:
     jnz .fo_fail
     movzx eax, byte [r13+DexOp.index]
     cmp byte [r12+Insn.legacy67], 0
-    je .fo_i64
+    je .fo_i3264
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_no                  ; x32+67: sem forma
     lea rdx, [rel dex_r32_names]
     jmp .fo_iemit
-.fo_i64:
+.fo_i3264:
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_i32
     lea rdx, [rel dex_r64_names]
+    jmp .fo_iemit
+.fo_i32:
+    lea rdx, [rel dex_r32_names]
+    jmp .fo_iemit
 .fo_iemit:
     mov ecx, eax
     mov rax, [rdx+rcx*8]
