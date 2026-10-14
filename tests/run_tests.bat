@@ -634,6 +634,18 @@ if exist tests\out\t32rt.exe (
     if !errorlevel! EQU 42 ( echo "  OK: rt exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: rt exit!=42" & set /a FAIL+=1 )
 ) else ( echo "  FALHA: sem t32rt.exe" & set /a FAIL+=1 )
 
+echo === [32] native x32 (tiny32 exit 42, Fase D1) ===
+"%DX%" tests\tiny32.exe -o tests\out\t32n.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native x32" & set /a FAIL+=1 ) else ( echo "  OK: generate -native x32" & set /a PASS+=1 )
+findstr /c:"push " tests\out\t32n.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem mnemonicos nativos x32" & set /a FAIL+=1 ) else ( echo "  OK: mnemonicos nativos x32" & set /a PASS+=1 )
+"%DX%" tests\tiny32.exe -o tests\out\t32n.asm -r -O tests\out\t32nrt.exe -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native x32" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native x32" & set /a PASS+=1 )
+if exist tests\out\t32nrt.exe (
+    tests\out\t32nrt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rt-native exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: rt-native exit!=42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem t32nrt.exe" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
