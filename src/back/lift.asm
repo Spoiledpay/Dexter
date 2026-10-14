@@ -97,6 +97,8 @@ dex_lift_insn:
     add rsp, 40
     test rdx, rdx
     jz .li_call_codat
+    cmp dword [r9+PeImage.arch], DEX_ARCH_X32
+    je .li_call_codat          ; Fase D1: sem rewrite IAT em x32 (db via gates)
     mov dword [r10+DexIR.cls], IR_CALLIMP
     mov dword [r10+DexIR.tkind], IRT_IMPORT
     mov [r10+DexIR.imp], rdx
@@ -157,6 +159,8 @@ dex_lift_insn:
     add rsp, 40
     test rdx, rdx
     jz .li_br_codat
+    cmp dword [r9+PeImage.arch], DEX_ARCH_X32
+    je .li_br_codat            ; Fase D1: sem rewrite IAT em x32 (db via gates)
     mov dword [r10+DexIR.cls], IR_JMPIMP
     mov dword [r10+DexIR.tkind], IRT_IMPORT
     mov [r10+DexIR.imp], rdx
@@ -237,6 +241,8 @@ dex_lift_insn:
     add rsp, 40
     test rdx, rdx
     jz .li_i_codat
+    cmp dword [r9+PeImage.arch], DEX_ARCH_X32
+    je .li_i_codat             ; Fase D1: sem rewrite IAT em x32 (db via gates)
     mov dword [r10+DexIR.cls], IR_INSTR
     mov dword [r10+DexIR.tkind], IRT_IMPORT
     mov [r10+DexIR.imp], rdx

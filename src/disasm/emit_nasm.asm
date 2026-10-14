@@ -1446,7 +1446,10 @@ dex_emit_native:
     pop rbp
     ret
 .fo_ripabs:
-    ; base==NOBASE: RIP (sem SIB) → [rel label]; SIB-abs → [abs hex]
+    ; base==NOBASE: x64-RIP (sem SIB) → [rel label]; SIB-abs → [abs hex];
+    ; x32 → absoluto numérico [0xVA] (Fase D1; sem rel, sem label).
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_abs32
     cmp byte [r12+Insn.has_sib], 0
     jne .fo_sibabs
     ; RIP: "[rel " + label + "]"
@@ -1503,6 +1506,9 @@ dex_emit_native:
     ret
 .fo_abshex:
     ; "[abs 0x..]": sem "abs" o nasm64 rejeita/infere RIP (forma errada).
+    ; x32: absoluto puro "[0x..]" (forma natural em bits 32).
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_abshex0x
     lea rdx, [rel s_abs]
     mov rcx, rbx
     sub rsp, 32
@@ -1510,6 +1516,17 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .fo_fail
+    jmp .fo_abshex0x
+.fo_abs32:
+    ; Fase D1: "[" + "0x" + hex(val) + "]" — r13 = op (val = VA abs).
+    mov rcx, rbx
+    mov edx, '['
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+.fo_abshex0x:
     lea rdx, [rel s_0x]
     mov rcx, rbx
     sub rsp, 32

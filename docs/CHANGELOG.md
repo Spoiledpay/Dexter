@@ -2,6 +2,21 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — x32 fase D1: nativo (2026-10-13)
+
+### Adicionado
+
+- Emissor nativo x32 por allowlist (`push/call/jmp/ret/indiretos`):
+  `build_rm` absoluto (disp32 = VA), `call [abs]`/`[0xVA]` no emissor,
+  IMPORT rebaixado p/ `db` (D2 fará `call [__imp_X]`); resto cai em
+  `db` pelo fallback existente.
+- Seção `[32]` (tiny32 `-native` exit 42); `[30]` agora exige `-native`
+  x32 com `bits 32` (recusa 4 removida; path morto do main removido).
+
+### Corrigido
+
+- `lift_check`: `fake_img` com `dq` a mais lia `arch=1` (regra D-18).
+
 ## [Unreleased] — x32 fase C: rebuild (2026-10-13)
 
 ### Adicionado

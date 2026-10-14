@@ -163,8 +163,9 @@ section .text
 
 ;-----------------------------------------------------------------------------
 ; dex_generate_asm — rcx=cfg, rdx=img -> rax=0 ok, 2 io, 4 x32+native, 6 oom
-; Fase x32: -native recusado com 4 (Fase D); rebuild x32 recusado no
-; dex_rebuild com 5 (Fase C).
+; Fase D1: -native permitido em x32 (nativo onde seguro, db no resto;
+; IAT segue db até a Fase D2). O retorno 4 ficou sem uso (mantido p/
+; compatibilidade de API).
 ;-----------------------------------------------------------------------------
 dex_generate_asm:
     push rbp
@@ -177,24 +178,6 @@ dex_generate_asm:
     push r14
     push r15
     sub rsp, 88
-    ; x32 + -native? (arch só conhecido aqui, pós-pe_load)
-    mov eax, [rcx+DexConfig.flags]
-    test eax, DF_NATIVE
-    jz .gen_archok
-    cmp dword [rdx+PeImage.arch], DEX_ARCH_X32
-    jne .gen_archok
-    mov eax, 4
-    add rsp, 88
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rsi
-    pop rdi
-    pop rbx
-    pop rbp
-    ret
-.gen_archok:
     mov eax, [rcx+DexConfig.mode]
     cmp eax, DEX_MODE_BIN
     je .gen_bin

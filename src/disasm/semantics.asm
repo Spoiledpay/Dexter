@@ -110,7 +110,32 @@ dex_build_operands:
     jz .no
     mov rbx, rcx               ; insn
     cmp byte [rbx+Insn.addr_mode], 1
-    je .no                    ; Fase x32: db fiel (Fase D: nativo x32)
+    jne .bm64
+    ; x32 Fase D1: allowlist (resto: db fiel). Classes auditadas p/
+    ; semântica 32-bit (sem REX; formas com 66 caem em .no dentro).
+    cmp dword [rbx+Insn.opcode_len], 1
+    jne .no
+    movzx eax, byte [rbx+Insn.opcode]
+    cmp eax, 0x6A
+    je .bm32go                 ; push imm8
+    cmp eax, 0x68
+    je .bm32go                 ; push imm32
+    cmp eax, 0xE8
+    je .bm32go                 ; call rel
+    cmp eax, 0xE9
+    je .bm32go                 ; jmp rel
+    cmp eax, 0xEB
+    je .bm32go                 ; jmp rel8
+    cmp eax, 0xFE
+    je .bm32go                 ; inc/dec r/m8
+    cmp eax, 0xFF
+    je .bm32go                 ; inc/dec/call/jmp/push r/m (/3,/5,/7 caem em .no)
+    cmp eax, 0xC3
+    je .bm32go                 ; ret
+    jmp .no
+.bm32go:
+    ; cai no dispatch normal abaixo (paths com REX nunca tomados em x32)
+.bm64:
     mov r10d, [rbx+Insn.opcode]
     mov r11d, [rbx+Insn.opcode_len]
     cmp r11d, 1
@@ -1497,6 +1522,8 @@ dex_build_operands:
     cmp eax, 4
     jne .ok
 .l1_ff64:
+    cmp byte [rbx+Insn.addr_mode], 1
+    je .ok                    ; x32: size 4 correto (call/jmp/push 32-bit)
     cmp byte [rbx+Insn.op0+DexOp.size], 4
     jne .ok
     mov byte [rbx+Insn.op0+DexOp.size], 8
@@ -2211,16 +2238,26 @@ dex_build_operands:
     je .br_sib
     cmp ecx, 5
     jne .br_base
-    ; rm==5: mod==0? RIP : base rbp
+    ; rm==5: mod==0? RIP (x64) / absoluto (x32) : base rbp
     movzx ecx, byte [rbx+Insn.modrm]
     cmp ecx, 0x40
     jae .br_bp
+    cmp byte [rbx+Insn.addr_mode], 1
+    je .br_abs32
     ; RIP: val = address + length + disp
     mov rax, [rbx+Insn.address]
     mov ecx, [rbx+Insn.length]
     add rax, rcx
     add rax, [rbx+Insn.disp]
     mov [rsi+DexOp.val], rax
+    xor eax, eax
+    pop rsi
+    ret
+.br_abs32:
+    ; x32: disp32 é endereço absoluto (VA). val = disp u32
+    ; (Insn.disp tem sinal; low32 é o endereço).
+    mov eax, [rbx+Insn.disp]
+    mov [rsi+DexOp.val], rax     ; rax zero-estendido (mov eax)
     xor eax, eax
     pop rsi
     ret

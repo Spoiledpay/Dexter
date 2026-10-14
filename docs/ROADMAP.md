@@ -347,3 +347,9 @@ no corpus simples; PEs complexos continuam em `-m bin`.
    indefinido); validador compartilhado `.ptr_tgt_ok` rejeita código
    (labels incertas), `.reloc` skipada e fora-do-eff; `dq` só p/ VA com
    label garantida (chunks fatia em todo R do range).
+- D-18 `struc` com append quebra fakes manuais dos drivers (2026-10-13,
+  Fase D1: `PeImage.arch` no fim fez `lift_check` ler `arch=1` — o
+  `fake_img` tinha um `dq` a mais e o `dd 1` (ex-`is_valid`) caiu sobre
+  `arch`; goldens viraram CALL/DATA sem IMPORT e a suíte pegou).
+  Regra: todo `fake_*` em `tests/` deve espelhar o layout exato do
+  `struc` (comparar campo a campo) + zerar `arch` (x64).

@@ -615,8 +615,10 @@ findstr /c:"bits 32" tests\out\calc32.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem bits 32" & set /a FAIL+=1 ) else ( echo "  OK: bits 32" & set /a PASS+=1 )
 findstr /c:"default rel" tests\out\calc32.asm >nul 2>&1
 if errorlevel 1 ( echo "  OK: sem default rel (x32)" & set /a PASS+=1 ) else ( echo "  FALHA: default rel em x32" & set /a FAIL+=1 )
-"%DX%" tests\Calculator.exe -o NUL -native -q >nul 2>&1
-if !errorlevel! EQU 4 ( echo "  OK: -native x32 recusado (4)" & set /a PASS+=1 ) else ( echo "  FALHA: -native x32 deveria retornar 4" & set /a FAIL+=1 )
+"%DX%" tests\Calculator.exe -o tests\out\calc32n.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -native x32" & set /a FAIL+=1 ) else ( echo "  OK: -native x32 aceito (D1)" & set /a PASS+=1 )
+findstr /c:"bits 32" tests\out\calc32n.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -native sem bits 32" & set /a FAIL+=1 ) else ( echo "  OK: -native com bits 32" & set /a PASS+=1 )
 
 echo === [31] rebuild x32 (tiny32 exit 42, Fase C) ===
 "%NASM%" -f win32 -o tests\out\tiny32.obj tests\tiny32.asm

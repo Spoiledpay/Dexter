@@ -75,8 +75,9 @@ fake_img:
     dd 2, 0                                  ; imports_count
     dq 0, 0                                  ; exports, relocs
     dd 0, 0
-    dq 0, 0, 0                               ; opt_header, nt_headers
-    dd 1, 0                                  ; is_valid
+    dq 0, 0                                  ; opt_header, nt_headers
+    dd 1, 0                                  ; is_valid (+pad_v)
+    dd 0, 0                                  ; arch=x64 (+pad_arch)
 fake_ctx:
     dq fake_img
 
