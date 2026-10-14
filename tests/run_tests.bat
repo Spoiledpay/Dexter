@@ -666,6 +666,24 @@ if exist tests\out\i32rt.exe (
     if !errorlevel! EQU 42 ( echo "  OK: rt-native exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: rt-native exit!=42" & set /a FAIL+=1 )
 ) else ( echo "  FALHA: sem i32rt.exe" & set /a FAIL+=1 )
 
+echo === [34] prefixo de tamanho em refs RIP (movzx/cmp, gcc-native) ===
+"%NASM%" -f win64 -o tests\out\memsz.obj tests\memsz.asm
+if errorlevel 1 ( echo "  FALHA: nasm memsz" & set /a FAIL+=1 ) else ( echo "  OK: nasm memsz" & set /a PASS+=1 )
+if exist tests\out\memsz.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\memsz.exe tests\out\memsz.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link memsz" & set /a FAIL+=1 ) else ( echo "  OK: link memsz" & set /a PASS+=1 )
+)
+"%DX%" tests\out\memsz.exe -o tests\out\memsz_nat.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native memsz" & set /a FAIL+=1 ) else ( echo "  OK: generate -native memsz" & set /a PASS+=1 )
+findstr /c:"movzx eax, byte [rel " tests\out\memsz_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem movzx byte" & set /a FAIL+=1 ) else ( echo "  OK: movzx byte" & set /a PASS+=1 )
+findstr /c:"movzx ecx, word [rel " tests\out\memsz_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem movzx word" & set /a FAIL+=1 ) else ( echo "  OK: movzx word" & set /a PASS+=1 )
+findstr /c:"cmp byte [rel " tests\out\memsz_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem cmp byte" & set /a FAIL+=1 ) else ( echo "  OK: cmp byte" & set /a PASS+=1 )
+"%NASM%" -f win64 -o tests\out\memsz_nat.obj tests\out\memsz_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm memsz -native" & set /a FAIL+=1 ) else ( echo "  OK: nasm memsz -native" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

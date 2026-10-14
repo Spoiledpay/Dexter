@@ -2,6 +2,28 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — gcc-native: prefixo de tamanho em refs RIP (2026-10-14)
+
+### Corrigido
+
+- `.fo_mem` com prefixo de tamanho em TODAS as formas MEM (hoist:
+  decisão antes de `.fo_memshape`; RIP/SIB-abs/abs32 ganham o que só
+  `[base]` tinha): `movzx r32, [rel label]` → `byte`/`word`,
+  `cmp [rel], imm` → `byte`. Era `nasm: invalid operand sizes`
+  (29× movzx + 1× cmp no `gcc -native`).
+- `aad` fantasma da sessão anterior: 0 ocorrências no output atual
+  (classe extinta; sem ação).
+
+### Adicionado
+
+- Corpus `tests/memsz.asm` (movzx byte/word RIP + cmp RIP imm) +
+  seção `[34]` (7 checks: build, generate, 3 greps, `nasm` exit 0).
+
+### Verificado
+
+- `gcc -native` fresco: 0 `movzx` sem tamanho, 0 `mem,imm` sem
+  tamanho (estático); `nasm -f win64` final em andamento.
+
 ## [Unreleased] — x32 fase D2: IAT absoluta (2026-10-14)
 
 ### Adicionado

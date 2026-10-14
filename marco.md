@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-14, Dexter 1.2.300)
+## 0. Onde estamos (2026-10-14, Dexter 1.2.301)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -16,13 +16,13 @@
 - [x] 3b dq-pointer (1.2.250, `s_tab` simbólica, `[21]`)
 - [x] 3c fuzz mínimo (1.2.253, `tests\fuzz_pe.py`, hang em imports achado e corrigido, `[22]`)
 - [x] R-6.5 `-emit` (1.2.254, `[23]`) + lote rápido (1.2.254: `[24]`, D-1, tag `v1.2.254`) + lote D-2..D-6 (1.2.256: `[25]`, `[26]`) + jtable 1ª fatia (1.2.257: `[27]`, tag `v1.2.257`)
-- Placar honesto: 231 passam, 0 falham (`tests\run_tests.bat → 231/231 OK` em 1.2.300: base 225/225 da sessão D1b+ em `docs/SESSAO-2026-10-13-D1B.md` + `[33]` D2 com 6 checks). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
+- Placar honesto: 238 passam, 0 falham (`tests\run_tests.bat → 238/238 OK` em 1.2.301: base 231/231 D2 + `[34]` gcc-RIP com 7 checks). Detalhe do dia: `docs/SESSAO-2026-10-12-DIA.md` (base R-7.4 em `docs/SESSAO-2026-10-11-R74.md`)
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[33]`, 231 checks em 1.2.300)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[34]`, 238 checks em 1.2.301)
 - [x] Suite lenta: `tests\run_slow.bat` (round-trip `ld.lld.exe` 68 MB)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs` (round-trip) + `var64/gcc/ld.lld` (bin) + negativos `var32/link/for` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -93,6 +93,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 ## 7. Dívida técnica (D-1–D-17, ver ROADMAP)
 
 - [x] D2 IAT absoluta x32 (2026-10-14, backlog `SESSAO-2026-10-13-D1B.md` §4.1): `call|jmp [__imp_X]` + labels, `[33]` verde, suíte 231/231 (1.2.300). `mov`-from-IAT segue `db` (kinds 3/4 não existem); `dq` 8B segue off em x32 (`nodq`); próxima fila: `gcc -native` 62 erros.
+- [x] gcc-native prefixo RIP (2026-10-14, backlog §4.2 parcial): hoist `.fo_mem`→`.fo_memshape` (movzx/cmp com tamanho em `[rel]`/SIB-abs/abs32); 30 erros estáticos zerados; corpus `memsz.asm` + `[34]` verde; suíte 238/238 (1.2.301). `aad` fantasma extinto (0 ocorrências). Resta: `nasm -f win64` final do gcc (em fundo) + resto do backlog.
 
 - [x] D-3 parcial: `sym_check` (`[15]`, golden `SYM n=5`) — falta `strpool`/`labels-imp` dedicado
 - [x] D-7: tabela D reativada como bitmap (1.2.266: 1 bit/RVA, 1 malloc; leitores: jump-table p/ código `[28]`, gates R/D no walker que convertem refs sem label em `db` — sem eles o var64 `-native` não montava)

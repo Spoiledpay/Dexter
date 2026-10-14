@@ -1217,14 +1217,13 @@ dex_emit_native:
 .fo_mem:
     ; Formas: [rel label] (RIP: base==NOBASE && !has_sib)
     ;         [abs] (SIB-abs: base==NOBASE && has_sib)
-    ;         [seg:base+index*scale±disp]
-    ; Prefixo de tamanho se: sem REG em qualquer op E mne != lea.
-    cmp byte [r13+DexOp.base], DEX_NOBASE
-    je .fo_ripabs
+    ;         [0xVA] (x32 absoluto) / [seg:base+index*scale±disp]
+    ; Prefixo de tamanho (vale p/ TODAS as formas; gcc-native): sem REG
+    ; em qualquer op E mne != lea. Decidido aqui; corpos só emitem colchetes.
     ; prefixo de tamanho?
     movzx eax, byte [r12+Insn.opcode]
     cmp eax, 0x8D
-    je .fo_membody             ; lea: nunca prefixo
+    je .fo_memshape             ; lea: nunca prefixo
     ; movzx/movsx (0F B6/B7/BE/BF): fonte m8/m16 SEMPRE explícita
     ; (destino REG suprime o prefixo geral; sem ele o nasm recusa:
     ; "invalid operand sizes"). Tamanho-fonte em DexOp.size
@@ -1251,13 +1250,13 @@ dex_emit_native:
 .fo_memregck:
     mov al, [r12+Insn.op0+DexOp.kind]
     cmp al, DEX_OP_REG
-    je .fo_membody
+    je .fo_memshape
     mov al, [r12+Insn.op1+DexOp.kind]
     cmp al, DEX_OP_REG
-    je .fo_membody
+    je .fo_memshape
     mov al, [r12+Insn.op2+DexOp.kind]
     cmp al, DEX_OP_REG
-    je .fo_membody
+    je .fo_memshape
     ; sem REG: prefixo pelo size
     movzx eax, byte [r13+DexOp.size]
     cmp eax, 1
@@ -1287,6 +1286,10 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .fo_fail
+.fo_memshape:
+    ;Prefixo decidido; corpo pela forma (RIP/SIB-abs/abs32/base).
+    cmp byte [r13+DexOp.base], DEX_NOBASE
+    je .fo_ripabs
 .fo_membody:
     ; '['
     mov rcx, rbx

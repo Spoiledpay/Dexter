@@ -32,3 +32,4 @@ Log de revisões (data, escopo, resultado). Toda revisão roda
 | 2026-10-13 | x32 fase D1b ([30] monta calc32n zero erros; regs endereco 32, push/pop 32, spans off x32). | build.bat limpo (1.2.297) + run_tests.bat 225/225 OK. |
 | 2026-10-13 | x32 fase D1b+ (allowlist ampla; jecxz; calc -native 8328 mnemonicos + link PE32). | build.bat limpo (1.2.298) + run_tests.bat 225/225 OK. |
 | 2026-10-14 | x32 fase D2 (IAT absoluta: lift sem veto call/jmp + emit `call [` absoluto + R-estreita de slots + chunks nodq em x32; `[33]` 6 checks; Calculator -native 21 refs/10 labels, nasm zero erros; default/db e x64 intactos). | build.bat limpo (1.2.300) + run_tests.bat 231/231 OK. |
+| 2026-10-14 | gcc-native prefixo RIP (hoist `.fo_mem`→`.fo_memshape`: movzx/cmp com tamanho em `[rel]`; corpus `memsz.asm` + `[34]` 7 checks; `aad` extinto). | build.bat limpo (1.2.301) + run_tests.bat 238/238 OK. |
