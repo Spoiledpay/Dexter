@@ -66,6 +66,8 @@ extern s_stosq
 extern s_lodsq
 extern s_scasq
 extern s_cmpsq
+extern s_nop
+extern s_jmp
 
 section .rodata
 s_label_pre  db "label_", 0
@@ -86,6 +88,8 @@ s_call_rel   db "    call [rel ", 0
 s_jmp_rel    db "    jmp [rel ", 0
 s_call_abs   db "    call [", 0
 s_jmp_abs    db "    jmp [", 0
+s_short      db " short", 0
+s_near       db " near", 0
 s_rb         db "]", 0
 s_global     db "global ", 0
 
@@ -555,6 +559,18 @@ dex_emit_native:
     mov rax, [r15+Insn.mne]
     test rax, rax
     jz .en_db                  ; sem mnemônico → db
+    ; R-8.2: nop 1-byte (0x90) com forma longa (ex: 66 90) não remonta
+    ; exato com `nop` puro → db (pause tem string própria; 0F 1F usa
+    ; operandos e cai nas regras de forma).
+    lea rcx, [rel s_nop]
+    cmp rax, rcx
+    jne .en_nopok
+    cmp byte [r15+Insn.opcode_len], 1
+    jne .en_nopok
+    cmp dword [r15+Insn.length], 1
+    je .en_nopok
+    jmp .en_db
+.en_nopok:
     ; indent
     lea rdx, [rel s_indent]
     mov rcx, rbx
@@ -726,6 +742,41 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .en_fail
+    ; R-8.2 f2: forma explícita p/ determinismo (nasm pode travar em
+    ; near por ponto-fixo local quando a distância beira 127; explícito
+    ; reserva exato já na passada 1). Só jcc (cmov/setcc não ramificam).
+    mov rax, [r15+Insn.mne]
+    lea rcx, [rel s_jcc]
+    cmp rax, rcx
+    jne .en_ccsuf_go
+    cmp byte [r15+Insn.legacy66], 0
+    jne .en_ccsuf_go              ; 66: rel16, sem forma forçada
+    cmp dword [r15+Insn.opcode_len], 1
+    je .en_cc_short
+    cmp dword [r15+Insn.opcode_len], 2
+    jne .en_ccsuf_go
+    movzx eax, byte [r15+Insn.opcode]
+    cmp al, 0x80
+    jb .en_ccsuf_go
+    cmp al, 0x8F
+    ja .en_ccsuf_go
+    lea rdx, [rel s_near]
+    jmp .en_ccsuf_app
+.en_cc_short:
+    movzx eax, byte [r15+Insn.opcode]
+    cmp al, 0x70
+    jb .en_ccsuf_go
+    cmp al, 0x7F
+    ja .en_ccsuf_go
+    lea rdx, [rel s_short]
+.en_ccsuf_app:
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .en_fail
+.en_ccsuf_go:
     jmp .en_ops
 .en_jcxz:
     cmp byte [r15+Insn.legacy67], 0
@@ -803,6 +854,33 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .en_fail
+    ; R-8.2 f2: jmp rel8→short, rel32→near (idem jcc; FF/call/loop
+    ; intactos — sem forma alternativa).
+    mov rax, [r15+Insn.mne]
+    lea rcx, [rel s_jmp]
+    cmp rax, rcx
+    jne .en_mne_raw_go
+    cmp byte [r15+Insn.legacy66], 0
+    jne .en_mne_raw_go           ; 66: rel16, sem forma forçada
+    cmp dword [r15+Insn.opcode_len], 1
+    jne .en_mne_raw_go
+    movzx eax, byte [r15+Insn.opcode]
+    cmp al, 0xEB
+    je .en_jmp_short
+    cmp al, 0xE9
+    jne .en_mne_raw_go
+    lea rdx, [rel s_near]
+    jmp .en_jmp_app
+.en_jmp_short:
+    lea rdx, [rel s_short]
+.en_jmp_app:
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .en_fail
+.en_mne_raw_go:
     jmp .en_ops
 
 ;-----------------------------------------------------------------------------
@@ -1109,6 +1187,44 @@ dex_emit_native:
     ret
 .fo_im8:
     and eax, 0xFF
+    cmp eax, 0x80
+    jb .fo_im8pos
+    ; negativo (ex 0xFF = -1): "-0x<mag>" (0xFF nu viraria imm32 no nasm)
+    mov rcx, rbx
+    mov edx, '-'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    lea rdx, [rel s_0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov eax, [r13+DexOp.val]   ; recarrega (calls mataram rax!)
+    and eax, 0xFF
+    neg eax
+    and eax, 0xFF               ; mag em 8 bits
+    mov rcx, rbx
+    mov edx, eax
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    xor eax, eax
+    add rsp, 32
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.fo_im8pos:
     mov rcx, rbx
     mov edx, eax
     xor r8d, r8d
@@ -1408,15 +1524,16 @@ dex_emit_native:
     test eax, eax
     jnz .fo_fail
 .fo_disp:
-    ; disp: 0 → omitir (exceto base ausente → já tratado); senão ±hex
+    ; disp ausente (size 0) → omitir; disp zero com bytes (size>0) → db
+    ; (nasm minimiza [reg+0x0] p/ [reg], encurtando; disp32 zero idem).
     movzx eax, byte [r12+Insn.disp_size]
     test eax, eax
     jz .fo_close
     mov rax, [r13+DexOp.val]
     test rax, rax
-    jz .fo_close
-    test rax, rax
+    jz .fo_no
     js .fo_dispneg
+.fo_dispnz:
     mov rcx, rbx
     mov edx, '+'
     sub rsp, 32

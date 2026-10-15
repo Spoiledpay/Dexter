@@ -252,8 +252,15 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   e DATA db-verbatim; prova: hello byte-idêntico + `hi` + AST 217
   instrs, tiny exit 42 = original. Raiz do disp: sem `vstart`, labels
   valem file-offset (sondas `rel`/`vstart` documentam).
-- [ ] R-8.2 fatia 2 — imports/relocs no backend próprio (IAT + `.reloc`
-  com VAs reais; prova: var64 `-native-bin` comportamental).
+- [x] R-8.2 fatia 2 — exatidão byte-a-byte em PE real (1.2.315, `[37]`):
+  var64 `-native-bin` byte-idêntico + comportamento idêntico; 5 classes
+  fechadas por iteração `fc`+listing (disp-zero→db; nop-longo→db;
+  jcc/jmp short//near explícitos contra ponto-fixo local do nasm;
+  imm8-negativo `-0x`; grp2 com `rcl` faltando); oráculo capstone.
+- [x] R-8.2 matriz pequenos (1.2.315, `[38]` 15 checks): loop/strings/
+  no_relocs/jtable/t32 `-native-bin` byte-idênticos + comportamentais;
+  t32 sem fonte (oráculo = exit do original); memsz sem run (fixture
+  com AV pré-existente); var64-win64 documentado (AV por D-19, f3).
 - [ ] R-8.2 fatia 3 — PE grande (gcc `-native-bin` + swap + `hello.c`).
 
 ## Dívida técnica conhecida (honesta, com ID)
@@ -261,11 +268,10 @@ no corpus simples; PEs complexos continuam em `-m bin`.
 - D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
   existe e numerado; dívida original ("sem ADRs numerados") superada;
   novas decisões seguem `NNNN-<título>.md`.
-- D-2 `.bss` auditada (2026-10-12): win64 emite seção vazia (link
-  dimensiona SEM o vsize); var64 tem 0xB90 referenciados e o rebuild
-  win64 roda mas imprime vazio (limitação R-4.4 confirmada p/ PEs
-  complexos); caminho fiel `-m bin`; contramedida futura: `resb`
-  vsize nobits.
+- D-2 `.bss` com `resb` + labels (R-8.1 FECHADA 1.2.303: `.wds_bss` +
+  `.ptr_tgt_ok` aceita `off<vsize`; soma `resb`==vsize, 100+ refs
+  simbólicas no var64, monta 0 erros; `[35]` trava). Comportamento em
+  PE grande pendente de layout (D-19 → R-8.2); caminho fiel `-m bin`.
 - D-3 `symtab`/`strpool`/`labels-imp` implementados e linkados mas sem uso
   no generate atual (biblioteca p/ R-3.3/R-4.5; cobertos por build, sem teste
   dedicado — adicionar teste unitário).

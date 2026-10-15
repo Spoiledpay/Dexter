@@ -595,7 +595,7 @@ s_setpre: db "set",0
 dex_grp1_mne:
     dq s_add,s_or,s_adc,s_sbb,s_and,s_sub,s_xor,s_cmp
 dex_grp2_mne:
-    dq s_rol,s_ror,s_rcr,s_shl,s_shr,s_shr,s_shl,s_sar
+    dq s_rol,s_ror,s_rcl,s_rcr,s_shl,s_shr,s_shl,s_sar
 dex_grp3_mne:
     dq s_test,s_test,s_not,s_neg,s_mul,s_imul,s_div,s_idiv
 dex_grp45_mne:

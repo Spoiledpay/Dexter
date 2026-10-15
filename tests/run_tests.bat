@@ -720,6 +720,70 @@ if exist tests\out\tiny_nb.exe (
     if !errorlevel! EQU 42 ( echo "  OK: tiny_nb exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: tiny_nb exit!=42" & set /a FAIL+=1 )
 ) else ( echo "  FALHA: sem tiny_nb.exe" & set /a FAIL+=1 )
 
+echo === [37] bin nativo var64 (R-8.2 f2: byte-identico + comportamento) ===
+"%DX%" tests\var64.exe -o tests\out\var64_nb.asm -m bin -native -r -O tests\out\var64_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native var64" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native var64" & set /a PASS+=1 )
+if exist tests\out\var64_nb.exe (
+    fc /b tests\var64.exe tests\out\var64_nb.exe >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: var64_nb difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: var64_nb byte-identico" & set /a PASS+=1 )
+    tests\out\var64_nb.exe > tests\out\var64_nb.out 2>&1
+    tests\var64.exe > tests\out\var64_orig2.out 2>&1
+    fc tests\out\var64_orig2.out tests\out\var64_nb.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem var64_nb.exe" & set /a FAIL+=1 )
+
+echo === [38] matriz bin-native pequenos (R-8.2 f2+) ===
+"%DX%" tests\loop.exe -o tests\out\loop_nb.asm -m bin -native -r -O tests\out\loop_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native loop" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native loop" & set /a PASS+=1 )
+fc /b tests\loop.exe tests\out\loop_nb.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: loop_nb difere" & set /a FAIL+=1 ) else ( echo "  OK: loop_nb byte-identico" & set /a PASS+=1 )
+if exist tests\out\loop_nb.exe (
+    tests\out\loop_nb.exe > tests\out\loop_nb.out 2>&1
+    tests\loop.exe > tests\out\loop_orig.out 2>&1
+    fc tests\out\loop_orig.out tests\out\loop_nb.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: loop comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: loop comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem loop_nb.exe" & set /a FAIL+=1 )
+"%DX%" tests\strings.exe -o tests\out\strings_nb.asm -m bin -native -r -O tests\out\strings_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native strings" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native strings" & set /a PASS+=1 )
+fc /b tests\strings.exe tests\out\strings_nb.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: strings_nb difere" & set /a FAIL+=1 ) else ( echo "  OK: strings_nb byte-identico" & set /a PASS+=1 )
+if exist tests\out\strings_nb.exe (
+    tests\out\strings_nb.exe > tests\out\strings_nb.out 2>&1
+    tests\strings.exe > tests\out\strings_orig.out 2>&1
+    fc tests\out\strings_orig.out tests\out\strings_nb.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: strings comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: strings comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem strings_nb.exe" & set /a FAIL+=1 )
+"%DX%" tests\no_relocs.exe -o tests\out\norelocs_nb.asm -m bin -native -r -O tests\out\norelocs_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native no_relocs" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native no_relocs" & set /a PASS+=1 )
+fc /b tests\no_relocs.exe tests\out\norelocs_nb.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: norelocs_nb difere" & set /a FAIL+=1 ) else ( echo "  OK: norelocs_nb byte-identico" & set /a PASS+=1 )
+if exist tests\out\norelocs_nb.exe (
+    tests\out\norelocs_nb.exe > tests\out\norelocs_nb.out 2>&1
+    tests\no_relocs.exe > tests\out\norelocs_orig.out 2>&1
+    fc tests\out\norelocs_orig.out tests\out\norelocs_nb.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: no_relocs comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: no_relocs comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem norelocs_nb.exe" & set /a FAIL+=1 )
+"%DX%" tests\jtable.exe -o tests\out\jt_nb.asm -m bin -native -r -O tests\out\jt_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native jtable" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native jtable" & set /a PASS+=1 )
+fc /b tests\jtable.exe tests\out\jt_nb.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: jt_nb difere" & set /a FAIL+=1 ) else ( echo "  OK: jt_nb byte-identico" & set /a PASS+=1 )
+if exist tests\out\jt_nb.exe (
+    tests\out\jt_nb.exe > tests\out\jt_nb.out 2>&1
+    tests\jtable.exe > tests\out\jt_orig.out 2>&1
+    fc tests\out\jt_orig.out tests\out\jt_nb.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: jtable comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: jtable comportamento identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem jt_nb.exe" & set /a FAIL+=1 )
+"%DX%" tests\t32.exe -o tests\out\t32_nb.asm -m bin -native -r -O tests\out\t32_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native t32" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native t32" & set /a PASS+=1 )
+fc /b tests\t32.exe tests\out\t32_nb.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: t32_nb difere" & set /a FAIL+=1 ) else ( echo "  OK: t32_nb byte-identico" & set /a PASS+=1 )
+if exist tests\out\t32_nb.exe (
+    tests\t32.exe >nul 2>&1
+    set T32E1=!errorlevel!
+    tests\out\t32_nb.exe >nul 2>&1
+    if !errorlevel! EQU !T32E1! ( echo "  OK: t32 exit igual ao original" & set /a PASS+=1 ) else ( echo "  FALHA: t32 exit difere" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem t32_nb.exe" & set /a FAIL+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%
