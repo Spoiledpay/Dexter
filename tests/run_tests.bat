@@ -301,7 +301,7 @@ echo === [14] imp label-at-slot (driver imp_check: HIT+MISS) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp_check.obj tests\imp_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm imp_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm imp_check" & set /a PASS+=1 )
 if exist tests\out\imp_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\x87.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link imp_check" & set /a FAIL+=1 ) else ( echo "  OK: link imp_check" & set /a PASS+=1 )
 )
 if exist tests\out\imp_check.exe (
@@ -783,6 +783,75 @@ if exist tests\out\t32_nb.exe (
     tests\out\t32_nb.exe >nul 2>&1
     if !errorlevel! EQU !T32E1! ( echo "  OK: t32 exit igual ao original" & set /a PASS+=1 ) else ( echo "  FALHA: t32 exit difere" & set /a FAIL+=1 )
 ) else ( echo "  FALHA: sem t32_nb.exe" & set /a FAIL+=1 )
+
+echo === [39] VEX/EVEX/x87/3DNow! (R-2.7: limites + mnemonicos) ===
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\x87_check.obj tests\x87_check.asm
+if errorlevel 1 ( echo "  FALHA: nasm x87_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm x87_check" & set /a PASS+=1 )
+if exist tests\out\x87_check.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\x87_check.exe tests\out\x87_check.obj obj\x87.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link x87_check" & set /a FAIL+=1 ) else ( echo "  OK: link x87_check" & set /a PASS+=1 )
+)
+if exist tests\out\x87_check.exe (
+    tests\out\x87_check.exe > tests\out\x87.out 2>&1
+    if !errorlevel! NEQ 0 ( echo "  FALHA: x87_check exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: x87_check exit 0" & set /a PASS+=1 )
+    findstr /c:"op=216 n=256 h=576891333" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 D8 golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 D8 golden" & set /a PASS+=1 )
+    findstr /c:"op=217 n=220 h=592770159" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 D9 golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 D9 golden" & set /a PASS+=1 )
+    findstr /c:"op=218 n=225 h=4014298225" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 DA golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DA golden" & set /a PASS+=1 )
+    findstr /c:"op=219 n=197 h=975159937" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 DB golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DB golden" & set /a PASS+=1 )
+    findstr /c:"op=220 n=240 h=1122928381" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 DC golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DC golden" & set /a PASS+=1 )
+    findstr /c:"op=221 n=208 h=3807924869" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 DD golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DD golden" & set /a PASS+=1 )
+    findstr /c:"op=222 n=241 h=1839814490" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 DE golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DE golden" & set /a PASS+=1 )
+    findstr /c:"op=223 n=217 h=1567726076" tests\out\x87.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: x87 DF golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DF golden" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem x87_check.exe" & set /a FAIL+=1 )
+"%NASM%" -f win64 -o tests\out\vex.obj tests\vex.asm
+if errorlevel 1 ( echo "  FALHA: nasm vex" & set /a FAIL+=1 ) else ( echo "  OK: nasm vex" & set /a PASS+=1 )
+if exist tests\out\vex.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\vex.exe tests\out\vex.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link vex" & set /a FAIL+=1 ) else ( echo "  OK: link vex" & set /a PASS+=1 )
+)
+tests\vex.exe >nul 2>&1
+if !errorlevel! EQU 42 ( echo "  OK: vex exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: vex exit!=42" & set /a FAIL+=1 )
+"%DX%" tests\vex.exe -o tests\out\vex_nb.asm -m bin -native -r -O tests\out\vex_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native vex" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native vex" & set /a PASS+=1 )
+findstr /c:"; vex" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem rotulo vex" & set /a FAIL+=1 ) else ( echo "  OK: rotulo vex" & set /a PASS+=1 )
+findstr /c:"; evex" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem rotulo evex" & set /a FAIL+=1 ) else ( echo "  OK: rotulo evex" & set /a PASS+=1 )
+findstr /c:"; 3dnow" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem rotulo 3dnow" & set /a FAIL+=1 ) else ( echo "  OK: rotulo 3dnow" & set /a PASS+=1 )
+findstr /c:"; fld" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem x87 real (fld)" & set /a FAIL+=1 ) else ( echo "  OK: x87 real (fld)" & set /a PASS+=1 )
+findstr /c:"; fstp" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem x87 real (fstp)" & set /a FAIL+=1 ) else ( echo "  OK: x87 real (fstp)" & set /a PASS+=1 )
+findstr /c:"; fninit" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem x87 real (fninit)" & set /a FAIL+=1 ) else ( echo "  OK: x87 real (fninit)" & set /a PASS+=1 )
+rem limites byte-a-byte: cada instrucao VEX/EVEX/3DNow numa unica linha db
+findstr /c:"db 0xC5, 0xE8, 0x58, 0xCB" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: VEX2 (vaddps) partido" & set /a FAIL+=1 ) else ( echo "  OK: limite VEX2" & set /a PASS+=1 )
+findstr /c:"db 0xC5, 0xF8, 0x77" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: VEX2 sem modrm (vzeroupper) partido" & set /a FAIL+=1 ) else ( echo "  OK: limite VEX2 sem modrm" & set /a PASS+=1 )
+findstr /c:"db 0xC4, 0xE2, 0x75, 0xA8, 0xC2" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: VEX3 0F38 partido" & set /a FAIL+=1 ) else ( echo "  OK: limite VEX3 0F38" & set /a PASS+=1 )
+findstr /c:"db 0xC4, 0xE3, 0x7D, 0x04, 0xC1, 0x1B" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: VEX3 0F3A (imm) partido" & set /a FAIL+=1 ) else ( echo "  OK: limite VEX3 0F3A" & set /a PASS+=1 )
+findstr /c:"db 0x62, 0xF1, 0x7C, 0x48, 0x10, 0x00" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: EVEX partido" & set /a FAIL+=1 ) else ( echo "  OK: limite EVEX" & set /a PASS+=1 )
+findstr /c:"db 0x0F, 0x0F, 0xC1, 0x9E" tests\out\vex_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: 3DNow sem byte-sufixo" & set /a FAIL+=1 ) else ( echo "  OK: limite 3DNow (sufixo)" & set /a PASS+=1 )
+if exist tests\out\vex_nb.exe (
+    fc /b tests\vex.exe tests\out\vex_nb.exe >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: vex_nb difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: vex_nb byte-identico" & set /a PASS+=1 )
+    tests\out\vex_nb.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: vex_nb exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: vex_nb exit!=42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem vex_nb.exe" & set /a FAIL+=1 )
 
 echo.
 echo =====================================================

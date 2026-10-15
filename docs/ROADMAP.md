@@ -47,8 +47,16 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   `mne=0` + `db` exato (nunca erro falso)
 - [x] R-2.6 emissor `db` + `label_<VA>:` + `; mne` (+ `; @0xVA` com `-hex`);
   `nop`/`int3` reais com `-nop-pad`
-- [ ] R-2.7 VEX/EVEX (`C4/C5/62`), x87, 3DNow! → hoje fallback `db`
-  (correto em bytes; semântica de label futura)
+- [x] R-2.7 VEX/EVEX (`C4/C5/62`), x87, 3DNow! rotulados (1.2.327): decoder
+  VEX2/VEX3/EVEX em x64 (prefixo em `npre`, mapa 0F/0F38/0F3A, flags/imm das
+  tabelas 2/38/3A, `Insn.enc` 1/2, mnemônico `vex`/`evex`); x87 com mnemônico
+  REAL (`src/disasm/x87.asm`: 64 mem + 512 reg, 576 codificações vs capstone
+  5.0.7 = 0 divergências); 3DNow! com o byte-sufixo (`tbl2_flag[0F]` agora
+  `F_MODRM|F_I8`); `semantics` recusa VEX/EVEX no nativo (db garantido).
+  Corpus `tests/vex.asm` + driver `tests/x87_check.asm` + `[39]` (29 checks):
+  limites byte-a-byte (VEX2/VEX3/0F38/0F3A/EVEX/3DNow) + round-trip
+  byte-idêntico + comportamento (`exit 42`). Limite honesto: semântica de
+  label/operando de VEX/EVEX segue futura (db byte-exato)
 
 ## Fase 3 — Imports/Exports/Relocs `[x]`
 

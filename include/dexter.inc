@@ -175,7 +175,8 @@ struc Insn
     .raw            resb 15  ; bytes originais (p/ emitter db)
     .segprefix      resb 1   ; 0=nenhum 1=es..6=gs (R-4.5; prefixes.asm preenche)
     .addr_mode      resb 1   ; 0 = 64 bits, 1 = 32 bits (Fase x32; dex_disasm_one preenche)
-    .pad2           resb 19
+    .enc            resb 1   ; R-2.7: 0=legacy, 1=VEX (C4/C5), 2=EVEX (62)
+    .pad2           resb 18
     .op0            resb 16  ; DexOp (R-4.5; ver layout acima)
     .op1            resb 16
     .op2            resb 16

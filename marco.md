@@ -20,7 +20,8 @@
 - [x] R-8.2 f1 bin com `.text` nativa (1.2.308, `[36]`: hello byte-idêntico + `hi` + AST 217 instrs, tiny 42)
 - [x] R-8.2 f2 exatidão + matriz (1.2.315, `[37]` var64 + `[38]` 15 checks: loop/strings/no_relocs/jtable/t32)
 - [x] R-8.2 f3 PE grande: gcc `-native-bin` byte-idêntico (1.2.325, `[S2]`: 2.064.976 B `fc` limpo + swap compila `hello_f3.c` → `hi`; fixes `l2_bt` por opcode + prefixo CL-shift D2/D3; critério da Fase 5 fechado)
-- Placar honesto: 270 passam, 0 falham (`tests\run_tests.bat → 270/270 OK` em 1.2.325: base 252/252 + `[37]`/`[38]` com 18 checks). Lenta `run_slow.bat`: `[S1]` ld.lld + `[S2]` gcc
+- [x] R-2.7 VEX/EVEX/x87/3DNow! rotulados (1.2.327, `[39]` 29 checks): VEX2/VEX3/EVEX com limite exato + `vex`/`evex`; x87 real (576 codificações vs capstone 5.0.7 = 0 div.); 3DNow! com byte-sufixo; gate `Insn.enc` no nativo. Corpus `vex.asm` byte-idêntico + `exit 42`
+- Placar honesto: 299 passam, 0 falham (`tests\run_tests.bat → 299/299 OK` em 1.2.327: base 270/270 + `[39]` com 29 checks). Lenta `run_slow.bat`: `[S1]` ld.lld + `[S2]` gcc
 
 ## 1. Build / Testes / Uso (resumo)
 
@@ -124,7 +125,8 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] R-8.2 f1 bin com `.text` nativa (1.2.308, `[36]` 7 checks). Prova: hello byte-idêntico + `hi` + AST 217 instrs; tiny exit 42 = original.
 - [x] R-8.2 f2 exatidão + matriz (1.2.315, `[37]` + `[38]`). Prova: var64 byte-idêntico + comportamento; loop/strings/no_relocs/jtable/t32 idem; 5 classes fechadas (disp-zero/nop/branch/imm8/grp2).
 - [x] R-8.2 fatia 3 — PE grande: gcc `-native-bin` byte-idêntico + comportamento (1.2.325, `[S2]`). Critério de aceite da Fase 5 FECHADO.
-- [ ] Resto ordenado (após R-8.2): SEH/unwind reemitido → R-2.7 VEX/EVEX/x87 rotulado → R-5.3 (`-f bin` com import table regenerada) → loads indexados/jump-to-code → `-s` + RIP.
+- [x] R-2.7 VEX/EVEX/x87/3DNow! rotulado (1.2.327, `[39]` 29 checks). Próximo da ordem: SEH/unwind reemitido.
+- [ ] Resto ordenado (após R-2.7): SEH/unwind reemitido → R-5.3 (`-f bin` com import table regenerada) → loads indexados/jump-to-code → `-s` + RIP.
 
 ## 9. Como marcar
 

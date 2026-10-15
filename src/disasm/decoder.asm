@@ -28,6 +28,8 @@ extern dex_tbl2_mne
 extern dex_tbl38_flag
 extern dex_tbl3a_flag
 extern dex_build_operands
+extern s_vex
+extern s_evex
 
 section .text
 
@@ -128,6 +130,16 @@ dex_disasm_one:
     jae .fallback_all
     ; ---- opcode ----
     movzx eax, byte [r10]
+    ; ---- R-2.7: VEX/EVEX (só x64; C4/C5/62 são prefixos) ----
+    cmp byte [r15+Insn.addr_mode], 0
+    jne .not_vex
+    cmp al, 0xC5
+    je .vex2
+    cmp al, 0xC4
+    je .vex3
+    cmp al, 0x62
+    je .evex
+.not_vex:
     cmp al, 0x0F
     je .esc0F
     movzx ecx, al              ; b0
@@ -294,3 +306,84 @@ dex_disasm_one:
     pop rbx
     pop rbp
     ret
+
+;=============================================================================
+; R-2.7 — prefixos VEX (C4/C5) e EVEX (62), só x64. Alcançados por jmp.
+; Estado: r11d = mapa (1=0F, 2=0F38, 3=0F3A), r8d = tamanho do prefixo,
+; eax = enc (1=VEX, 2=EVEX), r9 = ponteiro do byte de opcode. O prefixo
+; entra em npre p/ que ModRM/imm caiam no offset certo; mnemônico é
+; genérico (vex/evex) e o emissor sempre usa db (sem semântica de operando).
+;=============================================================================
+.vex2:
+    lea r9, [r10+2]
+    cmp r9, r12
+    jae .fallback_all
+    mov r11d, 1
+    mov r8d, 2
+    mov eax, 1
+    jmp .vex_go
+.vex3:
+    lea r9, [r10+3]
+    cmp r9, r12
+    jae .fallback_all
+    movzx r11d, byte [r10+1]
+    and r11d, 0x1F                   ; mmmmm (mapa)
+    cmp r11d, 1
+    jb .fallback_all
+    cmp r11d, 3
+    ja .fallback_all
+    mov r8d, 3
+    mov eax, 1
+    jmp .vex_go
+.evex:
+    lea r9, [r10+4]
+    cmp r9, r12
+    jae .fallback_all
+    movzx r11d, byte [r10+1]         ; P0
+    test r11d, 0x0C                  ; bits 3:2 reservados (devem ser 0)
+    jnz .fallback_all
+    and r11d, 0x03                   ; mm (mapa)
+    cmp r11d, 1
+    jb .fallback_all
+    movzx ecx, byte [r10+2]          ; P1
+    test ecx, 0x04                   ; bit 2 reservado (deve ser 1)
+    jz .fallback_all
+    mov r8d, 4
+    mov eax, 2
+.vex_go:
+    add [rbp-72], r8d                ; npre += tamanho do prefixo
+    mov [r15+Insn.enc], al
+    movzx ecx, byte [r9]             ; byte de opcode
+    mov dword [rbp-104], 1           ; oplen = 1
+    cmp r11d, 1
+    je .vex_map0f
+    cmp r11d, 2
+    je .vex_map38
+    lea rdx, [rel dex_tbl3a_flag]
+    movzx r10d, byte [rdx+rcx]
+    mov [rbp-80], r10d
+    or ecx, 0x3A00
+    mov dword [r15+Insn.opcode_len], 3
+    jmp .vex_set
+.vex_map38:
+    lea rdx, [rel dex_tbl38_flag]
+    movzx r10d, byte [rdx+rcx]
+    mov [rbp-80], r10d
+    or ecx, 0x3800
+    mov dword [r15+Insn.opcode_len], 3
+    jmp .vex_set
+.vex_map0f:
+    lea rdx, [rel dex_tbl2_flag]
+    movzx r10d, byte [rdx+rcx]
+    mov [rbp-80], r10d
+    or ecx, 0x0F00
+    mov dword [r15+Insn.opcode_len], 2
+.vex_set:
+    mov [r15+Insn.opcode], ecx
+    lea rdx, [rel s_vex]
+    cmp eax, 1
+    je .vex_smne
+    lea rdx, [rel s_evex]
+.vex_smne:
+    mov [r15+Insn.mne], rdx
+    jmp .got_op

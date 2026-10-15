@@ -91,6 +91,9 @@ global s_shrd
 global s_cmpx
 global s_xadd
 global s_sse
+global s_vex
+global s_evex
+global s_3dnow
 global s_rol
 global s_ror
 global s_rcl
@@ -216,6 +219,9 @@ s_shrd:  db "shrd", 0
 s_cmpx:  db "cmpxchg", 0
 s_xadd:  db "xadd", 0
 s_sse:   db "sse", 0
+s_vex:   db "vex", 0
+s_evex:  db "evex", 0
+s_3dnow: db "3dnow", 0
 s_rol:   db "rol", 0
 s_ror:   db "ror", 0
 s_rcl:   db "rcl", 0
@@ -378,7 +384,7 @@ dex_tbl1_mne:
 ; ---- tabela 2 bytes (0F xx): flags ----
 dex_tbl2_flag:
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM, 0, 0, 0, 0        ; 00
-    db 0, 0, 0, 0, 0, F_MODRM, 0, F_MODRM                    ; 08
+    db 0, 0, 0, 0, 0, F_MODRM, 0, F_MODRM|F_I8                  ; 08 (0F 0F = 3DNow! + ib; 0D prefetch)
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; 10 SSE
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; 14
     db F_MODRM, F_MODRM, F_MODRM, F_MODRM                    ; 18
@@ -439,7 +445,7 @@ dex_tbl2_flag:
 
 ; ---- tabela 2 bytes: mnemônicos ----
 dex_tbl2_mne:
-    times 16 dq 0
+    dq 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, s_3dnow
     times 16 dq 0
     times 16 dq s_sse
     times 16 dq s_sse

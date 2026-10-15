@@ -117,8 +117,11 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
   `console.asm` (WriteFile stdout/stderr, hex/dec).
 - `src/pe/`: `pe_load.asm`, `pe_sections.asm`, `rva.asm`, `pe_imports.asm`,
   `pe_exports.asm`, `pe_relocs.asm`.
-- `src/disasm/`: `decoder.asm`, `prefixes.asm`, `modrm.asm`,
+- `src/disasm/`: `decoder.asm` (LDE + VEX `C4/C5` + EVEX `62`: prefixo em
+  `npre`, mapa 0F/0F38/0F3A, `Insn.enc`), `prefixes.asm`, `modrm.asm`,
   `opcode_tbl.asm` (flags 1/2/38/3A + mnemônicos), `operands.asm`,
+  `semantics.asm` (`dex_build_operands`: whitelist; VEX/EVEX → `db`),
+  `x87.asm` (`dex_x87_mne`: mnemônico real D8-DF por opcode+ModRM),
   `emit_nasm.asm` (db + labels + `-hex`).
 - `src/gen/`: `asm_buffer.asm`, `labels.asm`, `symbols.asm`, `strings.asm`
   (pool), `rebuild.asm` (generate win64/bin + rebuild + patch_dirs).

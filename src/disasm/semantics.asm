@@ -31,6 +31,7 @@ extern s_mov
 extern s_test
 extern s_sysc
 extern s_sse
+extern dex_x87_mne
 extern s_retf
 extern s_int3
 extern s_int
@@ -109,6 +110,10 @@ dex_build_operands:
     test rcx, rcx
     jz .no
     mov rbx, rcx               ; insn
+    ; R-2.7: VEX/EVEX nunca são emitidos nativamente (prefixo não modelado
+    ; no emissor) — mnemônico genérico já vem do decoder; força db.
+    cmp byte [rbx+Insn.enc], 0
+    jne .no
     cmp byte [rbx+Insn.addr_mode], 1
     jne .bm64
     ; x32 Fase D1b: allowlist (resto: db fiel). Classes auditadas p/
@@ -1170,7 +1175,7 @@ dex_build_operands:
     jb .l1_shift                ; D0-D7 (D4/D5 já tratados; D6/D7→db aqui? não:
                                ; D4/D5 saíram acima; D0-D3 shifts, D6/D7 db)
     cmp eax, 0xE0
-    jb .no                    ; D8-DF x87 → db
+    jb .l1_x87                ; D8-DF x87 → mnemônico real (db byte-exato)
     cmp eax, 0xE4
     jb .l1_e0                   ; E0-E3 (rel, já com op0; só mne!)
     cmp eax, 0xE8
@@ -1186,6 +1191,17 @@ dex_build_operands:
     cmp eax, 0xFC
     jb .l1_flags2               ; F8-FB (mne já setado? não! setar aqui)
     jmp .l1_ffgrp               ; FC-FF
+.l1_x87:
+    ; R-2.7: resolve o mnemônico real (fld/fadd/fstp/...) e mantém db.
+    ; Ponto único de resolução x87; opcode em 0xD8-0xDF.
+    mov rcx, rbx
+    sub rsp, 40
+    call dex_x87_mne
+    add rsp, 40
+    test rax, rax
+    jz .no
+    mov [rbx+Insn.mne], rax
+    jmp .no
 .l1_movri:
     ; B0-B7: r8,imm8 | B8-BF: r,imm(v/64)
     mov ecx, eax

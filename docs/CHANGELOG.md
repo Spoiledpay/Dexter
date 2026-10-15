@@ -2,6 +2,38 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-2.7: VEX/EVEX/x87/3DNow! rotulados (2026-10-15)
+
+### Adicionado
+
+- Decoder VEX (`C4`/`C5`) e EVEX (`62`) em x64 (`src/disasm/decoder.asm`):
+  o prefixo entra em `npre`, o mapa (0F/0F38/0F3A) reaproveita as flags/imm
+  das tabelas 2/38/3A e a instrução vira UMA linha `db` byte-exata com
+  rótulo genérico `vex`/`evex` (`Insn.enc` = 1/2). Antes cada byte saía
+  solto (uma instrução VEX virava vários `db` desalinhados).
+- `src/disasm/x87.asm`: tabela real de mnemônicos x87 (`D8-DF`) resolvida
+  por (opcode, ModRM) — 64 formas memória + 512 registro; strings + tables
+  conferidas contra capstone 5.0.7 (576 codificações, 0 divergências).
+- Strings `s_vex`/`s_evex`/`s_3dnow` + `tbl2_mne[0F] = s_3dnow` em
+  `opcode_tbl.asm`.
+- Corpus `tests/vex.asm` (VEX2/VEX3/EVEX/x87/3DNow!), driver
+  `tests/x87_check.asm` (sweep 8×256 + FNV-1a) e seção `[39]` (29 checks).
+
+### Corrigido
+
+- 3DNow! (`0F 0F /r ib`) saía com comprimento errado: `tbl2_flag[0F]` era
+  só `F_MODRM` (perdia o byte-sufixo). Agora `F_MODRM|F_I8`.
+- `semantics` recusa VEX/EVEX no caminho nativo (`Insn.enc != 0` → `db`),
+  evitando emissão nativa falsa (ex.: VEX `0F 77` cairia em `emms`).
+
+### Verificado
+
+- x87: 576 codificações batem 1:1 com capstone; `run_tests.bat`
+  **299/299 OK**; `run_slow.bat` **7/7 OK** (ld.lld 68 MB + gcc
+  byte-idênticos). Corpus `vex` byte-idêntico + comportamento (`exit 42`).
+- Limite honesto: VEX/EVEX seguem `db` (sem semântica de label/operando);
+  EVEX 0F38 com imm8 pode ter comprimento off-by-one (raro; antes pior).
+
 ## [Unreleased] — R-8.2 f3: gcc `-native-bin` byte-idêntico + comportamento (2026-10-15)
 
 ### Adicionado
