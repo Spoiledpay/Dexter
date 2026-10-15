@@ -1270,6 +1270,49 @@ dex_generate_asm:
     mov eax, [rbx+DexConfig.flags]
     test eax, DF_NATIVE
     jz .wcs_emit_db
+    ; R-8.2 f3: em bin, REX com bits inúteis some na emissão (nasm só
+    ; emite REX que altera codificação) → db byte-exato. Casos:
+    ; 0x40 puro; X sem SIB (universal); W/R em FF /2,/4,/6 (sem reg-
+    ; operando; W fixo em 64); W/R em FE (8 bits, sem reg em R).
+    ; B sempre vale (estende rm/índice); W em /0,/1 vale (64 vs 32).
+    mov eax, [rbx+DexConfig.mode]
+    cmp eax, DEX_MODE_BIN
+    jne .wcs_rexok
+    cmp byte [rel g_insn+Insn.has_rex], 0
+    je .wcs_rexok
+    movzx eax, byte [rel g_insn+Insn.rex]
+    cmp al, 0x40
+    je .wcs_emit_db
+    test al, 0x02
+    jz .wcs_rexxok
+    cmp byte [rel g_insn+Insn.has_sib], 0
+    je .wcs_emit_db
+.wcs_rexxok:
+    movzx ecx, byte [rel g_insn+Insn.opcode]
+    cmp cl, 0xFF
+    je .wcs_rexff
+    cmp cl, 0xFE
+    jne .wcs_rexok
+    test al, 0x0C
+    jnz .wcs_emit_db
+    jmp .wcs_rexok
+.wcs_rexff:
+    cmp byte [rel g_insn+Insn.has_modrm], 0
+    je .wcs_rexok
+    movzx ecx, byte [rel g_insn+Insn.modrm]
+    shr ecx, 3
+    and ecx, 7
+    cmp ecx, 2
+    je .wcs_rexff26
+    cmp ecx, 4
+    je .wcs_rexff26
+    cmp ecx, 6
+    jne .wcs_rexok
+.wcs_rexff26:
+    test al, 0x0C
+    jnz .wcs_emit_db
+    jmp .wcs_rexok
+.wcs_rexok:
     lea rcx, [rel g_insn]
     sub rsp, 32
     call dex_build_operands

@@ -67,7 +67,6 @@ extern s_lodsq
 extern s_scasq
 extern s_cmpsq
 extern s_nop
-extern s_jmp
 
 section .rodata
 s_label_pre  db "label_", 0
@@ -89,7 +88,7 @@ s_jmp_rel    db "    jmp [rel ", 0
 s_call_abs   db "    call [", 0
 s_jmp_abs    db "    jmp [", 0
 s_short      db " short", 0
-s_near       db " near", 0
+s_near       db " strict near", 0
 s_rb         db "]", 0
 s_global     db "global ", 0
 
@@ -679,6 +678,29 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .en_fail
+    ; R-8.2 f2: jmp rel8→short, rel32→near (caminho comum; EB/E9
+    ; definem a forma sozinhos — FF/call/loop caem fora).
+    cmp byte [r15+Insn.legacy66], 0
+    jne .en_nojmpsuf
+    cmp dword [r15+Insn.opcode_len], 1
+    jne .en_nojmpsuf
+    movzx eax, byte [r15+Insn.opcode]
+    cmp al, 0xEB
+    je .en_jmp_short
+    cmp al, 0xE9
+    jne .en_nojmpsuf
+    lea rdx, [rel s_near]
+    jmp .en_jmp_app
+.en_jmp_short:
+    lea rdx, [rel s_short]
+.en_jmp_app:
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .en_fail
+.en_nojmpsuf:
     jmp .en_ops
 .en_fs_movsq:
     lea rax, [rel s_movsq]
@@ -744,11 +766,8 @@ dex_emit_native:
     jnz .en_fail
     ; R-8.2 f2: forma explícita p/ determinismo (nasm pode travar em
     ; near por ponto-fixo local quando a distância beira 127; explícito
-    ; reserva exato já na passada 1). Só jcc (cmov/setcc não ramificam).
-    mov rax, [r15+Insn.mne]
-    lea rcx, [rel s_jcc]
-    cmp rax, rcx
-    jne .en_ccsuf_go
+    ; reserva exato já na passada 1). Opcode define a forma (70-7F rel8,
+    ; 0F80-8F rel32); cmov/setcc/jcxz caem fora pelos ranges.
     cmp byte [r15+Insn.legacy66], 0
     jne .en_ccsuf_go              ; 66: rel16, sem forma forçada
     cmp dword [r15+Insn.opcode_len], 1
@@ -854,33 +873,6 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .en_fail
-    ; R-8.2 f2: jmp rel8→short, rel32→near (idem jcc; FF/call/loop
-    ; intactos — sem forma alternativa).
-    mov rax, [r15+Insn.mne]
-    lea rcx, [rel s_jmp]
-    cmp rax, rcx
-    jne .en_mne_raw_go
-    cmp byte [r15+Insn.legacy66], 0
-    jne .en_mne_raw_go           ; 66: rel16, sem forma forçada
-    cmp dword [r15+Insn.opcode_len], 1
-    jne .en_mne_raw_go
-    movzx eax, byte [r15+Insn.opcode]
-    cmp al, 0xEB
-    je .en_jmp_short
-    cmp al, 0xE9
-    jne .en_mne_raw_go
-    lea rdx, [rel s_near]
-    jmp .en_jmp_app
-.en_jmp_short:
-    lea rdx, [rel s_short]
-.en_jmp_app:
-    mov rcx, rbx
-    sub rsp, 32
-    call asmbuf_append_str
-    add rsp, 32
-    test eax, eax
-    jnz .en_fail
-.en_mne_raw_go:
     jmp .en_ops
 
 ;-----------------------------------------------------------------------------
@@ -1051,13 +1043,8 @@ dex_emit_native:
     jb .fo_r8low
     cmp ecx, 7
     ja .fo_r8low
-    ; sem REX, idx 4-7: hi SOMENTE se vier de ModRM (não B0-B7).
-    ; B0-B7 usam spl/bpl/sil/dil mesmo sem REX.
-    movzx eax, byte [r12+Insn.opcode]
-    cmp eax, 0xB0
-    jb .fo_r8hi
-    cmp eax, 0xB8
-    jb .fo_r8low
+    ; sem REX, idx 4-7: sempre hi (ah/ch/dh/bh). spl/bpl/sil/dil
+    ; EXIGEM REX (SDM); sem ele o nasm forçaria REX e mudaria tudo.
     jmp .fo_r8hi
 .fo_r8hi:
     sub ecx, 4
@@ -1340,6 +1327,17 @@ dex_emit_native:
     movzx eax, byte [r12+Insn.opcode]
     cmp eax, 0x8D
     je .fo_memshape             ; lea: nunca prefixo
+    ; shifts/rotates por CL (D2/D3): op1=CL é só a contagem e NÃO
+    ; determina o tamanho. Quem carrega o tamanho é op0 (r/m): sem o
+    ; prefixo o nasm assume byte e troca Ev→Eb (D3→D2). Força explicit.
+    cmp dword [r12+Insn.opcode_len], 1
+    jne .fo_mem_d23ck
+    movzx eax, byte [r12+Insn.opcode]
+    cmp eax, 0xD2
+    je .fo_memsize
+    cmp eax, 0xD3
+    je .fo_memsize
+.fo_mem_d23ck:
     ; movzx/movsx (0F B6/B7/BE/BF): fonte m8/m16 SEMPRE explícita
     ; (destino REG suprime o prefixo geral; sem ele o nasm recusa:
     ; "invalid operand sizes"). Tamanho-fonte em DexOp.size
@@ -1374,6 +1372,7 @@ dex_emit_native:
     cmp al, DEX_OP_REG
     je .fo_memshape
     ; sem REG: prefixo pelo size
+.fo_memsize:
     movzx eax, byte [r13+DexOp.size]
     cmp eax, 1
     je .fo_psz1

@@ -2,6 +2,30 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-8.2 f3: gcc `-native-bin` byte-idêntico + comportamento (2026-10-15)
+
+### Adicionado
+
+- Seção `[S2]` em `tests\run_slow.bat`: gcc 2 MB `-m bin -native`
+  → `nasm -f bin` → `fc /b` byte-idêntico → swap do toolchain
+  (backup+restore com hash) compila `tests/hello_f3.c` e confere `hi`.
+- Corpus `tests/hello_f3.c` (fixture do teste de comportamento).
+
+### Corrigido
+
+- `semantics .l2_bt` forçava `s_bt` para A3/AB/B3/BB: BTS/BTR/BTC
+  saíam como `bt` (diferença de 1 byte `AB→A3` no bin). Agora escolhe
+  por `Insn.opcode`; tabela 2-byte alinhada (`B3→s_btr`, `BB→s_btc`).
+- Shift/rotate por CL em memória (D2/D3) saía sem prefixo de tamanho:
+  o nasm assumia byte e trocava Ev→Eb (`D3→D2`). `emit_nasm .fo_mem`
+  agora força o prefixo por `op0.size` quando o único REG é CL.
+
+### Verificado
+
+- gcc 15.2.0 (2.064.976 B, 10 seções) `-m bin -native` → `fc /b` 0
+  diffs + comportamento idêntico (`hi`); `tests\run_tests.bat` 270/270;
+  `tests\run_slow.bat` 7/7 (`[S1]` ld.lld 68 MB + `[S2]` gcc).
+
 ## [Unreleased] — gcc-native: prefixo de tamanho em refs RIP (2026-10-14)
 
 ### Corrigido

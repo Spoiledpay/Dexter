@@ -452,9 +452,9 @@ dex_tbl2_mne:
     dq s_jcc,s_jcc,s_jcc,s_jcc, s_jcc,s_jcc,s_jcc,s_jcc
     times 16 dq s_setcc
     dq 0,0,s_cpuid,s_bt, s_shld,s_shld,0,0
-    dq 0,0,0,s_bt, s_shrd,s_shrd,0,s_imul
-    dq s_cmpx,s_cmpx,0,s_bt, 0,0,s_movzx,s_movzx
-    dq 0,0,0,s_bt, s_bsf,s_bsr,s_movsx,s_movsx
+    dq 0,0,0,s_bts, s_shrd,s_shrd,0,s_imul
+    dq s_cmpx,s_cmpx,0,s_btr, 0,0,s_movzx,s_movzx
+    dq 0,0,0,s_btc, s_bsf,s_bsr,s_movsx,s_movsx
     dq s_xadd,s_xadd,0,0, 0,0,0,0
     dq s_bswap,s_bswap,s_bswap,s_bswap, s_bswap,s_bswap,s_bswap,s_bswap
     times 48 dq s_sse                  ; D0-FF

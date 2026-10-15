@@ -261,7 +261,16 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   no_relocs/jtable/t32 `-native-bin` byte-idênticos + comportamentais;
   t32 sem fonte (oráculo = exit do original); memsz sem run (fixture
   com AV pré-existente); var64-win64 documentado (AV por D-19, f3).
-- [ ] R-8.2 fatia 3 — PE grande (gcc `-native-bin` + swap + `hello.c`).
+- [x] R-8.2 fatia 3 — PE grande (gcc `-native-bin`, 1.2.325): `-m bin
+  -native` do gcc gera 17 MB `.asm`, `nasm -f bin` 0 erros, `fc /b`
+  **byte-idêntico** (2.064.976 B) + comportamento provado por swap do
+  toolchain (gcc reassemblado compila `tests/hello_f3.c` → `hi`, restore
+  verificado por hash). 2 bugs reais fechados: (a) `semantics .l2_bt`
+  forçava `s_bt` p/ A3/AB/B3/BB (BTS/BTR/BTC saíam `bt`) → mne por
+  opcode + tbl2 `B3→s_btr`/`BB→s_btc`; (b) shift/rotate por CL (D2/D3)
+  MEM sem prefixo de tamanho (nasm assumia byte, `D3→D2`) →
+  `emit_nasm .fo_mem` força prefixo por op0.size. `[S2]` em
+  `tests\run_slow.bat`.
 
 ## Dívida técnica conhecida (honesta, com ID)
 

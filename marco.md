@@ -19,8 +19,8 @@
 - [x] R-8.1 `.bss` com `resb` + labels (1.2.303, `[35]`: soma `resb`==vsize, 100+ refs simbólicas, monta 0 erros; limite honesto D-19)
 - [x] R-8.2 f1 bin com `.text` nativa (1.2.308, `[36]`: hello byte-idêntico + `hi` + AST 217 instrs, tiny 42)
 - [x] R-8.2 f2 exatidão + matriz (1.2.315, `[37]` var64 + `[38]` 15 checks: loop/strings/no_relocs/jtable/t32)
-- [ ] R-8.2 f3 (PE grande: gcc `-native-bin` + swap + `hello.c` — ordenada na Fase 5)
-- Placar honesto: 270 passam, 0 falham (`tests\run_tests.bat → 270/270 OK` em 1.2.315: base 252/252 + `[37]`/`[38]` com 18 checks). Detalhe do dia: R-8.2 f2
+- [x] R-8.2 f3 PE grande: gcc `-native-bin` byte-idêntico (1.2.325, `[S2]`: 2.064.976 B `fc` limpo + swap compila `hello_f3.c` → `hi`; fixes `l2_bt` por opcode + prefixo CL-shift D2/D3; critério da Fase 5 fechado)
+- Placar honesto: 270 passam, 0 falham (`tests\run_tests.bat → 270/270 OK` em 1.2.325: base 252/252 + `[37]`/`[38]` com 18 checks). Lenta `run_slow.bat`: `[S1]` ld.lld + `[S2]` gcc
 
 ## 1. Build / Testes / Uso (resumo)
 
@@ -123,7 +123,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] R-8.1 `.bss` com `resb` + labels (1.2.303, `[35]` 7 checks, commit `dddeac4`). Nível asm exato; comportamento em PE grande pendente de layout.
 - [x] R-8.2 f1 bin com `.text` nativa (1.2.308, `[36]` 7 checks). Prova: hello byte-idêntico + `hi` + AST 217 instrs; tiny exit 42 = original.
 - [x] R-8.2 f2 exatidão + matriz (1.2.315, `[37]` + `[38]`). Prova: var64 byte-idêntico + comportamento; loop/strings/no_relocs/jtable/t32 idem; 5 classes fechadas (disp-zero/nop/branch/imm8/grp2).
-- [ ] R-8.2 fatia 3 — PE grande: gcc `-native-bin` + swap + `hello.c` → `hi`. Critério de aceite da Fase 5.
+- [x] R-8.2 fatia 3 — PE grande: gcc `-native-bin` byte-idêntico + comportamento (1.2.325, `[S2]`). Critério de aceite da Fase 5 FECHADO.
 - [ ] Resto ordenado (após R-8.2): SEH/unwind reemitido → R-2.7 VEX/EVEX/x87 rotulado → R-5.3 (`-f bin` com import table regenerada) → loads indexados/jump-to-code → `-s` + RIP.
 
 ## 9. Como marcar

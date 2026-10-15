@@ -1293,6 +1293,16 @@ dex_build_operands:
     lea rcx, [rel dex_grp2_mne]
     mov rax, [rcx+rax*8]
     mov [rbx+Insn.mne], rax
+    ; C0 par: opera r/m8 (66 → r/m16); C1: 4/8/2 (idem D0).
+    movzx eax, byte [rbx+Insn.opcode]
+    test eax, 1
+    jnz .l1_sh32
+    mov r9d, 1
+    cmp byte [rbx+Insn.legacy66], 0
+    je .l1_shsz
+    mov r9d, 2
+    jmp .l1_shsz
+.l1_sh32:
     mov r9d, 4
     cmp byte [rbx+Insn.has_rex], 0
     je .l1_sh66
@@ -1816,7 +1826,27 @@ dex_build_operands:
     je .l2_ba
     jmp .no
 .l2_bt:
+    ; mne por opcode: A3=bt, AB=bts, B3=btr, BB=btc
+    movzx eax, byte [rbx+Insn.opcode]
+    cmp eax, 0xA3
+    je .l2_bt_bt
+    cmp eax, 0xAB
+    je .l2_bt_bts
+    cmp eax, 0xB3
+    je .l2_bt_btr
+    lea rax, [rel s_btc]
+    mov [rbx+Insn.mne], rax
+    jmp .l2_btrm
+.l2_bt_bt:
     lea rax, [rel s_bt]
+    mov [rbx+Insn.mne], rax
+    jmp .l2_btrm
+.l2_bt_bts:
+    lea rax, [rel s_bts]
+    mov [rbx+Insn.mne], rax
+    jmp .l2_btrm
+.l2_bt_btr:
+    lea rax, [rel s_btr]
     mov [rbx+Insn.mne], rax
     jmp .l2_btrm
 .l2_cmpx:
