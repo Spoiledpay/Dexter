@@ -64,3 +64,48 @@ bin preserva a base byte a byte.
 explícito falharam com `87` em handles válidos onde `ReadFile`
 sequencial, `GetFileSizeEx` e `mmap` funcionam. I/O posicional do Dexter =
 `mmap_rw`; wrappers de seek foram removidos em vez de mantidos quebrados.
+
+## 11. Corpus de exceção real (`tests/exc.exe`) — R-5.4 F4
+`tests/exc.exe` (MinGW-w64 `g++ -O1`, fonte `tests/exc_cpp.cpp`) é um
+programa C++ que lança `throw 7` no fundo de uma recursão **não-tail**
+(6 frames, cada um com um destrutor não-trivial) e captura em `main`
+(`catch (int)`), exigindo que o desenrolar (unwind) do Windows percorra os
+`RUNTIME_FUNCTION`/`UNWIND_INFO` reais e rode os destrutores.
+
+Perfil do binário (oráculo para o fixture): **18 seções**; `.pdata` com
+**117 `RUNTIME_FUNCTION`** e flags de unwind
+`{UNW_FLAG_NHANDLER(0), EHANDLER(1), EHANDLER|UHANDLER(3)}` — ou seja
+`UNWIND_INFO` com **handler RVA real** (`__CxxFrameHandler3`), não apenas
+prolog. É o corpus que exercita o handler de verdade (o `var64` só tinha
+prologs).
+
+Fatos de campo:
+- `-m bin -native`: **byte-idêntico** (`fc /b` 0 diffs) e o reconstruído
+  roda o throw/catch (`caught=7 cleanups=6`, **exit 42**) — prova que a
+  `.pdata`/`.xdata` simbólica da F3 é funcional, não só fiel em bytes.
+- **Modo win64: o rebuild crasha (`0xC000007B`).** Causa = **D-19**: o
+  `link.exe` funde/reordena (`18→16` seções; `.xdata` some dentro de
+  `.rdata`; `.pdata` muda de VA) e o `dex_patch_dirs` copia os
+  DataDirectories originais cegos — o Import Directory continua apontando
+  `0x10000`, que após o remanejo é `.bss` (a `.idata` foi para `0xE000`).
+  Não é falha do unwind simbólico (as flags reemitidas da `.pdata` saem
+  idênticas às originais); reforça que PEs reais pedem `-m bin`
+  (D-19 / R-8.2).
+
+## 12. `-f bin`: label = file-offset ⇒ `disp32` entre seções precisa de K
+
+Em `nasm -f bin` **não há segmentos**: cada label recebe como valor o seu
+**offset no arquivo** (não o RVA). O layout do Dexter reproduz os
+`raw_ptr` originais (padding `times N db 0`), então *dentro* de uma seção
+o deslocamento relativo coincide com o RVA e o `disp32` RIP-relativo sai
+correto. **Entre seções diferentes não coincide**, porque cada seção tem
+seu próprio `delta = vaddr − raw_ptr` (hello: `.text` 0xC00, `.rdata`
+0x1A00).
+
+Consequência para `call|jmp [rel __imp_X]` (IAT em `.rdata`, código em
+`.text`): o `disp32` montado seria o do espaço de offsets, deslocado do
+original por `K = (vaddr_iat − raw_iat) − (vaddr_code − raw_code)`.
+Correção (R-5.3 F1): emitir `[rel __imp_X + K]` — a expressão somada ao
+label devolve o `disp32` original (hello/var64: `K = 0xE00` / `0x6600`).
+Sem K o `.asm` ainda monta, mas o binário fica byte-diferente (falha
+silenciosa se não houver o gate `[rel __imp_` na suíte).

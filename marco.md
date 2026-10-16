@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-15, Dexter 1.2.325)
+## 0. Onde estamos (2026-10-15, Dexter 1.2.338)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -20,14 +20,17 @@
 - [x] R-8.2 f1 bin com `.text` nativa (1.2.308, `[36]`: hello byte-idêntico + `hi` + AST 217 instrs, tiny 42)
 - [x] R-8.2 f2 exatidão + matriz (1.2.315, `[37]` var64 + `[38]` 15 checks: loop/strings/no_relocs/jtable/t32)
 - [x] R-8.2 f3 PE grande: gcc `-native-bin` byte-idêntico (1.2.325, `[S2]`: 2.064.976 B `fc` limpo + swap compila `hello_f3.c` → `hi`; fixes `l2_bt` por opcode + prefixo CL-shift D2/D3; critério da Fase 5 fechado)
-- [x] R-2.7 VEX/EVEX/x87/3DNow! rotulados (1.2.327, `[39]` 29 checks): VEX2/VEX3/EVEX com limite exato + `vex`/`evex`; x87 real (576 codificações vs capstone 5.0.7 = 0 div.); 3DNow! com byte-sufixo; gate `Insn.enc` no nativo. Corpus `vex.asm` byte-idêntico + `exit 42`
-- Placar honesto: 299 passam, 0 falham (`tests\run_tests.bat → 299/299 OK` em 1.2.327: base 270/270 + `[39]` com 29 checks). Lenta `run_slow.bat`: `[S1]` ld.lld + `[S2]` gcc
+- [x] R-2.7 VEX/EVEX/x87/3DNow! rotulados (1.2.327, `[39]` 29 checks): VEX2/VEX3/EVEX com limite exato + `vex`/`evex`; x87 real (576 codificações vs capstone 5.0.7 = 0 div.); 3DNow! com byte-sufixo; gate `Insn.enc` no nativo. Corpus `vex.asm` byte-idêntico + `exit 42` (COMMIT `5d1daaf`)
+- [x] R-5.4 SEH/unwind reemitido — **F1** parser `.pdata`/`.xdata` (1.2.329, `[40]`), **F2** emissão win64 simbólica `wrt ..imagebase` + EXC dir regenerado (1.2.332, `[41]` var64 `rva=0xD000 size=0x588`; ataca D-19), **F3** emissão bin simbólica **byte-idêntica** `dd label_<VA> + C` + bitmap p/ unwind RVAs não-monotônicos (1.2.338, `[42]`; gcc/ld.lld `fc /b` 0 diffs). **F4** FECHADA (1.2.338, `[43]`, 6 checks): corpus de exceção real `tests/exc.exe` (C++ `throw`/`catch`, 117 `RUNTIME_FUNCTION` com `__CxxFrameHandler3`) `-m bin -native` byte-idêntico **e** reconstruído roda o throw/catch (exit 42); win64 do fixture = D-19 (`0xC000007B`)
+- [x] Removido debug vazado `[cs] sec=` no `-m bin -native` (`-q` agora 0 bytes em stdout)
+- [x] Round-trip `-m bin` byte-idêntico verificado nos apps do usuário: `link/Contador/Color2/Case/Char/color/Calculator` (x32) + `gcc` (x64) — todos `fc /b` 0 diffs (bin e bin-native)
+- Placar honesto: 327 passam, 0 falham (`tests\run_tests.bat → 327/327 OK` em 1.2.341: base 270/270 + `[39]` 29 + `[40]` 4 + `[41]` 7 + `[42]` 4 + `[43]` 6 + `[44]` 4 + 3 gates F1). Lenta `run_slow.bat`: **7/7** (`[S1]` ld.lld 68 MB + `[S2]` gcc byte-idênticos com `.pdata`/`.xdata` simbólicas)
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[38]`, 270 checks em 1.2.325)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[44]`, 327 checks em 1.2.341)
 - [x] Suite lenta: `tests\run_slow.bat` (`[S1]` round-trip `ld.lld.exe` 68 MB + `[S2]` gcc byte-idêntico+comportamento)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs/jtable/t32` (round-trip bin-native) + `var64/gcc/ld.lld` (bin) + `gcc` (`-native-bin` byte-idêntico + comportamento = R-8.2 FECHADA) + negativos `var32/link` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -37,7 +40,9 @@
 - [x] `git status` limpo + `build.bat` OK (v1.2.179, 2026-10-11; só `marco.md` untracked)
 - [x] `tests\run_tests.bat` confirma base 67/13
 - [x] AV reproduzido isolado: `dexter tests\tiny.exe -native` → `-1073741819` (0xC0000005), sem `.asm`
-- [ ] Matriz de isolação repetida (walker neutro / imp neutro / R neutro — um por vez)
+- [~] Matriz de isolação (walker/imp/R neutros): **obsoleta** — a causa raiz
+  do AV (`[rbp-100]`×`[rbp-96]` em `.wds_chunks`) foi fechada na Fase 1
+  (2026-10-11); a matriz deixou de ser necessária.
 
 ## 3. Fase 1 — Fechar bloqueador R-6.4.3 (AV `-native`)
 
@@ -90,9 +95,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 
 - [x] `tests\fuzz_pe.py` mínimo (muta bytes, nunca executa input; 20 casos seed 7 na suíte `[22]` + baterias manuais 200/300/50; meta: só saídas 0-3/5, nunca crash/hang — 1 hang real achado e corrigido em 1.2.253)
 - [x] Jump tables: base rotulada via R + corpus `jtable.asm` + round-trip (1.2.257, `[27]`); entradas `dq label_` p/ código via D-7 (1.2.266, `[28]` com guarda `-s`), `jmp [idx]` opaco (futuro: índice simbólico)
-- [ ] SEH/unwind reemitido (hoje: cópia/trim)
-- [ ] R-2.7 VEX/EVEX/x87 rotulado (hoje: `db` correto)
-- [ ] R-5.3 bin com import table regenerada (hoje: copiada, suficiente)
+- Itens abertos de fidelidade (SEH/unwind reemitido, R-5.3) vivem na fila ordenada do §8 (fonte única — não duplicar aqui).
 - [x] R-6.5 `-emit=db|native` (1.2.254, `[23]`) + var64 `-native` montável (1.2.266, `[29]`: disp com `0x`, disp32-curto→`db` em 32 bits, jcc32 com `op0=REL`, `movzx/movsx` com `byte/word`, imm32 negativo como `-0x`, gates R/D) + R-6.6 IR otimizável/backend próprio (→ Fase 5 R-8.2)
 
 ## 7. Dívida técnica (D-1–D-19, ver ROADMAP)
@@ -100,7 +103,15 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] D2 IAT absoluta x32 (2026-10-14, backlog `SESSAO-2026-10-13-D1B.md` §4.1): `call|jmp [__imp_X]` + labels, `[33]` verde, suíte 231/231 (1.2.300). `mov`-from-IAT segue `db` (kinds 3/4 não existem); `dq` 8B segue off em x32 (`nodq`); próxima fila: `gcc -native` 62 erros.
 - [x] gcc-native prefixo RIP (2026-10-14, backlog §4.2): hoist `.fo_mem`→`.fo_memshape` (movzx/cmp com tamanho em `[rel]`/SIB-abs/abs32); 30 erros estáticos zerados; corpus `memsz.asm` + `[34]` verde; `nasm -f win64` do gcc FECHADO com 0 erros (obj 10,5 MB) + link só com LNK4078; suíte 238/238 (1.2.301). `aad` fantasma extinto (0 ocorrências). Comportamento em PE grande → Fase 5 (D-19).
 
-- [x] D-3 parcial: `sym_check` (`[15]`, golden `SYM n=5`) — falta `strpool`/`labels-imp` dedicado
+- [x] D-3 FECHADA (2026-10-16): `symtab` (`[15]`, golden `SYM n=5`) +
+  **`strpool`/`asm_buffer`** (`tests/strpool_check.asm` + `[44]`, golden
+  `STRPOOL o=0 6 B len=11`). `labels-imp` coberto indiretamente por
+  `[13]`/`[14]` (imp_check).
+- [x] D-15 FECHADA (2026-10-16): `dex_console_write` reserva 48 B p/ o 5º
+  arg do `WriteFile` (antes `[rsp+32]` caía no fundo do frame).
+- [x] D-16 FECHADA (2026-10-16, auditoria): "prólogo duplicado" descrito
+  **não existe**; comentário de alinhamento corrigido + buffer do hex
+  movido p/ `[rbp-72]` (32 B, acima da shadow).
 - [x] D-7: tabela D reativada como bitmap (1.2.266: 1 bit/RVA, 1 malloc; leitores: jump-table p/ código `[28]`, gates R/D no walker que convertem refs sem label em `db` — sem eles o var64 `-native` não montava)
 - [x] R-6.1/x64 nativo em PE real (1.2.266, `[29]`: disp com `0x`, disp32-curto em 32 bits, jcc32 `op0=REL`, `movzx/movsx` com `byte/word`, imm32 negativo, gates R/D)
 - [x] x32 fases A+B (1.2.271, `[30]`+`[6c]`: loader PE32 + decoder 32-bit + `bits 32` db fiel; tabelas endireitadas p/ ambos os modos: imul AF, cmov 40-43, x87 ModRM, acumulador-imm 66)
@@ -126,7 +137,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] R-8.2 f2 exatidão + matriz (1.2.315, `[37]` + `[38]`). Prova: var64 byte-idêntico + comportamento; loop/strings/no_relocs/jtable/t32 idem; 5 classes fechadas (disp-zero/nop/branch/imm8/grp2).
 - [x] R-8.2 fatia 3 — PE grande: gcc `-native-bin` byte-idêntico + comportamento (1.2.325, `[S2]`). Critério de aceite da Fase 5 FECHADO.
 - [x] R-2.7 VEX/EVEX/x87/3DNow! rotulado (1.2.327, `[39]` 29 checks). Próximo da ordem: SEH/unwind reemitido.
-- [ ] Resto ordenado (após R-2.7): SEH/unwind reemitido → R-5.3 (`-f bin` com import table regenerada) → loads indexados/jump-to-code → `-s` + RIP.
+- [x] Resto ordenado (após R-2.7): SEH/unwind reemitido **F1–F4 FECHADAS** (F4 = corpus de exceção real `tests/exc.exe` + fuzz `.pdata`/`.xdata`, 1.2.338 `[43]`). **R-5.3 F1 FECHADA** (1.2.341): imports nativos no `-m bin -native` (`call|jmp [rel __imp_X + K]`, K = correção de delta offset↔RVA; `[36]`/`[37]`). Próximo da ordem: → **R-5.3 F2–F4** (tabela simbólica) → loads indexados/jump-to-code → `-s` + RIP.
 
 ## 9. Como marcar
 

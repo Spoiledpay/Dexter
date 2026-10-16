@@ -71,4 +71,7 @@ out/ obj/        artefatos de build (ignorados no git)
   dispatch C0+, mov-SIB, `.cs_in_code`, spill `[rbp-56]`).
 - [x] R-6.2: `dex_lex_one` (`src/front/lexer.asm`, 17 kinds) + driver
   `tests/lex_check.asm` (golden 164 tokens, 0 unknowns).
-- [ ] R-2.7 (VEX/EVEX), R-5.3+, R-6.6, D-7, SEH/unwind — ver ROADMAP + `docs/adr/0001-ast-lexer-codegen.md`.
+- [x] R-2.7 VEX/EVEX/x87/3DNow! + R-5.4 SEH/unwind (F1–F4) — ver ROADMAP.
+- [x] R-5.3 F1: imports nativos no `-m bin -native` (`call|jmp [rel __imp_X + K]`).
+- [ ] R-5.3 F2–F4 (tabela de imports simbólica), R-6.6 (backend próprio),
+  loads indexados/jump-to-code — ver ROADMAP + `docs/adr/0001-ast-lexer-codegen.md`.

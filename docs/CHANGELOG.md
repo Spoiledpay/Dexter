@@ -2,6 +2,151 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — Dívidas D-3/D-15/D-16 (2026-10-16)
+
+### Corrigido
+
+- **D-15** (`src/io/console.asm`): `dex_console_write` reservava 32 B e
+  escrevia o 5º arg do `WriteFile` (`lpOverlapped=0`) em `[rsp+32]`, que
+  caía no fundo do frame (funcionava por sorte). Agora reserva 48 B —
+  o slot do 5º arg fica dentro do reservado.
+- **D-16** (`src/gen/asm_buffer.asm`): auditoria — o "prólogo duplicado"
+  descrito em 2026-10-11 **não existe**; nenhum caller passa `digits>16`.
+  Comentário de alinhamento enganoso ("FALHA!") corrigido; buffer do hex
+  movido de `[rbp-40]` (16 B) para `[rbp-72]` (32 B, acima da shadow),
+  cobrindo `digits<=32` sem tocar registradores salvos.
+
+### Adicionado
+
+- **D-3 fechada**: `tests/strpool_check.asm` + seção `[44]` — driver
+  dedicado do string pool (`strpool_new/add/get/free` + `asmbuf_len`):
+  offsets estáveis 0/6/11, `len==17`, leitura por offset com `dex_streq`,
+  borda `off>=len -> 0`. Golden `STRPOOL o=0 6 B len=11`.
+
+### Verificado
+
+- `tests\run_tests.bat` **327/327 OK** (`BAT_EXIT=0`); lenta **7/7**.
+
+## [Unreleased] — R-5.3 F1: imports nativos no `-m bin -native` (2026-10-16)
+
+### Adicionado
+
+- R-5.3 F1: em `-m bin -native` (x64), o walker deixa de mandar `IMPORT`
+  para `db` e emite `call|jmp [rel __imp_X + K]`. Os labels `__imp_X:`
+  passam a ser injetados nos slots da IAT pelo caminho de dados do bin
+  (novo `.gb_db_slots` em `src/gen/rebuild.asm`, fatias byte-exatas via
+  `dex_emit_data` + `dex_emit_imp_label`).
+- **Correção de delta K** (obrigatória em `-f bin`): como os labels valem
+  file-offset, a ref RIP-relativa entre seções precisa de
+  `K = iat_rva − off(slot) − (vaddr_code − raw_code)`; `K==0` (mesma seção)
+  emite o nome puro. `extern dex_rva_to_offset` adicionado a `rebuild.asm`.
+- `[36]`/`[37]`: gates que exigem `[rel __imp_` no `.asm` (o fallback `db`
+  é byte-idêntico, então sem o gate a regressão passaria silenciosa).
+
+### Verificado
+
+- hello: 3× `jmp [rel __imp_... + 0xe00]` + 3 labels `__imp_`; `nasm -f bin`
+  0 erros; `fc /b` 0 diffs; reconstruído imprime `hi` (exit 0).
+- var64: 16 refs nativas (`+ 0x6600`); `fc /b` 0 diffs.
+- `tests\run_tests.bat` **323/323 OK** (`BAT_EXIT=0`); lenta **7/7**
+  (gcc 2 MB + ld.lld 68 MB `-m bin -native` seguem byte-idênticos).
+- Pendente: R-5.3 F2–F4 (tabela simbólica: descritores/ILT/IAT/hint/nomes).
+
+## [Unreleased] — R-5.4 SEH F4: exceção real + fuzz de unwind (2026-10-16)
+
+### Adicionado
+
+- Corpus de **exceção real** `tests/exc.exe` (fonte `tests/exc_cpp.cpp`,
+  MinGW-w64 `g++ -O1`): C++ com `throw`/`catch` em recursão não-tail
+  (6 frames com destrutor) → `.pdata` com 117 `RUNTIME_FUNCTION` e handlers
+  `__CxxFrameHandler3` reais (flags `EHANDLER`/`UHANDLER`).
+- Seção `[43]` (6 checks): `-m bin -native` byte-idêntico + **o
+  reconstruído roda o throw/catch (exit 42)** — prova de que o unwind
+  simbólico (F3) é funcional, não só fiel; `dd label_` presente no `.asm`;
+  fuzz de `.pdata`/`.xdata` em dois modos.
+- `tests/fuzz_pe.py`: operadores F4 que miram o encadeamento SEH
+  (`--input tests/exc.exe`): EXCEPTION_DIRECTORY, flips em `.pdata`/`.xdata`
+  e ponteiro `UnwindData` corrompido; flag `--bin-native` para exercitar o
+  emissor simbólico (não só o loader).
+
+### Verificado
+
+- `tests\run_tests.bat` **320/320 OK** (base 314 + `[43]`).
+- Fuzz `tests/exc.exe`: **300** casos (seed 42, win64) + **300** casos
+  (seed 7, `-m bin -native`) → 0 crashes / 0 hangs (só saídas 0-3/5).
+- `tests\exc.exe` win64 `-native -r` = **D-19** (link funde seções;
+  Import Directory cego → `0xC000007B`); documentado em `PE_NOTES §11`.
+  O caminho fiel é `-m bin` (byte-idêntico + comportamento).
+
+## [Unreleased] — R-5.4 SEH F1: parser .pdata/.xdata (2026-10-15)
+
+### Adicionado
+
+- `src/pe/pe_unwind.asm` (R-5.4 SEH/unwind, fatia 1): decodifica as
+  estruturas de exceção x64 — `.pdata` (`RUNTIME_FUNCTION`, 3×u32) e
+  `.xdata` (`UNWIND_INFO` completo: versão/flags/prolog/frame/unwind codes
+  + `CHAININFO`/`EHANDLER`/`UHANDLER`) com validação de limites contra o
+  arquivo; `dex_unwind_count`/`dex_unwind_rf`/`dex_unwind_info`.
+- `tests/unwind_check.asm` + seção `[40]`: driver com `PeImage`/seções/corpo
+  craftados em memória (sem I/O), 2 `RUNTIME_FUNCTION` + 2 `UNWIND_INFO`
+  (um simples, um com handler) + casos de borda (índice/rva fora).
+
+### Verificado
+
+- `tests\run_tests.bat` **303/303 OK** (base 299 + `[40]`).
+- Sem tocar emissão ainda (F2/F3 pendentes): nenhum byte de saída mudou.
+
+## [Unreleased] — R-5.4 SEH F2: emissão simbólica win64 (2026-10-15)
+
+### Adicionado
+
+- `rebuild.asm .emit_pdata_sec` / `.emit_xdata_sec` (F2): no caminho
+  **win64**, `.pdata`/`.xdata` deixam de ser cópia crua e passam a ser
+  reemitidas **simbolicamente**: cada `RUNTIME_FUNCTION` vira
+  `dd label_<VA> wrt ..imagebase, ...` (reloc `ADDR32NB`) e cada
+  `UNWIND_INFO` ganha `label_<VA>:` + bytes do header/unwind codes (`db`)
+  + os campos RVA (handler/`chained`) como `dd label wrt ..imagebase`.
+  O `link.exe` recalcula as RVAs e o EXCEPTION_DIRECTORY mesmo
+  reordenando seções — ataca o D-19. Entradas de `.pdata` nulas (padding)
+  são puladas (o link rejeita RUNTIME_FUNCTION zerada: LNK1223) e o
+  linker dimensiona a seção pelo conteúdo.
+- `tests/pe_exc_dir.py` (valida EXCEPTION_DIRECTORY: rva/size != 0 e
+  `size % 12 == 0`) + seção `[41]` (7 checks).
+
+### Verificado
+
+- var64 win64 `-native -r`: link OK, `.pdata` 118 entradas, EXC dir
+  válido (`rva=0xD000 size=0x588`) com RVAs recalculadas pelo linker.
+- `tests\run_tests.bat` **310/310 OK** (base 303 + `[41]`). A emissão
+  `-m bin` não foi tocada (F3 pendente) → byte-idêntico intacto.
+
+## [Unreleased] — R-5.4 SEH F3: emissão simbólica e byte-idêntica em `-m bin` (2026-10-15)
+
+### Adicionado
+
+- F3: no caminho **`-m bin -native`**, `.pdata`/`.xdata` também saem
+  **simbólicas**. Em `-f bin` os labels valem file-offset, então a RVA
+  vira a **expressão constante** `dd label_<VA> + C`, com
+  `C = vaddr − raw_ptr` da seção do alvo (`.pd_field` resolve a seção) —
+  somando 0 byte de diferença. `.xdata` reusa o emissor de F2.
+- `.emit_xdata_sec` reescrito com **bitmap** de inícios de `UNWIND_INFO`
+  (`dex_malloc` zerado): os unwind RVAs da `.pdata` **não são monotônicos**
+  (gcc), então o cursor antigo perdia entradas; agora marca todos os
+  inícios da `.pdata`, **propaga alvos `chained`** (até 8 passadas) e emite
+  em ordem de offset (gaps em `db` de uma vez). OOM/sem `.pdata` → `.xdata`
+  crua (direção segura).
+- `.emit_pdata_sec`: em bin, entradas nulas saem `dd 0, 0, 0` (byte-fiel)
+  e a **cauda** (`raw_size` não múltiplo de 12, ex.: gcc) sai `db`.
+- `[42]` (4 checks: `.pdata` bin simbólica + `nasm -f bin` +
+  `fc /b` 0 diffs).
+
+### Verificado
+
+- gcc 15.2.0 `-m bin -native` → `nasm -f bin` → `fc /b` **0 diffs** com
+  `.pdata`/`.xdata` simbólicas; idem ld.lld 68 MB e todo o corpus.
+- `tests\run_tests.bat` **314/314 OK** (base 310 + `[42]`);
+  `tests\run_slow.bat` **7/7 OK**. Bytes de saída inalterados.
+
 ## [Unreleased] — R-2.7: VEX/EVEX/x87/3DNow! rotulados (2026-10-15)
 
 ### Adicionado
@@ -25,6 +170,10 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
   só `F_MODRM` (perdia o byte-sufixo). Agora `F_MODRM|F_I8`.
 - `semantics` recusa VEX/EVEX no caminho nativo (`Insn.enc != 0` → `db`),
   evitando emissão nativa falsa (ex.: VEX `0F 77` cairia em `emms`).
+- Debug vazado em `-m bin -native`: o ramo `.collect_syms`/`.cs_sec` de
+  `rebuild.asm` imprimia `[cs] sec=N n=M` em stdout **mesmo com `-q`**
+  (strings `s_csdbg`/`s_csdbg2` + 3 externs de console). Removido; `-q`
+  volta a ser silencioso (0 bytes em stdout).
 
 ### Verificado
 

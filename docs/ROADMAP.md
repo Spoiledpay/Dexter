@@ -93,8 +93,18 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   `nasm -f bin` = **byte-idêntico** (hello 2560 B e var64 91872 B:
   `fc /b` igual + comportamento igual)
 - [x] R-5.2 round-trip testado: win64/hello (`hi`, exit 0) e bin/hello+var64
-- [ ] R-5.3 `-f bin` com import table REGENERADA (hoje: copiada — suficiente
-  e fiel; regenerar só se preciso)
+- [~] R-5.3 `-f bin` com import table REGENERADA (hoje: copiada — suficiente
+  e fiel; regenerar só se preciso). **F1 FECHADA** (1.2.341): em
+  `-m bin -native` os imports deixam de cair em `db` — o walker emite
+  `call|jmp [rel __imp_X + K]` e o caminho de dados do bin injeta
+  `__imp_X:` nos slots da IAT (`.gb_db_slots`). **K é a correção de delta
+  obrigatória**: em `-f bin` os labels valem FILE-OFFSET, então uma
+  referência RIP-relativa entre seções sai com `disp32` errado por
+  `K = iat_rva − off(slot) − (vaddr_code − raw_code)` (hello/var64:
+  0xE00/0x6600). Prova: hello/var64 (e gcc 2 MB + ld.lld 68 MB na lenta)
+  `fc /b` 0 diffs **com** `[rel __imp_` no `.asm`; `[36]`/`[37]` travam o
+  gate (db silencioso seria byte-idêntico e passaria). Falta **F2–F4**
+  (descritores/ILT/IAT/hint-name/nomes simbólicos).
 - [ ] R-5.4 strings em code-flow, jump tables, SEH/unwind reemitido,
   fuzzy corpus expandido, `tests\fuzz_pe.py`
   (PARCIAL 1.2.250, 3b: pré-scan `.collect_strs` insere starts de runs +
@@ -103,10 +113,37 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   RESTA: jump-to-code (alvos), loads indexados `[rbx+n]`, `.str_run`
   com `\r\n`; 1ª fatia 1.2.257: base rotulada via R + corpus
   `jtable.asm` + `[27]` + fix `jmp/call r64` sem REX (`.l1_ffmem`))
+- [x] R-5.4 SEH/unwind reemitido (F1–F4 FECHADAS): **F1** (1.2.329) —
+  parser `src/pe/pe_unwind.asm` (`dex_unwind_count`/`dex_unwind_rf`/
+  `dex_unwind_info`): decodifica `RUNTIME_FUNCTION` (.pdata) e
+  `UNWIND_INFO` completo (.xdata) com validação de limites; driver
+  `tests/unwind_check.asm` + `[40]`. **F2 FECHADA** (1.2.33x) — emissão
+  win64 SIMBÓLICA (`rebuild.asm .emit_pdata_sec`/`.emit_xdata_sec`):
+  `.pdata` vira `dd label_<VA> wrt ..imagebase` e `.xdata` reconstrói
+  cada `UNWIND_INFO` (label por info + handler/chained como `dd label
+  wrt ..imagebase`); o linker recalcula as RVAs e o EXCEPTION_DIRECTORY
+  (ataca D-19). `[41]` (7 checks: seções simbólicas + nasm + link +
+  EXC dir válido). **F3 FECHADA** (1.2.33x) — emissão bin SIMBÓLICA e
+  **byte-idêntica**: RVA em `-f bin` vira `dd label_<VA> + C` (C =
+  `vaddr − raw_ptr` da seção do alvo; expressão constante); `.xdata`
+  usa **bitmap** de inícios (os unwind RVAs da `.pdata` NÃO são
+  monotônicos) + propagação de `chained`; cauda não-múltipla-de-12 da
+  `.pdata` sai `db`. `[42]` (4 checks). Gate: `fc /b` 0 diffs em todo o
+  corpus + gcc (2 MB) + ld.lld (68 MB) e comportamento. **F4 FECHADA**
+  (1.2.338, `[43]` 6 checks): corpus de **exceção real** `tests/exc.exe`
+  (`tests/exc_cpp.cpp`, C++ `throw`/`catch`; 117 `RUNTIME_FUNCTION` com
+  handler `__CxxFrameHandler3`) — `-m bin -native` byte-idêntico **e** o
+  reconstruído roda o throw/catch (**exit 42**), provando que a
+  `.pdata`/`.xdata` simbólica é funcional, não só fiel. Modo win64 do
+  fixture segue **D-19** (`0xC000007B`: o link funde 18→16 seções e o
+  Import Directory cego aponta p/ `.bss` — `PE_NOTES §11`).
 - [x] R-5.4-fuzz `tests\fuzz_pe.py` mínimo (1.2.253, determinístico por
   seed: flips + miradas em MZ/lfanew/seções/imports + truncamento;
   mutante nunca executado; passa = saída em {0,1,2,3,5}; `[22]` com
-  20 casos seed 7; 1 hang real achado (imports, D-8) e corrigido)
+  20 casos seed 7; 1 hang real achado (imports, D-8) e corrigido;
+  **F4** amplia p/ `.pdata`/`.xdata`: ops EXC dir / flip pdata / flip xdata
+  / `UnwindData` corrompido + flag `--bin-native`; 300 (win64) + 300
+  (bin-native) casos em `tests/exc.exe` sem crash/hang)
 
 ## Fase 6 — AST / Lexer / Geração de código nativo (nova, incremental `[ ]`)
 
@@ -211,8 +248,6 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `[16]` na suíte (texto/json/inspect-only/`imports_count`=14 no
   var64). Limite honesto: imports por ordinal (`func` vazio) sem
   cobertura no corpus atual.
-- [ ] R-7.2 `-func/-xrefs/-trace` (sobre `target_va`, `truncated:true`
-  honesto)
 - [x] R-7.2 `-func` (`src/diag/func.asm`, linear-sweep até ret/jmp/
   inválido/fim, sem CFG) + `-xrefs` (`src/diag/xref.asm`: call/jmp/
   branch/data, cap 256) + `-trace` (`src/diag/trace.asm`: first-call
@@ -233,9 +268,7 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   2 corrompidos, inspect-only) + fuzz manual (subdir/data/nome:
   só 3 ou saída honesta, nunca crash/hang).
 - [x] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout;
-  FECHADO 1.2.245, `[19]` na suíte; linhas antigas abaixo mantidas p/
-  histórico)
-- [ ] R-7.4 `-snapshot/-compare` (hash FNV-1a + size + layout)
+  FECHADO 1.2.245, `[19]` na suíte)
 - [x] R-7.5 `--doctor` (nasm/link/kernel32/versão; FECHADO 1.2.248:
   `src/diag/doctor.asm`, `dex_doctor(cfg,img) → 0`, inspect-only,
   `-q` não suprime, existência via open (`ok`/`missing` honesto),
@@ -289,9 +322,12 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `.ptr_tgt_ok` aceita `off<vsize`; soma `resb`==vsize, 100+ refs
   simbólicas no var64, monta 0 erros; `[35]` trava). Comportamento em
   PE grande pendente de layout (D-19 → R-8.2); caminho fiel `-m bin`.
-- D-3 `symtab`/`strpool`/`labels-imp` implementados e linkados mas sem uso
-  no generate atual (biblioteca p/ R-3.3/R-4.5; cobertos por build, sem teste
-  dedicado — adicionar teste unitário).
+- D-3 `symtab`/`strpool` FECHADOS com testes dedicados: `symtab`
+  (`tests/sym_check.asm` + `[15]`, golden `SYM n=5`) e `strpool`/
+  `asm_buffer` (`tests/strpool_check.asm` + `[44]`, golden
+  `STRPOOL o=0 6 B len=11`: offsets estáveis 0/6/11, len 17, `get` por
+  offset com `dex_streq`, borda `off>=len -> 0`). `labels-imp` segue
+  coberto indiretamente pelo `[13]`/`[14]` (imp_check).
 - D-4 I/O posicional removido de vez (2026-10-12): externs mortos
   `dex_file_read_at`/`dex_file_write_at` extirpados de `rebuild.asm`
   (declarados, nunca chamados); `mmap_rw` é o desenho.
@@ -379,13 +415,17 @@ no corpus simples; PEs complexos continuam em `-m bin`.
    de escrita NUNCA em `[RSP-8]`; frame atual 8 pushes + `sub rsp, 328`
    = 392 ⇒ `[rbp-384]=[RSP]` exato; leaf-call sem shadow só toca
    `[RSP-8]` (seguro); ao criar buffer local, provar `[base]≥[RSP]`.
-- D-15 `dex_console_write` com 5º arg (`lpOverlapped`) em `[rsp+32]`
-   em vez de `[rsp]` (2026-10-11, latente: funciona por lixo benigno).
-- D-16 `asmbuf_append_u64_hex` com prólogo duplicado aparente
-   (outer+inner, label `dex_append_u64_hex_tmp:` no meio) e epílogo
-   único (2026-10-11, latente: funciona em todos os testes — hex
-   correto, RBP/RSP íntegros no chamador; NÃO mexer sem prova +
-   suite; auditar com `.lst` antes de simplificar).
+- D-15 FECHADA (1.2.341): `dex_console_write` reservava só 32 B
+   (`sub rsp,32`) e escrevia o 5º arg (`lpOverlapped=0`) em `[rsp+32]`, que
+   caía no fundo do frame (benigno por sorte). Agora `sub rsp,48`/
+   `add rsp,48` — o slot do 5º arg fica **dentro** do reservado (32 shadow
+   + 8 arg + 8 alinhamento).
+- D-16 FECHADA (1.2.341, auditoria): o "prólogo duplicado" descrito em
+   2026-10-11 **não existe** no código atual (`asmbuf_append_u64_hex` com
+   prólogo/epílogo únicos; nenhum caller passa `digits>16`). Comentário de
+   alinhamento enganoso ("FALHA!") corrigido; buffer do hex movido p/
+   `[rbp-72]` (32 B, acima da shadow) => cobre `digits<=32` sem tocar os
+   registradores salvos.
 - D-17 Regra do pré-scan unificado (2026-10-12, 3b `.collect_strs`):
    pré-scan que alimenta g_symR DEVE espelhar o conjunto emitido
    (skip `.reloc`, filtro `-s`, trim-wide pdata/xdata) sempre na direção

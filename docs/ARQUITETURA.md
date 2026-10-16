@@ -104,6 +104,16 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
 7. **Falhas de alocação nunca mascaradas; sem `TODO`/stub com sucesso falso.**
    Desconhecido no decoder = `db` real (preserva bytes), não erro falso.
 8. **`-start`/`-end` limitam desassemblagem (código); dados saem inteiros.**
+9. **Imports nativos em `-f bin` com correção de delta (R-5.3 F1).** Em
+   `-m bin -native` o walker emite `call|jmp [rel __imp_X + K]` e o
+   caminho de dados do bin injeta `__imp_X:` nos slots da IAT
+   (`.gb_db_slots`). Em `-f bin` cada label vale **file-offset** (não RVA),
+   então uma referência entre seções exige
+   `K = iat_rva − off(slot) − (vaddr_code − raw_code)`; sem K o `disp32`
+   sairia deslocado (e o bin continuaria montando, mas byte-diferente).
+   `K==0` (mesma seção) emite o nome puro. Gates `[36]`/`[37]` exigem
+   `[rel __imp_` no `.asm` (o fallback `db` é byte-idêntico e passaria em
+   silêncio). R-5.3 F2–F4 (tabela simbólica) pendentes.
 
 ## Mapa de arquivos
 
@@ -116,7 +126,8 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
   (open/open_rw/write_all/write_cstr), `mmap.asm` (mmap_read/rw/unmap),
   `console.asm` (WriteFile stdout/stderr, hex/dec).
 - `src/pe/`: `pe_load.asm`, `pe_sections.asm`, `rva.asm`, `pe_imports.asm`,
-  `pe_exports.asm`, `pe_relocs.asm`.
+  `pe_exports.asm`, `pe_relocs.asm`, `pe_unwind.asm` (SEH: `.pdata`/
+  `.xdata` → RUNTIME_FUNCTION/UNWIND_INFO, R-5.4 F1).
 - `src/disasm/`: `decoder.asm` (LDE + VEX `C4/C5` + EVEX `62`: prefixo em
   `npre`, mapa 0F/0F38/0F3A, `Insn.enc`), `prefixes.asm`, `modrm.asm`,
   `opcode_tbl.asm` (flags 1/2/38/3A + mnemônicos), `operands.asm`,
