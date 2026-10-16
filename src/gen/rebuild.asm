@@ -45,6 +45,8 @@ extern dex_emit_insn
 extern dex_emit_native
 extern dex_emit_data
 extern dex_emit_label
+extern dex_label_emit_va
+extern dex_unwind_info
 extern symtab_new
 extern symtab_lookup_va
 extern symtab_insert_va
@@ -57,11 +59,9 @@ extern dex_mmap_rw
 extern dex_unmap
 extern dex_close
 extern dex_pe_find_section
-extern dex_console_print_cstr
+extern dex_rva_to_offset
 extern dex_console_print_err
 extern dex_console_print_u64hex
-extern dex_console_print_u64dec
-extern dex_console_newline
 extern dex_parse_asm
 extern dex_ast_dump
 extern dex_ast_free_unit
@@ -87,6 +87,13 @@ s_code  db " code", 13, 10, 0
 s_data  db " data", 13, 10, 0
 s_rdata db " rdata", 13, 10, 0
 s_crlf2 db 13, 10, 0
+s_dd4    db "    dd ", 0
+s_db4    db "    db ", 0
+s_wrtim  db " wrt ..imagebase", 0
+s_comsp2 db ", ", 0
+s_plus0x db " + 0x", 0
+s_dd000  db "    dd 0, 0, 0", 13, 10, 0
+s_crlf4  db 13, 10, "    db ", 0
 s_pdata  db ".pdata", 0
 s_xdata  db ".xdata", 0
 s_nop    db "    nop", 13, 10, 0
@@ -117,8 +124,6 @@ s_reloc db ".reloc", 0
 s_lab    db "label_", 0
 s_uscore db "_", 0
 s_dotname db ".", 0
-s_csdbg  db "[cs] sec=", 0
-s_csdbg2 db " n=", 0
 s_db_pre db '    db "', 0
 s_q34    db '", 34, "', 0
 s_q0     db '", 0', 13, 10, 0
@@ -157,6 +162,10 @@ g_ir:      resb 24                 ; DexIR scratch do walker (R-6.4)
 g_rarr:    resq 1                  ; VAs RIP->dados ordenadas (R-6.4 2b; -native)
 g_rn:      resq 1                  ; count (qword)
 g_chunkimg: resq 1                 ; img p/ .wds_chunks (evita 7º arg pilha)
+g_ui_tmp:   resb 32                ; UnwindInfo scratch (F2 walk .xdata)
+g_unwind_bin: resb 1               ; F3: 1 = modo bin (dd label + C), 0 = win64 (wrt)
+g_pad_ub:   resb 7
+g_bin_img:  resq 1                 ; F3: img p/ .pd_field achar a seção do alvo
 g_spancfg: resq 1                  ; cfg p/ validador de alvo dq (NO_RELOCS)
 g_spanflags: resq 1                ; bit0 nodq: span sai db puro (.reloc: verbatim)
 
@@ -410,6 +419,21 @@ dex_generate_asm:
     jnz .oom_free
     jmp .next_sect
 .walk_data:
+    ; F2 (R-5.4): .pdata/.xdata = emissao simbolica (win64; link recalcula RVA)
+    lea rcx, [rel s_pdata]
+    lea rdx, [r12+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .do_pdata
+    lea rcx, [rel s_xdata]
+    lea rdx, [r12+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .do_xdata
     mov rcx, rbx
     mov rdx, r15
     mov r8, r14
@@ -419,6 +443,31 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .oom_free
+    jmp .next_sect
+.do_pdata:
+    mov byte [rel g_unwind_bin], 0
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8, r14
+    mov r9, r12
+    sub rsp, 32
+    call .emit_pdata_sec
+    add rsp, 32
+    test eax, eax
+    jnz .oom_free
+    jmp .next_sect
+.do_xdata:
+    mov byte [rel g_unwind_bin], 0
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8, r14
+    mov r9, r12
+    sub rsp, 32
+    call .emit_xdata_sec
+    add rsp, 32
+    test eax, eax
+    jnz .oom_free
+    jmp .next_sect
 .next_sect:
     inc r13d
     jmp .sect
@@ -767,29 +816,6 @@ dex_generate_asm:
     mov edi, [rbp-60]          ; recarrega (rdi morre em .cs_walk/inner)
     cmp r13d, edi
     jae .cs_ok
-    mov [rbp-120], r13d        ; dbg: i
-    mov [rbp-112], edi         ; dbg: count
-    lea rcx, [rel s_csdbg]
-    sub rsp, 32
-    call dex_console_print_cstr
-    add rsp, 32
-    mov ecx, [rbp-120]
-    sub rsp, 32
-    call dex_console_print_u64dec
-    add rsp, 32
-    lea rcx, [rel s_csdbg2]
-    sub rsp, 32
-    call dex_console_print_cstr
-    add rsp, 32
-    mov ecx, [rbp-112]
-    sub rsp, 32
-    call dex_console_print_u64dec
-    add rsp, 32
-    sub rsp, 32
-    call dex_console_newline
-    add rsp, 32
-    mov edi, [rbp-112]
-    mov r13d, [rbp-120]
     mov eax, r13d
     imul eax, SIZEOF_PE_SECTION
     mov rsi, [r15+PeImage.sections_ptr]
@@ -1332,10 +1358,6 @@ dex_generate_asm:
     xor r9d, r9d
     cmp dword [rel g_ir+DexIR.tkind], IRT_IMPORT
     jne .wcs_cg
-    ; R-8.2 f1: em bin, __imp_ não existe (slots db-verbatim) → db.
-    mov eax, [rbx+DexConfig.mode]
-    cmp eax, DEX_MODE_BIN
-    je .wcs_emit_db
     mov rax, [rel g_ir+DexIR.imp]
     test rax, rax
     jz .wcs_cg
@@ -1349,6 +1371,81 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .wcs_emit_db             ; nome impossível: db honesto
+    ; R-5.3 F1: em -f bin os labels valem FILE-OFFSET, então o disp32
+    ; RIP-relativo precisa da correção de delta entre a seção do slot
+    ; (IAT) e a do código: K = iat_rva - off(slot) - (vaddr_code-raw_code).
+    ; Anexa " + 0xK" (ou " - 0xK") ao nome; win64 não corrige (o linker
+    ; resolve os labels na mesma imagem). Ver docs/ARQUITETURA.md.
+    mov eax, [rbx+DexConfig.mode]
+    cmp eax, DEX_MODE_BIN
+    jne .wcs_imp_name
+    mov rax, [rel g_ir+DexIR.imp]
+    mov edx, [rax+ImportEntry.iat_rva]
+    mov [rbp-112], edx           ; iat_rva
+    mov rcx, r15
+    sub rsp, 32
+    call dex_rva_to_offset
+    add rsp, 32
+    test rax, rax
+    jz .wcs_emit_db              ; slot não mapeado: db honesto
+    mov ecx, [rbp-112]
+    sub ecx, eax                 ; iat_rva - off_t
+    mov edx, [r12+PeSection.vaddr]
+    sub edx, [r12+PeSection.raw_ptr] ; D_code = vaddr-raw do código
+    sub ecx, edx                 ; K (sinal)
+    test ecx, ecx
+    jz .wcs_imp_name             ; K==0: nome puro
+    lea r10, [rel g_impname]
+.wcs_k_find:
+    cmp byte [r10], 0
+    je .wcs_k_found
+    inc r10
+    jmp .wcs_k_find
+.wcs_k_found:
+    mov byte [r10], ' '
+    inc r10
+    test ecx, ecx
+    jns .wcs_k_pos
+    mov byte [r10], '-'
+    neg ecx
+    jmp .wcs_k_sign
+.wcs_k_pos:
+    mov byte [r10], '+'
+.wcs_k_sign:
+    mov byte [r10+1], ' '
+    mov byte [r10+2], '0'
+    mov byte [r10+3], 'x'
+    add r10, 4
+    mov r11d, ecx                ; K positivo
+    xor r9d, r9d                 ; started (0 = sem dígito ainda)
+    mov r8d, 28
+.wcs_k_hx:
+    mov eax, r11d
+    mov ecx, r8d
+    shr eax, cl
+    and eax, 15
+    test r9d, r9d
+    jnz .wcs_k_emit
+    test eax, eax
+    jnz .wcs_k_start
+    test r8d, r8d
+    jz .wcs_k_start             ; último dígito (0) sempre sai
+    jmp .wcs_k_next
+.wcs_k_start:
+    mov r9d, 1
+.wcs_k_emit:
+    add eax, 48
+    cmp eax, 57
+    jbe .wcs_k_st
+    add eax, 39
+.wcs_k_st:
+    mov [r10], al
+    inc r10
+.wcs_k_next:
+    sub r8d, 4
+    jns .wcs_k_hx
+    mov byte [r10], 0
+.wcs_imp_name:
     lea r9, [rel g_impname]
 .wcs_cg:
     ; tkind DATA só vira nativo com o alvo em R (label garantido pela
@@ -1842,6 +1939,740 @@ dex_generate_asm:
     pop r12
     pop rsi
     pop rdi
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .emit_pdata_sec — rcx=cfg, rdx=img, r8=buf, r9=sec -> eax=0 ok | 1 oom.
+; R-5.4 F2: reemite .pdata (win64) com RVA simbólica: cada RUNTIME_FUNCTION
+; vira `dd label_<VA> wrt ..imagebase, ...`; o link recalcula as RVAs (ADDR32NB)
+; mesmo reordenando seções (ataca D-19). Entradas de padding (begin==0) saem
+; numéricas `dd 0, 0, 0` (byte-preserva). Nunca emite byte solto: a saída é
+; sempre a mesma tabela, só simbólica.
+; Frame: rbp + 5 pushes (40) + sub 48 = 88 ≡ 0 -> alinhado.
+; Slots: [rbp-56]=count [rbp-64]=i [rbp-72]=beginVA [rbp-80]=endVA [rbp-88]=unwindVA.
+;-----------------------------------------------------------------------------
+.emit_pdata_sec:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 48
+    mov r12, rdx                 ; img
+    mov r13, r8                  ; buf
+    mov r14, r9                  ; sec
+    mov rax, [r12+PeImage.file_buffer]
+    mov ecx, [r14+PeSection.raw_ptr]
+    add rax, rcx
+    mov r15, rax                 ; p (bytes crus)
+    mov eax, [r14+PeSection.raw_size]
+    xor edx, edx
+    mov ecx, SIZEOF_RUNTIME_FUNCTION
+    div ecx
+    mov [rbp-56], eax            ; count
+    mov dword [rbp-64], 0        ; i
+.pd_loop:
+    mov eax, [rbp-64]
+    cmp eax, [rbp-56]
+    jae .pd_tail
+    imul eax, SIZEOF_RUNTIME_FUNCTION
+    lea r10, [r15+rax]           ; rf
+    mov ecx, [r10]
+    test ecx, ecx
+    jz .pd_pad
+    mov rdx, [r12+PeImage.image_base]
+    mov eax, [r10]
+    add rax, rdx
+    mov [rbp-72], rax            ; beginVA
+    mov eax, [r10+4]
+    add rax, rdx
+    mov [rbp-80], rax            ; endVA
+    mov eax, [r10+8]
+    add rax, rdx
+    mov [rbp-88], rax            ; unwindVA
+    lea rdx, [rel s_dd4]
+    mov rcx, r13
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .pd_fail
+    mov rcx, r13
+    mov rdx, [rbp-72]
+    call .pd_field
+    test eax, eax
+    jnz .pd_fail
+    lea rdx, [rel s_comsp2]
+    mov rcx, r13
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .pd_fail
+    mov rcx, r13
+    mov rdx, [rbp-80]
+    call .pd_field
+    test eax, eax
+    jnz .pd_fail
+    lea rdx, [rel s_comsp2]
+    mov rcx, r13
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .pd_fail
+    mov rcx, r13
+    mov rdx, [rbp-88]
+    call .pd_field
+    test eax, eax
+    jnz .pd_fail
+    lea rdx, [rel s_crlf2]
+    mov rcx, r13
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .pd_fail
+    jmp .pd_next
+.pd_pad:
+    ; win64: NÃO emitir (link rejeita RUNTIME_FUNCTION zerada — LNK1223).
+    ; bin: emitir "dd 0, 0, 0" (byte-idêntico ao original).
+    cmp byte [rel g_unwind_bin], 0
+    je .pd_next
+    lea rdx, [rel s_dd000]
+    mov rcx, r13
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .pd_fail
+    jmp .pd_next
+.pd_next:
+    inc dword [rbp-64]
+    jmp .pd_loop
+.pd_tail:
+    ; bin: raw_size pode não ser múltiplo de 12 — emite a cauda como db
+    ; (preserva o layout byte-a-byte). win64: irrelevante (link dimensiona).
+    cmp byte [rel g_unwind_bin], 0
+    je .pd_ok
+    mov eax, [rbp-56]
+    imul eax, SIZEOF_RUNTIME_FUNCTION
+    mov ecx, [r14+PeSection.raw_size]
+    sub ecx, eax                 ; tail
+    jbe .pd_ok
+    mov r8d, ecx
+    mov eax, [rbp-56]
+    imul eax, SIZEOF_RUNTIME_FUNCTION
+    lea rdx, [r15+rax]
+    mov rcx, r13
+    sub rsp, 32
+    call .xd_db
+    add rsp, 32
+    test eax, eax
+    jnz .pd_fail
+.pd_ok:
+    xor eax, eax
+    add rsp, 48
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.pd_fail:
+    mov eax, 1
+    add rsp, 48
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .pd_field — rcx=buf, rdx=va -> "label_<va> wrt ..imagebase". rax=0/1.
+; Frame: rbp + 2 pushes (16) + sub 32 = 48 ≡ 0.
+;-----------------------------------------------------------------------------
+.pd_field:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    sub rsp, 32
+    mov rbx, rcx
+    mov r12, rdx
+    mov rcx, rbx
+    mov rdx, r12
+    sub rsp, 32
+    call dex_label_emit_va
+    add rsp, 32
+    test eax, eax
+    jnz .pf_fail
+    cmp byte [rel g_unwind_bin], 0
+    jne .pf_bin
+    lea rdx, [rel s_wrtim]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .pf_fail
+    jmp .pf_done
+.pf_bin:
+    ; F3: " + 0x<C>", C = vaddr - raw_ptr da seção que contém o alvo (rva).
+    mov rax, r12
+    mov rdx, [rel g_bin_img]
+    test rdx, rdx
+    jz .pf_fail
+    sub rax, [rdx+PeImage.image_base]   ; rva
+    mov rcx, [rdx+PeImage.sections_ptr]
+    mov r8d, [rdx+PeImage.num_sections]
+    mov [rbp-40], r8d
+    xor r9d, r9d
+.pf_b_l:
+    cmp r9d, [rbp-40]
+    jae .pf_fail
+    mov edx, r9d
+    imul edx, SIZEOF_PE_SECTION
+    lea r10, [rcx+rdx]                  ; sec
+    mov edx, [r10+PeSection.vaddr]
+    cmp rax, rdx
+    jb .pf_b_n
+    mov r11d, [r10+PeSection.vsize]
+    mov edx, [r10+PeSection.raw_size]
+    cmp r11d, edx
+    jae .pf_b_sp
+    mov r11d, edx
+.pf_b_sp:
+    test r11d, r11d
+    jz .pf_b_n
+    mov edx, [r10+PeSection.vaddr]
+    mov r8, rax
+    sub r8d, edx                        ; delta = rva - vaddr
+    cmp r8d, r11d
+    jae .pf_b_n
+    mov r11d, [r10+PeSection.vaddr]
+    mov edx, [r10+PeSection.raw_ptr]
+    sub r11d, edx                       ; C = vaddr - raw_ptr
+    lea rdx, [rel s_plus0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .pf_fail
+    mov rcx, rbx
+    mov edx, r11d
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .pf_fail
+    jmp .pf_done
+.pf_b_n:
+    inc r9d
+    jmp .pf_b_l
+.pf_done:
+    xor eax, eax
+    add rsp, 32
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.pf_fail:
+    mov eax, 1
+    add rsp, 32
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .emit_xdata_sec — rcx=cfg, rdx=img, r8=buf, r9=sec -> eax=0 ok | 1 oom.
+; R-5.4 F2/F3: reemite .xdata. Marca NUM BITMAP todo offset de início de
+; UNWIND_INFO referenciado pela .pdata (os unwind RVAs NÃO são monotônicos) e
+; propaga alvos `chained`; emite em ordem de offset: label_<VA> + bytes do
+; header/unwind codes (db) + os campos RVA como `dd label...`. Bytes fora de
+; estrutura (padding/gaps) saem db de uma vez. OOM/sem .pdata -> .xdata crua.
+; Frame: rbp + 5 pushes (40) + sub 144 = 184 ≡ 0.
+; Slots: [rbp-48]raw [rbp-56]bm [rbp-64]pbytes [rbp-72]pcount [rbp-80]xvaddr
+;        [rbp-88]pi [rbp-96]cur [rbp-104]rvacnt [rbp-112]k [rbp-120]pass
+;        [rbp-124]changed [rbp-128]scan.
+;-----------------------------------------------------------------------------
+.emit_xdata_sec:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 144
+    mov r12, rdx                 ; img
+    mov r13, r8                  ; buf
+    mov r14, r9                  ; sec (.xdata)
+    mov rax, [r12+PeImage.file_buffer]
+    mov ecx, [r14+PeSection.raw_ptr]
+    add rax, rcx
+    mov r15, rax                 ; p (bytes .xdata)
+    mov eax, [r14+PeSection.raw_size]
+    mov [rbp-48], eax            ; raw_size
+    mov eax, [r14+PeSection.vaddr]
+    mov [rbp-80], eax            ; xvaddr
+    mov qword [rbp-56], 0        ; bm = NULL
+    ; ---- .pdata (fonte dos inícios) ----
+    mov rcx, r12
+    lea rdx, [rel s_pdata]
+    sub rsp, 32
+    call dex_pe_find_section
+    add rsp, 32
+    test rax, rax
+    jz .xd_rawall
+    mov rcx, rax
+    mov rax, [r12+PeImage.file_buffer]
+    mov edx, [rcx+PeSection.raw_ptr]
+    add rax, rdx
+    mov [rbp-64], rax            ; pbytes
+    mov eax, [rcx+PeSection.raw_size]
+    xor edx, edx
+    mov r8d, SIZEOF_RUNTIME_FUNCTION
+    div r8d
+    mov [rbp-72], eax            ; pcount
+    ; bitmap = (raw+7)/8 (dex_malloc zera)
+    mov eax, [rbp-48]
+    add eax, 7
+    shr eax, 3
+    test eax, eax
+    jz .xd_rawall
+    mov ecx, eax
+    sub rsp, 32
+    call dex_malloc
+    add rsp, 32
+    test rax, rax
+    jz .xd_rawall
+    mov [rbp-56], rax            ; bm
+    ; ---- marca infos da .pdata ----
+    mov dword [rbp-88], 0        ; pi
+.xd_mk:
+    mov eax, [rbp-88]
+    cmp eax, [rbp-72]
+    jae .xd_prop
+    imul eax, SIZEOF_RUNTIME_FUNCTION
+    mov rdx, [rbp-64]
+    lea r10, [rdx+rax]           ; rf
+    mov ecx, [r10]
+    test ecx, ecx
+    jz .xd_mk_n
+    mov eax, [r10+8]             ; unwind rva
+    mov ecx, [rbp-80]
+    cmp eax, ecx
+    jb .xd_mk_n
+    sub eax, ecx                 ; off
+    cmp eax, [rbp-48]
+    jae .xd_mk_n
+    call .xd_setbit
+.xd_mk_n:
+    inc dword [rbp-88]
+    jmp .xd_mk
+    ; ---- propaga alvos chained (até 8 passadas) ----
+.xd_prop:
+    mov dword [rbp-120], 0       ; pass
+.xd_pass:
+    mov dword [rbp-124], 0       ; changed
+    mov dword [rbp-128], 0       ; scan
+.xd_scn:
+    mov eax, [rbp-128]
+    cmp eax, [rbp-48]
+    jae .xd_pass_end
+    call .xd_getbit              ; eax=scan -> 1 se marcado
+    test eax, eax
+    jz .xd_scn_n
+    mov edx, [rbp-80]
+    add edx, [rbp-128]
+    mov rcx, r12
+    lea r8, [rel g_ui_tmp]
+    sub rsp, 32
+    call dex_unwind_info
+    add rsp, 32
+    test eax, eax
+    jnz .xd_scn_n
+    cmp dword [rel g_ui_tmp+UnwindInfo.rvacnt], 3
+    jne .xd_scn_n
+    mov eax, [rbp-128]
+    add eax, [rel g_ui_tmp+UnwindInfo.total]
+    sub eax, 4
+    lea r10, [r15+rax]
+    mov eax, [r10]               ; chained unwind rva
+    mov ecx, [rbp-80]
+    cmp eax, ecx
+    jb .xd_scn_n
+    sub eax, ecx                 ; toff
+    cmp eax, [rbp-48]
+    jae .xd_scn_n
+    call .xd_getbit
+    test eax, eax
+    jnz .xd_scn_n                ; já marcado
+    mov eax, [rbp-128]
+    add eax, [rel g_ui_tmp+UnwindInfo.total]
+    sub eax, 4
+    lea r10, [r15+rax]
+    mov eax, [r10]
+    sub eax, [rbp-80]            ; toff
+    call .xd_setbit
+    mov dword [rbp-124], 1
+.xd_scn_n:
+    inc dword [rbp-128]
+    jmp .xd_scn
+.xd_pass_end:
+    cmp dword [rbp-124], 0
+    je .xd_emit
+    inc dword [rbp-120]
+    cmp dword [rbp-120], 8
+    jae .xd_emit
+    jmp .xd_pass
+    ; ---- emissão em ordem de offset ----
+.xd_emit:
+    mov dword [rbp-96], 0        ; cur
+.xd_el:
+    mov eax, [rbp-96]
+    cmp eax, [rbp-48]
+    jae .xd_ok
+    call .xd_getbit
+    test eax, eax
+    jz .xd_egap
+    ; label_<VA>
+    mov rdx, [r12+PeImage.image_base]
+    mov eax, [rbp-80]
+    add eax, [rbp-96]
+    add rdx, rax
+    mov rcx, r13
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+    mov edx, [rbp-80]
+    add edx, [rbp-96]
+    mov rcx, r12
+    lea r8, [rel g_ui_tmp]
+    sub rsp, 32
+    call dex_unwind_info
+    add rsp, 32
+    test eax, eax
+    jnz .xd_ebad
+    mov ecx, [rel g_ui_tmp+UnwindInfo.total]
+    test ecx, ecx
+    jz .xd_ebad
+    mov eax, [rbp-96]
+    add eax, ecx
+    cmp eax, [rbp-48]
+    ja .xd_ebad
+    ; db header+codes = total - rvacnt*4
+    mov eax, [rel g_ui_tmp+UnwindInfo.rvacnt]
+    shl eax, 2
+    mov ecx, [rel g_ui_tmp+UnwindInfo.total]
+    sub ecx, eax
+    mov eax, [rbp-96]
+    lea rdx, [r15+rax]
+    mov r8d, ecx
+    mov rcx, r13
+    sub rsp, 32
+    call .xd_db
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+    ; campos RVA simbólicos
+    mov eax, [rel g_ui_tmp+UnwindInfo.rvacnt]
+    test eax, eax
+    jz .xd_eadv
+    mov [rbp-104], eax           ; rvacnt
+    mov dword [rbp-112], 0       ; k
+.xd_rva_l:
+    mov eax, [rbp-112]
+    cmp eax, [rbp-104]
+    jae .xd_rva_done
+    test eax, eax
+    jnz .xd_rva_sep
+    lea rdx, [rel s_dd4]
+    jmp .xd_rva_pre
+.xd_rva_sep:
+    lea rdx, [rel s_comsp2]
+.xd_rva_pre:
+    mov rcx, r13
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+    mov eax, [rbp-96]
+    add eax, [rel g_ui_tmp+UnwindInfo.total]
+    mov ecx, [rbp-104]
+    shl ecx, 2
+    sub eax, ecx
+    mov ecx, [rbp-112]
+    shl ecx, 2
+    add eax, ecx
+    lea r10, [r15+rax]
+    mov ecx, [r10]
+    mov rdx, [r12+PeImage.image_base]
+    add rdx, rcx                 ; VA do alvo
+    mov rcx, r13
+    call .pd_field
+    test eax, eax
+    jnz .xd_fail
+    inc dword [rbp-112]
+    jmp .xd_rva_l
+.xd_rva_done:
+    lea rdx, [rel s_crlf2]
+    mov rcx, r13
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+.xd_eadv:
+    mov eax, [rel g_ui_tmp+UnwindInfo.total]
+    add [rbp-96], eax
+    jmp .xd_el
+.xd_ebad:
+    ; marcado mas não decodificou: 1 byte db e avança (nunca trava)
+    mov eax, [rbp-96]
+    lea rdx, [r15+rax]
+    mov r8d, 1
+    mov rcx, r13
+    sub rsp, 32
+    call .xd_db
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+    inc dword [rbp-96]
+    jmp .xd_el
+.xd_egap:
+    ; gap: acha o próximo offset marcado (>= cur) e emite db [cur, next)
+    mov eax, [rbp-96]
+    mov [rbp-128], eax
+.xd_egap_s:
+    mov eax, [rbp-128]
+    cmp eax, [rbp-48]
+    jae .xd_egap_e
+    call .xd_getbit
+    test eax, eax
+    jnz .xd_egap_hit
+    inc dword [rbp-128]
+    jmp .xd_egap_s
+.xd_egap_hit:
+    mov eax, [rbp-128]
+    sub eax, [rbp-96]
+    mov r8d, eax
+    mov eax, [rbp-96]
+    lea rdx, [r15+rax]
+    mov rcx, r13
+    sub rsp, 32
+    call .xd_db
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+    mov eax, [rbp-128]
+    mov [rbp-96], eax
+    jmp .xd_el
+.xd_egap_e:
+    mov eax, [rbp-48]
+    sub eax, [rbp-96]
+    mov r8d, eax
+    mov eax, [rbp-96]
+    lea rdx, [r15+rax]
+    mov rcx, r13
+    sub rsp, 32
+    call .xd_db
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+    mov eax, [rbp-48]
+    mov [rbp-96], eax
+    jmp .xd_el
+.xd_rawall:
+    mov r8d, [rbp-48]
+    test r8d, r8d
+    jz .xd_ok
+    mov rdx, r15
+    mov rcx, r13
+    sub rsp, 32
+    call .xd_db
+    add rsp, 32
+    test eax, eax
+    jnz .xd_fail
+.xd_ok:
+    mov rcx, [rbp-56]
+    test rcx, rcx
+    jz .xd_ok2
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+.xd_ok2:
+    xor eax, eax
+    add rsp, 144
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.xd_fail:
+    mov rcx, [rbp-56]
+    test rcx, rcx
+    jz .xd_fail2
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+.xd_fail2:
+    mov eax, 1
+    add rsp, 144
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+; .xd_setbit — eax=offset -> seta bit em [rbp-56]. clobber rax,rcx,rdx,r8.
+.xd_setbit:
+    mov r8d, 1
+    mov ecx, eax
+    and ecx, 7
+    shl r8d, cl
+    mov ecx, eax
+    shr ecx, 3
+    mov rdx, [rbp-56]
+    or byte [rdx+rcx], r8b
+    ret
+
+; .xd_getbit — eax=offset -> eax=1 se marcado, 0 senão. clobber rax,rcx,rdx,r8.
+.xd_getbit:
+    mov ecx, eax
+    shr ecx, 3
+    mov rdx, [rbp-56]
+    movzx r8d, byte [rdx+rcx]
+    mov ecx, eax
+    and ecx, 7
+    mov eax, r8d
+    shr eax, cl
+    and eax, 1
+    ret
+
+;-----------------------------------------------------------------------------
+; .xd_db — rcx=buf, rdx=ptr, r8=len -> "    db 0x.., ..." (16/linha). rax=0/1.
+; Frame: rbp + 4 pushes (32) + sub 32 = 64 ≡ 0. Tmp hex em [rbp-40,-35].
+;-----------------------------------------------------------------------------
+.xd_db:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    sub rsp, 32
+    mov rbx, rcx
+    mov r12, rdx
+    mov r13, r8
+    test r13, r13
+    jz .xdd_ok
+    lea rdx, [rel s_db4]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .xdd_fail
+    xor r14d, r14d               ; i
+.xdd_l:
+    cmp r14, r13
+    jae .xdd_end
+    test r14, 15
+    jz .xdd_nosep
+    lea rdx, [rel s_comsp2]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .xdd_fail
+.xdd_nosep:
+    movzx eax, byte [r12+r14]
+    mov byte [rbp-40], '0'
+    mov byte [rbp-39], 'x'
+    mov ecx, eax
+    shr ecx, 4
+    cmp ecx, 9
+    jbe .xdd_h1
+    add ecx, 55
+    jmp .xdd_h2
+.xdd_h1:
+    add ecx, 48
+.xdd_h2:
+    mov [rbp-38], cl
+    and eax, 15
+    cmp eax, 9
+    jbe .xdd_l1
+    add eax, 55
+    jmp .xdd_l2
+.xdd_l1:
+    add eax, 48
+.xdd_l2:
+    mov [rbp-37], al
+    mov byte [rbp-36], 0
+    lea rdx, [rbp-40]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .xdd_fail
+    inc r14
+    mov rax, r14
+    and rax, 15
+    jnz .xdd_l
+    cmp r14, r13
+    jae .xdd_end
+    lea rdx, [rel s_crlf4]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .xdd_fail
+    jmp .xdd_l
+.xdd_end:
+    lea rdx, [rel s_crlf2]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .xdd_fail
+.xdd_ok:
+    xor eax, eax
+    add rsp, 32
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.xdd_fail:
+    mov eax, 1
+    add rsp, 32
+    pop r14
+    pop r13
+    pop r12
     pop rbx
     pop rbp
     ret
@@ -3949,7 +4780,8 @@ dex_generate_bin:
     test eax, IMAGE_SCN_CNT_CODE
     jnz .gb_nb_code
     test eax, IMAGE_SCN_MEM_EXECUTE
-    jz .gb_db
+    jnz .gb_nb_code
+    jmp .gb_data_native
 .gb_nb_code:
     mov rcx, rbx
     mov rdx, r15
@@ -3962,6 +4794,29 @@ dex_generate_bin:
     jnz .gb_oom_free
     jmp .gb_next
 .gb_db:
+    ; R-5.3 F1: em bin+native x64, injetar `__imp_X:` nos slots da IAT
+    ; (o walker emite `call|jmp [rel __imp_X + K]`; sem o label o nasm
+    ; falharia). Sem imports ou fora de x64/native: db-verbatim puro.
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_NATIVE
+    jz .gb_db_plain
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    jne .gb_db_plain
+    mov ecx, [r15+PeImage.imports_count]
+    test ecx, ecx
+    jz .gb_db_plain
+    mov [rel g_bin_img], r15
+    mov rcx, r14               ; buf
+    mov rdx, rsi               ; file base
+    mov r8, [rbp-96]           ; sec
+    mov r9d, [rbp-112]         ; raw
+    sub rsp, 32
+    call .gb_db_slots
+    add rsp, 32
+    test eax, eax
+    jnz .gb_oom_free
+    jmp .gb_next
+.gb_db_plain:
     ; db dos bytes
     mov rax, [rbp-96]
     mov ecx, [rax+PeSection.raw_ptr]
@@ -3978,6 +4833,49 @@ dex_generate_bin:
     mov r10d, [rbp-104]
     inc r10d
     jmp .gb_sec
+.gb_data_native:
+    ; F3 (R-5.4): .pdata/.xdata simbólicos em bin+native (RVA = label + C).
+    mov byte [rel g_unwind_bin], 1
+    mov [rel g_bin_img], r15
+    lea rcx, [rel s_pdata]
+    mov rax, [rbp-96]
+    lea rdx, [rax+PeSection.name]
+    sub rsp, 32
+    call dex_generate_asm.secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .gb_do_pdata
+    lea rcx, [rel s_xdata]
+    mov rax, [rbp-96]
+    lea rdx, [rax+PeSection.name]
+    sub rsp, 32
+    call dex_generate_asm.secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .gb_do_xdata
+    jmp .gb_db
+.gb_do_pdata:
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8, r14
+    mov r9, [rbp-96]
+    sub rsp, 32
+    call dex_generate_asm.emit_pdata_sec
+    add rsp, 32
+    test eax, eax
+    jnz .gb_oom_free
+    jmp .gb_next
+.gb_do_xdata:
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8, r14
+    mov r9, [rbp-96]
+    sub rsp, 32
+    call dex_generate_asm.emit_xdata_sec
+    add rsp, 32
+    test eax, eax
+    jnz .gb_oom_free
+    jmp .gb_next
 .gb_bss:
     ; seção sem bytes (bss): comentário
     lea rdx, [rel s_secpre]
@@ -4202,6 +5100,141 @@ dex_generate_bin:
 .gs_d:
     add rsp, 32
     pop r12
+    pop rbx
+    pop rbp
+    ret
+
+; .gb_db_slots — emite os bytes de uma seção de DADOS em fatias byte-exatas,
+; com `__imp_X:` antes de cada slot de import (IAT) dentro de
+; [vaddr, vaddr+raw). Escolha do próximo slot por varredura (a ordem das
+; ImportEntry não é garantida). R-5.3 F1 (bin+native x64).
+; Args: rcx=buf, rdx=file_base, r8=sec, r9d=raw; img em [rel g_bin_img].
+; Ret: eax=0 ok | 1 OOM (o caller mapeia p/ 6). Preserva não-voláteis.
+.gb_db_slots:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rdi
+    push rsi
+    push r12
+    push r13
+    push r14
+    push r15                     ; 7 pushes (56) + sub 88 = 144 ≡ 0
+    sub rsp, 88
+    mov rbx, rcx                 ; buf
+    mov r12, rdx                 ; file base
+    mov r13, r8                  ; sec
+    mov r14d, r9d                ; raw
+    mov r15, [rel g_bin_img]     ; img
+    xor eax, eax
+    mov [rbp-72], rax            ; cur = 0 (cursor de emissão)
+    mov [rbp-88], rax            ; floor = 0 (piso da varredura de slots)
+.gbs_outer:
+    mov rax, [rbp-72]
+    cmp eax, r14d
+    jae .gbs_done                ; seção inteira já emitida
+    mov qword [rbp-80], -1       ; best = nenhum (sentinela)
+    xor r10d, r10d               ; i2
+.gbs_scan:
+    mov ecx, [r15+PeImage.imports_count]
+    cmp r10d, ecx
+    jae .gbs_scan_done
+    mov rdx, [r15+PeImage.imports_ptr]
+    test rdx, rdx
+    jz .gbs_scan_done
+    mov eax, r10d
+    imul eax, SIZEOF_IMPORT_ENTRY
+    mov edx, [rdx+rax+ImportEntry.iat_rva]
+    mov ecx, [r13+PeSection.vaddr]
+    sub edx, ecx                 ; off = iat_rva - vaddr
+    mov rcx, [rbp-88]
+    cmp rdx, rcx
+    jb .gbs_scan_next            ; < floor: já tratado
+    cmp edx, r14d
+    jae .gbs_scan_next           ; >= raw
+    mov rcx, [rbp-80]
+    cmp rcx, -1
+    je .gbs_take
+    cmp rdx, rcx
+    jae .gbs_scan_next
+.gbs_take:
+    mov [rbp-80], rdx
+.gbs_scan_next:
+    inc r10d
+    jmp .gbs_scan
+.gbs_scan_done:
+    mov rcx, [rbp-80]
+    cmp rcx, -1
+    je .gbs_rest                 ; sem slot à frente: emite o resto
+    mov rdx, r12
+    mov eax, [r13+PeSection.raw_ptr]
+    add rdx, rax
+    add rdx, [rbp-72]            ; ptr = file_base + raw_ptr + cur
+    mov r8, rcx
+    sub r8, [rbp-72]             ; len = best - cur
+    mov rcx, rbx
+    mov r9, -1
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .gbs_fail
+    ; __imp_X: no VA do slot (image_base + vaddr + best)
+    mov rax, [r15+PeImage.image_base]
+    mov ecx, [r13+PeSection.vaddr]
+    add rax, rcx
+    add rax, [rbp-80]
+    mov rcx, rbx
+    mov rdx, rax
+    mov r8, r15
+    sub rsp, 32
+    call dex_emit_imp_label
+    add rsp, 32
+    test eax, eax
+    jnz .gbs_fail
+    mov rax, [rbp-80]
+    mov [rbp-72], rax            ; cur = best
+    inc rax
+    mov [rbp-88], rax            ; floor = best + 1
+    jmp .gbs_outer
+.gbs_rest:
+    mov rax, [rbp-72]
+    cmp eax, r14d
+    jae .gbs_done
+    mov rdx, r12
+    mov eax, [r13+PeSection.raw_ptr]
+    add rdx, rax
+    add rdx, [rbp-72]
+    mov r8d, r14d
+    sub r8, [rbp-72]             ; len = raw - cur
+    mov rcx, rbx
+    mov r9, -1
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .gbs_fail
+.gbs_done:
+    xor eax, eax
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rdi
+    pop rbx
+    pop rbp
+    ret
+.gbs_fail:
+    mov eax, 1
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rsi
+    pop rdi
     pop rbx
     pop rbp
     ret
