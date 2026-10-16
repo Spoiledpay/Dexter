@@ -301,7 +301,7 @@ echo === [14] imp label-at-slot (driver imp_check: HIT+MISS) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp_check.obj tests\imp_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm imp_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm imp_check" & set /a PASS+=1 )
 if exist tests\out\imp_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\x87.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\x87.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\pe_unwind.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link imp_check" & set /a FAIL+=1 ) else ( echo "  OK: link imp_check" & set /a PASS+=1 )
 )
 if exist tests\out\imp_check.exe (
@@ -707,6 +707,12 @@ echo === [36] bin nativo em PE simples (R-8.2 f1) ===
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native hello" & set /a PASS+=1 )
 fc /b tests\hello.exe tests\out\hello_nb.exe >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: hello_nb difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: hello_nb byte-identico" & set /a PASS+=1 )
+rem R-5.3 F1: import NATIVO no bin (sem K, o bin cairia silenciosamente
+rem em db e continuaria byte-identico — por isso o gate explicito).
+findstr /c:"[rel __imp_" tests\out\hello_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: import nao-nativo no bin" & set /a FAIL+=1 ) else ( echo "  OK: import nativo (bin __imp_)" & set /a PASS+=1 )
+findstr /r /c:"__imp_.* + 0x" tests\out\hello_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem correcao de delta K" & set /a FAIL+=1 ) else ( echo "  OK: correcao de delta K (bin)" & set /a PASS+=1 )
 findstr /r /c:"^    mov " tests\out\hello_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem mnemonicos nativos" & set /a FAIL+=1 ) else ( echo "  OK: mnemonicos nativos" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -o tests\out\hello_nb_ast.asm -m bin -native -ast-dump -q > tests\out\nb_ast.out 2>&1
@@ -726,6 +732,9 @@ if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native var64" & set /a FAIL+=
 if exist tests\out\var64_nb.exe (
     fc /b tests\var64.exe tests\out\var64_nb.exe >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: var64_nb difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: var64_nb byte-identico" & set /a PASS+=1 )
+    rem R-5.3 F1: import nativo tambem no var64 (call [rel __imp_ + 0x6600]).
+    findstr /c:"[rel __imp_" tests\out\var64_nb.asm >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: var64 import nao-nativo no bin" & set /a FAIL+=1 ) else ( echo "  OK: var64 import nativo (bin)" & set /a PASS+=1 )
     tests\out\var64_nb.exe > tests\out\var64_nb.out 2>&1
     tests\var64.exe > tests\out\var64_orig2.out 2>&1
     fc tests\out\var64_orig2.out tests\out\var64_nb.out >nul 2>&1
@@ -852,6 +861,84 @@ if exist tests\out\vex_nb.exe (
     tests\out\vex_nb.exe >nul 2>&1
     if !errorlevel! EQU 42 ( echo "  OK: vex_nb exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: vex_nb exit!=42" & set /a FAIL+=1 )
 ) else ( echo "  FALHA: sem vex_nb.exe" & set /a FAIL+=1 )
+
+echo === [40] SEH/unwind F1: parser .pdata/.xdata (R-5.4) ===
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\unwind_check.obj tests\unwind_check.asm
+if errorlevel 1 ( echo "  FALHA: nasm unwind_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm unwind_check" & set /a PASS+=1 )
+if exist tests\out\unwind_check.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\unwind_check.exe tests\out\unwind_check.obj obj\pe_unwind.obj obj\pe_sections.obj obj\rva.obj obj\string.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link unwind_check" & set /a FAIL+=1 ) else ( echo "  OK: link unwind_check" & set /a PASS+=1 )
+)
+if exist tests\out\unwind_check.exe (
+    tests\out\unwind_check.exe > tests\out\unwind.out 2>&1
+    if !errorlevel! NEQ 0 ( echo "  FALHA: unwind_check exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: unwind_check exit 0" & set /a PASS+=1 )
+    findstr /c:"UNWIND OK count=2" tests\out\unwind.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: golden unwind" & set /a FAIL+=1 ) else ( echo "  OK: golden unwind" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem unwind_check.exe" & set /a FAIL+=1 )
+
+echo === [41] SEH F2: .pdata/.xdata simbolicos win64 (R-5.4) ===
+"%DX%" tests\var64.exe -o tests\out\v64eh.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native var64" & set /a FAIL+=1 ) else ( echo "  OK: generate -native var64" & set /a PASS+=1 )
+findstr /c:"section .pdata rdata" tests\out\v64eh.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem section .pdata" & set /a FAIL+=1 ) else ( echo "  OK: section .pdata" & set /a PASS+=1 )
+findstr /c:"wrt ..imagebase" tests\out\v64eh.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: .pdata nao-simbolica" & set /a FAIL+=1 ) else ( echo "  OK: .pdata simbolica (wrt ..imagebase)" & set /a PASS+=1 )
+findstr /c:"section .xdata rdata" tests\out\v64eh.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem section .xdata" & set /a FAIL+=1 ) else ( echo "  OK: section .xdata" & set /a PASS+=1 )
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\v64eh.obj tests\out\v64eh.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm v64eh" & set /a FAIL+=1 ) else ( echo "  OK: nasm v64eh" & set /a PASS+=1 )
+"%DX%" tests\var64.exe -o tests\out\v64eh.asm -native -r -O tests\out\v64eh.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native var64 (link)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native var64 (link)" & set /a PASS+=1 )
+if exist tests\out\v64eh.exe (
+    python tests\pe_exc_dir.py tests\out\v64eh.exe > tests\out\exc.txt 2>&1
+    if !errorlevel! NEQ 0 ( echo "  FALHA: EXCEPTION_DIRECTORY invalido" & set /a FAIL+=1 ) else ( echo "  OK: EXCEPTION_DIRECTORY valido" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem v64eh.exe" & set /a FAIL+=1 )
+
+echo === [42] SEH F3: .pdata/.xdata simbolicos em bin (R-5.4) ===
+"%DX%" tests\var64.exe -o tests\out\v64f3.asm -m bin -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate bin-native var64" & set /a FAIL+=1 ) else ( echo "  OK: generate bin-native var64" & set /a PASS+=1 )
+findstr /c:"dd label_140001000 + 0x" tests\out\v64f3.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: .pdata bin nao-simbolica" & set /a FAIL+=1 ) else ( echo "  OK: .pdata bin simbolica (label + C)" & set /a PASS+=1 )
+"%NASM%" -f bin -o tests\out\v64f3.exe tests\out\v64f3.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm -f bin v64f3" & set /a FAIL+=1 ) else ( echo "  OK: nasm -f bin v64f3" & set /a PASS+=1 )
+fc /b tests\var64.exe tests\out\v64f3.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: v64f3 difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: bin simbolico byte-identico" & set /a PASS+=1 )
+
+echo === [43] SEH F4: excecao real C++ + fuzz unwind (R-5.4) ===
+rem Fixture tests\exc.exe (MinGW-w64 g++ -O1): lanca/captura excecao com
+rem __CxxFrameHandler3 real (117 RUNTIME_FUNCTION, flags EHANDLER/UHANDLER).
+rem Prova: -m bin -native byte-identico E o reconstruido roda throw/catch
+rem (exit 42). Sem o unwind reemitido correto, o desenrolar dos destrutores
+rem nao fecharia e a saida nao seria 42.
+if not exist tests\exc.exe ( echo "  FALHA: tests\exc.exe ausente" & set /a FAIL+=1 )
+"%DX%" tests\exc.exe -o tests\out\exc_nb.asm -m bin -native -r -O tests\out\exc_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native exc" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native exc" & set /a PASS+=1 )
+if exist tests\out\exc_nb.exe (
+    fc /b tests\exc.exe tests\out\exc_nb.exe >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: exc_nb difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: exc_nb byte-identico" & set /a PASS+=1 )
+    tests\out\exc_nb.exe > tests\out\exc_nb.out 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: exc_nb exit 42 (throw/catch real)" & set /a PASS+=1 ) else ( echo "  FALHA: exc_nb exit!=42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem exc_nb.exe" & set /a FAIL+=1 )
+findstr /c:"dd label_" tests\out\exc_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: unwind nao-simbolico (sem dd label_)" & set /a FAIL+=1 ) else ( echo "  OK: unwind simbolico (.pdata/.xdata)" & set /a PASS+=1 )
+python tests\fuzz_pe.py --input tests\exc.exe --cases 20 --seed 7 > tests\out\fuzz_exc.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: fuzz unwind (win64)" & set /a FAIL+=1 ) else ( echo "  OK: fuzz .pdata/.xdata (win64)" & set /a PASS+=1 )
+python tests\fuzz_pe.py --input tests\exc.exe --cases 20 --seed 7 --bin-native > tests\out\fuzz_exc_bn.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: fuzz unwind (bin-native)" & set /a FAIL+=1 ) else ( echo "  OK: fuzz .pdata/.xdata (bin-native)" & set /a PASS+=1 )
+
+echo === [44] strpool dedicado (D-3) ===
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\strpool_check.obj tests\strpool_check.asm
+if errorlevel 1 ( echo "  FALHA: nasm strpool_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm strpool_check" & set /a PASS+=1 )
+if exist tests\out\strpool_check.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\strpool_check.exe tests\out\strpool_check.obj obj\strings.obj obj\asm_buffer.obj obj\string.obj obj\memory.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link strpool_check" & set /a FAIL+=1 ) else ( echo "  OK: link strpool_check" & set /a PASS+=1 )
+)
+if exist tests\out\strpool_check.exe (
+    tests\out\strpool_check.exe > tests\out\strpool.out 2>&1
+    if !errorlevel! NEQ 0 ( echo "  FALHA: strpool_check exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: strpool_check exit 0" & set /a PASS+=1 )
+    findstr /c:"STRPOOL o=0 6 B len=11" tests\out\strpool.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: golden strpool" & set /a FAIL+=1 ) else ( echo "  OK: golden strpool" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem strpool_check.exe" & set /a FAIL+=1 )
 
 echo.
 echo =====================================================
