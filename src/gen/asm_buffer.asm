@@ -185,19 +185,24 @@ asmbuf_append_u64_hex:
     push rbx
     push r12
     push r13
-    sub rsp, 56                ; 4 pushes -> rsp%16==8; 48%16==0 => FALHA!
+    sub rsp, 88                ; 3 pushes -> rsp%16==8; 88%16==8 => calls ≡0.
+                               ; (D-16 auditado: o "prólogo duplicado" descrito
+                               ; em 2026-10-11 NÃO existe; o buffer antigo em
+                               ; [rbp-40] cabia 16 dígitos e não tocava os regs
+                               ; salvos. Buffer movido p/ [rbp-72] (32 B, acima
+                               ; da shadow [rbp-112,-81]) => cobre digits<=32.)
     mov rbx, rcx
     mov r12, rdx
     mov r13d, r8d
-    lea rdx, [rbp-40]
+    lea rdx, [rbp-72]
     mov rcx, r12
     mov r8d, r13d
     call dex_u64_to_hex        ; rax = len
     mov r8, rax
-    lea rdx, [rbp-40]
+    lea rdx, [rbp-72]
     mov rcx, rbx
     call asmbuf_append
-    add rsp, 56
+    add rsp, 88
     pop r13
     pop r12
     pop rbx

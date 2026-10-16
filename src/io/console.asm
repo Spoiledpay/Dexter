@@ -59,12 +59,12 @@ dex_console_write:
     mov rcx, rbx
     mov rdx, rdi
     mov r8, r12
-    lea r9, [rbp-40]           ; local real (abaixo dos regs salvos!)
+    lea r9, [rbp-40]           ; lpNumberOfBytesWritten (local real)
     mov qword [rbp-40], 0
-    sub rsp, 32
-    mov qword [rsp+32], 0
+    sub rsp, 48                ; 32 shadow + 8 (5º arg) + 8 p/ alinhar 16
+    mov qword [rsp+32], 0      ; lpOverlapped = 0 (dentro do reservado; D-15)
     call WriteFile
-    add rsp, 32
+    add rsp, 48
     test eax, eax
     jz .zero_w
     mov rax, [rbp-40]
