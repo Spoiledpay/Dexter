@@ -19,3 +19,5 @@ tests/*.asm.sha256
 !tests/var32.exe
 !tests/var64.exe
 !tests/link.exe
+!tests/exc.exe
+
