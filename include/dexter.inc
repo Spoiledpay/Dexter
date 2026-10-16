@@ -183,6 +183,33 @@ struc Insn
 endstruc
 %define SIZEOF_INSN 160
 
+; Unwind info (R-5.4 SEH): flags de UNWIND_INFO (IMAGE_OPTIONAL_HEADER)
+%define UNW_FLAG_EHANDLER  0x01
+%define UNW_FLAG_UHANDLER  0x02
+%define UNW_FLAG_CHAININFO 0x04
+
+; RUNTIME_FUNCTION (.pdata): RVAs de inicio/fim do corpo + UNWIND_INFO
+struc RuntimeFunction
+    .begin   resd 1
+    .end     resd 1
+    .unwind  resd 1
+endstruc
+%define SIZEOF_RUNTIME_FUNCTION 12
+
+; UNWIND_INFO decodificado (.xdata)
+struc UnwindInfo
+    .version  resb 1   ; byte0 bits 0-2
+    .flags    resb 1   ; byte0 bits 3-7 (UNW_FLAG_*)
+    .prolog   resb 1   ; tamanho do prólogo em bytes
+    .ncodes   resb 1   ; nº de unwind codes
+    .framereg resb 1   ; registrador de frame (0 = nenhum)
+    .frameoff resb 1   ; offset do frame (escala 16)
+    .pad      resw 1
+    .total    resd 1   ; tamanho total deste UNWIND_INFO em bytes
+    .rvacnt   resd 1   ; 0, 1 (handler) ou 3 (chained RUNTIME_FUNCTION)
+    .rvaoff   resd 1   ; offset dos campos RVA relativo ao início (ou -1)
+endstruc
+
 ; Entrada de import normalizada (gen).
 struc ImportEntry
     .dll_name       resq 1   ; char* (aponta p/ dentro do file_buffer ou cópia)
