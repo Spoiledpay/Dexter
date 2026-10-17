@@ -94,10 +94,32 @@ def labelable(sec):
     return rs > 0 and not (ch & (CNT_CODE | EXEC)) and name not in (b".pdata", b".xdata")
 
 
+def qstr(bs):
+    """Reproduz .emit_qstr (rebuild.asm): 'db "<texto>", 0' com " -> ", 34, "."""
+    s = bs.decode("latin1").replace('"', '", 34, "')
+    return f'db "{s}", 0'
+
+
+def cstr(rva, limit=256):
+    """Le um cstring ASCII-imprimivel terminado em NUL. None se invalido."""
+    o = r2o(rva)
+    if o is None:
+        return None
+    end = min(o + limit, len(d))
+    z = d.find(b"\x00", o, end)
+    if z < 0:
+        return None
+    bs = d[o:z]
+    if any(b < 0x20 or b > 0x7E for b in bs):
+        return None
+    return bs
+
+
 descs = []
 n = 0
 symbolic = 0
 rawf = 0
+dll_names = 0
 bad = 0
 while True:
     if o + 20 > len(d):
@@ -137,6 +159,17 @@ while True:
         if f"label_{tgt_va:X}:" not in text:
             print(f"  FALTA label do alvo: label_{tgt_va:X}:")
             bad += 1
+        # F4: o Nome da DLL vira `db "<dll>", 0` simbolico
+        if label == "Name":
+            bs = cstr(rva)
+            if bs is None:
+                continue
+            expq = qstr(bs)
+            if expq in text:
+                dll_names += 1
+            else:
+                print(f"  FALTA nome de DLL simbolico: {expq}")
+                bad += 1
     if oft == 0 and ts == 0 and fc == 0 and nm == 0 and ft == 0:
         break
     n += 1
@@ -148,6 +181,7 @@ while True:
 # ---- F3: arrays de thunks (OFT=ILT; FT=IAT) -> `dq label_<hint/name> + C` ----
 thunks_sym = 0
 thunks_raw = 0
+hint_sym = 0
 for oft, nm, ft in descs:
     for arr in (oft, ft):
         if arr == 0:
@@ -174,6 +208,22 @@ for oft, nm, ft in descs:
                     if f"label_{tgt_va:X}:" not in text:
                         print(f"  FALTA label do hint/name: label_{tgt_va:X}:")
                         bad += 1
+                    # F4: IMAGE_IMPORT_BY_NAME -> `dw <hint>` + `db "<name>", 0`
+                    o3 = r2o(v)
+                    if o3 is not None and o3 + 2 <= len(d):
+                        hw = struct.unpack_from("<H", d, o3)[0]
+                        expw = f"dw 0x{hw:X}"
+                        if expw in text:
+                            hint_sym += 1
+                        else:
+                            print(f"  FALTA hint simbolico: {expw} (rva={v:#x})")
+                            bad += 1
+                        bs = cstr(v + 2)
+                        if bs is not None:
+                            expq = qstr(bs)
+                            if expq not in text:
+                                print(f"  FALTA nome de import simbolico: {expq}")
+                                bad += 1
             if exp is None:
                 exp = f"dq 0x{v:X}"
                 if exp in text:
@@ -195,5 +245,5 @@ for oft, nm, ft in descs:
 
 print(f"IMPDESC descs={n + 1} simbolicos={symbolic} crus={rawf} "
       f"thunks={thunks_sym + thunks_raw} sym={thunks_sym} raw={thunks_raw} "
-      f"ruins={bad}")
+      f"hint={hint_sym} nomes={dll_names} ruins={bad}")
 sys.exit(1 if bad else 0)

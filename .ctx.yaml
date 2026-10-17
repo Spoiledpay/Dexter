@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-17T10:38:11.2785527-03:00
+updated_at: 2026-10-17T11:03:08.5997428-03:00
 files:
     include\dexter.inc:
         imports:
@@ -2185,6 +2185,7 @@ files:
             - s_dq
             - s_dqpre
             - s_dq0
+            - s_dw4
             - s_reloc
             - s_lab
             - s_uscore
@@ -2231,6 +2232,7 @@ files:
             - g_spancfg
             - g_spanflags
             - dex_generate_asm
+            - dex_emit_qstr
             - dex_rebuild
             - dex_patch_dirs
             - dex_generate_bin
@@ -2373,9 +2375,9 @@ files:
             - dex_generate_asm.uw_emit
             - DF_QUIET
         package: ""
-        size: 177172
-        modified_at: 2026-10-17T10:22:36.4178099-03:00
-        hash: c591d06584153dcd648a3fbcbd2f62550390cdeb82b10194da59d6bb9cbf4809
+        size: 183867
+        modified_at: 2026-10-17T10:51:42.4825023-03:00
+        hash: 8c0ab8534570736bdc3a6121d1779b149448b558eb21fd29897fa04056a59896
     src\gen\strings.asm:
         imports:
             - dexter.inc
@@ -3415,6 +3417,8 @@ files:
             - r2o
             - target_section
             - labelable
+            - qstr
+            - cstr
         calls:
             - len
             - print
@@ -3429,10 +3433,17 @@ files:
             - max
             - target_section
             - labelable
+            - qstr
+            - decode
+            - replace
+            - cstr
+            - min
+            - find
+            - any
         package: ""
-        size: 6495
-        modified_at: 2026-10-17T10:18:19.0147396-03:00
-        hash: 599e3eedd54536927cf0aec2c367e9bba2b1cdf8fbe6bd3d6804356478f28199
+        size: 8265
+        modified_at: 2026-10-17T10:48:44.7528373-03:00
+        hash: 148ef121e7071f19453b3414bbe6592bdab518a7121af61b689bae7c609cbba3
     tests\ref_native\ref_hello.asm:
         imports: []
         functions:
@@ -4875,6 +4886,23 @@ memories:
       updated_at: 2026-10-17T10:38:11.2785527-03:00
       confidence: 1
       last_verified: 2026-10-17T10:38:11.1302-03:00
+      created_by: human
+    - id: e4a3472b-ca8b-7591-0ec8-6fdd02d03a2b
+      title: 'Implementado: R-5.3 F4 (hint/name + nomes de DLL simbolicos) - FECHA R-5.3'
+      description: 'Dexter 1.2.367: IMAGE_IMPORT_BY_NAME vira dw hint + db nome,0; Name do descritor vira db dll,0 (dex_emit_qstr file-scope; .gb_hint_emit/.gb_name_emit/.gb_cstr; fallback db byte-fiel). Gate [48] + pe_impdesc.py. run_tests 350/350 OK; run_slow 7/7; fc /b 0 diffs hello/var64/exc/gcc/notepad; notepad hint=620 nomes=50.'
+      type: milestone
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - tests/pe_impdesc.py
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T11:03:08.5997428-03:00
+      updated_at: 2026-10-17T11:03:08.5997428-03:00
+      confidence: 1
+      last_verified: 2026-10-17T11:03:08.4773296-03:00
       created_by: human
 decisions: []
 dependencies:

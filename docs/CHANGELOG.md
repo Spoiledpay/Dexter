@@ -2,6 +2,28 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-5.3 F4: hint/name + nomes de DLL simbólicos (`-m bin -native`) (2026-10-17)
+
+### Adicionado
+
+- **R-5.3 F4** (fecha R-5.3): a import table fica **100% regenerada** no
+  `-m bin -native`. Cada `IMAGE_IMPORT_BY_NAME` sai `dw <hint>` +
+  `db "<nome>", 0`; o `Name` do descritor sai `db "<dll>", 0`. Em
+  `src/gen/rebuild.asm`: `.gb_db_slots` ganha os eventos 32 (hint/name) e 64
+  (nome de DLL) + emissores `.gb_hint_emit`/`.gb_name_emit` + `.gb_cstr`
+  (cstring bounded imprimível); `dex_emit_qstr` foi **promovido a
+  file-scope** (os `.gb_*` estão em `dex_generate_bin` e não alcançavam o
+  `.emit_qstr` local de `dex_generate_asm`). Fallback `db` byte-fiel quando o
+  cstring não é imprimível/sem NUL/len > 255.
+
+### Verificado
+
+- `build.bat` limpo (1.2.367); `tests\run_tests.bat` **350/350 OK** (343 + 7
+  novos: seção `[48]`); `tests\run_slow.bat` **7/7 OK**.
+- `fc /b` 0 diffs em hello/var64/exc/gcc/notepad (`-m bin -native`);
+  `tests/pe_impdesc.py` (hint/nomes): hello `hint=6 nomes=1 ruins=0`,
+  notepad `hint=620 nomes=50 ruins=0`, todos `ruins=0`.
+
 ## [Unreleased] — R-5.3 F3: thunks ILT/IAT simbólicos (`-m bin -native`) (2026-10-17)
 
 ### Adicionado

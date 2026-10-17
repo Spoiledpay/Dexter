@@ -99,8 +99,7 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   `nasm -f bin` = **byte-idêntico** (hello 2560 B e var64 91872 B:
   `fc /b` igual + comportamento igual)
 - [x] R-5.2 round-trip testado: win64/hello (`hi`, exit 0) e bin/hello+var64
-- [~] R-5.3 `-f bin` com import table REGENERADA (hoje: copiada — suficiente
-  e fiel; regenerar só se preciso). **F1 FECHADA** (1.2.341): em
+- [x] R-5.3 `-f bin` com import table REGENERADA. **F1 FECHADA** (1.2.341): em
   `-m bin -native` os imports deixam de cair em `db` — o walker emite
   `call|jmp [rel __imp_X + K]` e o caminho de dados do bin injeta
   `__imp_X:` nos slots da IAT (`.gb_db_slots`). **K é a correção de delta
@@ -125,7 +124,14 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   alvo é registrado **independente** do slot (o scanner resolve 1 VA por
   iteração). Gate: `tests/pe_impdesc.py` estendido + `[47]` (343/343);
   hello/var64/exc/gcc/notepad `fc /b` 0 diffs. Prova do ramo cru: notepad
-  (`thunks=630 sym=620 raw=10`). Falta **F4** (hint/name + nomes simbólicos).
+  (`thunks=630 sym=620 raw=10`). **F4 FECHADA** (1.2.367): a import table
+  fica **100% regenerada** — cada `IMAGE_IMPORT_BY_NAME` sai
+  `dw <hint>` + `db "<nome>", 0` e o `Name` do descritor sai
+  `db "<dll>", 0` (via `dex_emit_qstr`, promovido a file-scope: os `.gb_*`
+  moram em `dex_generate_bin` e não alcançavam o antigo local
+  `.emit_qstr` de `dex_generate_asm`). Gate `[48]` (350/350); prova:
+  hello `hint=6 nomes=1`, notepad `hint=620 nomes=50`, todos `ruins=0`.
+  Não-ASCII/não-imprimível ou sem NUL → fallback `db` (byte-fiel).
 - [ ] R-5.4 strings em code-flow, jump tables, SEH/unwind reemitido,
   fuzzy corpus expandido, `tests\fuzz_pe.py`
   (PARCIAL 1.2.250, 3b: pré-scan `.collect_strs` insere starts de runs +

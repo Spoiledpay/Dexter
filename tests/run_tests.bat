@@ -984,14 +984,32 @@ findstr /c:"label_140002178:" tests\out\hello_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: label do hint/name ausente (hello)" & set /a FAIL+=1 ) else ( echo "  OK: label do hint/name emitido (hello)" & set /a PASS+=1 )
 python tests\pe_impdesc.py tests\hello.exe tests\out\hello_nb.asm > tests\out\impthunk_hello.out 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: thunks (hello)" & type tests\out\impthunk_hello.out & set /a FAIL+=1 ) else ( echo "  OK: thunks conferidos (hello)" & set /a PASS+=1 )
-findstr /c:"thunks=6 sym=6 raw=0 ruins=0" tests\out\impthunk_hello.out >nul 2>&1
+findstr /c:"thunks=6 sym=6 raw=0 hint=6 nomes=1 ruins=0" tests\out\impthunk_hello.out >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: golden thunks hello" & type tests\out\impthunk_hello.out & set /a FAIL+=1 ) else ( echo "  OK: golden thunks hello (6/6/0)" & set /a PASS+=1 )
 python tests\pe_impdesc.py tests\var64.exe tests\out\var64_nb.asm > tests\out\impthunk_var64.out 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: thunks (var64)" & type tests\out\impthunk_var64.out & set /a FAIL+=1 ) else ( echo "  OK: thunks conferidos (var64)" & set /a PASS+=1 )
 python tests\pe_impdesc.py tests\notepad.exe tests\out\notepad_nb.asm > tests\out\impthunk_notepad.out 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: thunks (notepad)" & type tests\out\impthunk_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: thunks conferidos (notepad)" & set /a PASS+=1 )
-findstr /c:"thunks=630 sym=620 raw=10 ruins=0" tests\out\impthunk_notepad.out >nul 2>&1
+findstr /c:"thunks=630 sym=620 raw=10 hint=620 nomes=50 ruins=0" tests\out\impthunk_notepad.out >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: golden thunks notepad (bound->raw)" & type tests\out\impthunk_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: golden thunks notepad (620 sym + 10 raw)" & set /a PASS+=1 )
+
+echo === [48] hint/name + nomes de DLL simbolicos (R-5.3 F4) ===
+rem Oraculo: cada IMAGE_IMPORT_BY_NAME sai `dw <hint>` + `db "<nome>", 0` e o
+rem Name do descritor sai `db "<dll>", 0`; bytes identicos (fc ja checado).
+findstr /c:"dw 0x186" tests\out\hello_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: hint/name nao-simbolico (hello)" & set /a FAIL+=1 ) else ( echo "  OK: hint/name simbolico (hello)" & set /a PASS+=1 )
+findstr /c:"KERNEL32.dll" tests\out\hello_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nome de DLL nao-simbolico (hello)" & set /a FAIL+=1 ) else ( echo "  OK: nome de DLL simbolico (hello)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\hello.exe tests\out\hello_nb.asm > tests\out\impname_hello.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: hint/name (hello)" & type tests\out\impname_hello.out & set /a FAIL+=1 ) else ( echo "  OK: hint/name conferidos (hello)" & set /a PASS+=1 )
+findstr /c:"hint=6 nomes=1 ruins=0" tests\out\impname_hello.out >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: golden hint/name hello" & type tests\out\impname_hello.out & set /a FAIL+=1 ) else ( echo "  OK: golden hint/name hello (6/1)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\exc.exe tests\out\exc_nb.asm > tests\out\impname_exc.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: hint/name (exc)" & type tests\out\impname_exc.out & set /a FAIL+=1 ) else ( echo "  OK: hint/name conferidos (exc)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\notepad.exe tests\out\notepad_nb.asm > tests\out\impname_notepad.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: hint/name (notepad)" & type tests\out\impname_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: hint/name conferidos (notepad)" & set /a PASS+=1 )
+findstr /c:"hint=620 nomes=50 ruins=0" tests\out\impname_notepad.out >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: golden hint/name notepad" & type tests\out\impname_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: golden hint/name notepad (620/50)" & set /a PASS+=1 )
 
 echo.
 echo =====================================================

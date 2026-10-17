@@ -123,6 +123,7 @@ s_imp_l db "__imp_", 0
 s_dq    db ": dq ", 0
 s_dqpre db "    dq ", 0
 s_dq0   db "    dq 0", 13, 10, 0
+s_dw4   db "    dw ", 0
 s_reloc db ".reloc", 0
 s_lab    db "label_", 0
 s_uscore db "_", 0
@@ -1771,7 +1772,7 @@ dex_generate_asm:
     add rdx, r13
     mov r8d, [rbp-104]
     sub rsp, 32
-    call .emit_qstr
+    call dex_emit_qstr
     add rsp, 32
     test eax, eax
     jnz .wds_fail
@@ -4094,8 +4095,10 @@ dex_generate_asm:
     pop rbp
     ret
 
-; .emit_qstr — rcx=buf, rdx=ptr, r8d=len -> '    db "...", 0' (escapa ")
-.emit_qstr:
+; dex_emit_qstr — rcx=buf, rdx=ptr, r8d=len -> '    db "...", 0' (escapa ")
+; File-scope (usado pelos geradores win64 `dex_generate_asm` e bin
+; `dex_generate_bin` — R-5.3 F4). Ret: eax = 0/1 (do ultimo append).
+dex_emit_qstr:
     push rbp
     mov rbp, rsp
     push rbx
@@ -5485,7 +5488,7 @@ dex_generate_bin:
 ;        [rbp-144]dptr [rbp-152]term [rbp-160]evva [rbp-168]fuw
 ;        (F3) [rbp-176]dptr2 [rbp-192]tk [rbp-200]tpass [rbp-208]tbase_rva
 ;             [rbp-216]tbase_off [rbp-224]tval
-;        [rbp-232]bitmap-unwind [rbp-240]fthunk.
+;        [rbp-232]bitmap-unwind [rbp-240]fthunk [rbp-248]fhint [rbp-256]fname.
 .gb_db_slots:
     push rbp
     mov rbp, rsp
@@ -5531,6 +5534,8 @@ dex_generate_bin:
     mov dword [rbp-120], 0       ; fi (iat)
     mov dword [rbp-168], 0       ; fuw (início de UNWIND_INFO)
     mov dword [rbp-240], 0       ; fthunk (slot de thunk ILT/IAT — F3)
+    mov dword [rbp-248], 0       ; fhint (IMAGE_IMPORT_BY_NAME — F4)
+    mov dword [rbp-256], 0       ; fname (nome de DLL — F4)
     ; ---- varredura 1: slots de import (IAT) ----
     xor r10d, r10d               ; i2
 .gbs_iat:
@@ -5621,7 +5626,7 @@ dex_generate_bin:
     call .gsa_upd
     add rsp, 32
 .gbs_sd_t1:
-    mov eax, [r10+12]
+    mov eax, [r10+12]            ; Name (nome da DLL)
     test eax, eax
     jz .gbs_sd_t2
     mov edx, eax
@@ -5632,7 +5637,7 @@ dex_generate_bin:
     cmp edx, [rbp-72]
     jb .gbs_sd_t2
     mov eax, edx
-    mov r11d, 2
+    mov r11d, 64                 ; kind: nome de DLL (F4)
     sub rsp, 32
     call .gsa_upd
     add rsp, 32
@@ -5730,7 +5735,7 @@ dex_generate_bin:
     jae .gbs_th_knext
     cmp eax, [rbp-72]
     jb .gbs_th_knext
-    mov r11d, 2                  ; kind: alvo (label_)
+    mov r11d, 32                 ; kind: IMAGE_IMPORT_BY_NAME (F4)
     sub rsp, 32
     call .gsa_upd
     add rsp, 32
@@ -5806,6 +5811,10 @@ dex_generate_bin:
     cmp dword [rbp-104], 0
     jne .gbs_lab
     cmp dword [rbp-112], 0
+    jne .gbs_lab
+    cmp dword [rbp-248], 0       ; hint/name precisa label? (F4)
+    jne .gbs_lab
+    cmp dword [rbp-256], 0       ; nome de DLL precisa label? (F4)
     je .gbs_lab_done
 .gbs_lab:
     mov rcx, rbx
@@ -5856,7 +5865,7 @@ dex_generate_bin:
     ; slot de thunk ILT/IAT? emite `dq` (F3) e avanca 8 bytes
 .gbs_th_slot:
     cmp dword [rbp-240], 0
-    je .gbs_chk_uw
+    je .gbs_hn_check
     mov rcx, rbx
     mov rdx, r15
     mov r8d, [r13+PeSection.raw_ptr]
@@ -5871,6 +5880,48 @@ dex_generate_bin:
     add rax, 8
     mov [rbp-64], rax            ; cur = best + 8
     mov [rbp-72], rax            ; floor = best + 8
+    jmp .gbs_outer
+    ; IMAGE_IMPORT_BY_NAME? emite `dw <hint>` + `db "<nome>", 0` (F4)
+.gbs_hn_check:
+    cmp dword [rbp-248], 0
+    je .gbs_nm_check
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8d, [r13+PeSection.raw_ptr]
+    mov eax, [rbp-80]
+    add r8d, eax                 ; off no arquivo da struct hint/name
+    mov r9d, r14d
+    sub r9d, [rbp-80]            ; maxlen = raw - best
+    sub rsp, 32
+    call .gb_hint_emit
+    add rsp, 32
+    cmp rax, -1
+    je .gbs_fail                 ; OOM
+    mov rcx, [rbp-80]
+    add rcx, rax                 ; cur = best + consumidos
+    mov [rbp-64], rcx
+    mov [rbp-72], rcx
+    jmp .gbs_outer
+    ; nome de DLL? emite `db "<nome>", 0` (F4)
+.gbs_nm_check:
+    cmp dword [rbp-256], 0
+    je .gbs_chk_uw
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8d, [r13+PeSection.raw_ptr]
+    mov eax, [rbp-80]
+    add r8d, eax                 ; off no arquivo do nome da DLL
+    mov r9d, r14d
+    sub r9d, [rbp-80]            ; maxlen = raw - best
+    sub rsp, 32
+    call .gb_name_emit
+    add rsp, 32
+    cmp rax, -1
+    je .gbs_fail                 ; OOM
+    mov rcx, [rbp-80]
+    add rcx, rax
+    mov [rbp-64], rcx
+    mov [rbp-72], rcx
     jmp .gbs_outer
     ; início de UNWIND_INFO? reemite simbólico (R-5.4; qualquer seção)
 .gbs_chk_uw:
@@ -5975,8 +6026,9 @@ dex_generate_bin:
 ;-----------------------------------------------------------------------------
 ; .gsa_upd — atualiza o menor evento `best` (folha; usa o frame do chamador).
 ; Args: eax = off candidato, r11d = máscara (1 desc, 2 alvo, 4 iat, 8 uw,
-; 16 slot de thunk).
-; Só toca rax/rdx/r11 e [rbp-80,-104,-112,-120,-168,-240]. Preserva os demais.
+; 16 slot de thunk, 32 hint/name, 64 nome de DLL).
+; Só toca rax/rdx/r11 e [rbp-80,-104,-112,-120,-168,-240,-248,-256].
+; Preserva os demais.
 ;-----------------------------------------------------------------------------
 .gsa_upd:
     mov rdx, [rbp-80]
@@ -5992,6 +6044,8 @@ dex_generate_bin:
     mov dword [rbp-120], 0
     mov dword [rbp-168], 0
     mov dword [rbp-240], 0
+    mov dword [rbp-248], 0
+    mov dword [rbp-256], 0
 .gup_set:
     test r11d, 1
     jz .gup_s2
@@ -6010,8 +6064,16 @@ dex_generate_bin:
     mov dword [rbp-168], 1
 .gup_s16:
     test r11d, 16
-    jz .gup_ret
+    jz .gup_s32
     mov dword [rbp-240], 1
+.gup_s32:
+    test r11d, 32
+    jz .gup_s64
+    mov dword [rbp-248], 1
+.gup_s64:
+    test r11d, 64
+    jz .gup_ret
+    mov dword [rbp-256], 1
 .gup_ret:
     ret
 
@@ -6196,6 +6258,189 @@ dex_generate_bin:
     ret
 .gfe_fail:
     mov eax, 1
+    add rsp, 56
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .gb_cstr — rcx=ptr, edx=maxlen -> rax = len (>=0) | -1 (sem NUL, byte fora
+; de 0x20..0x7E, ou len > 255). Folha: clobbra só voláteis (rax/rcx/rdx/r8).
+;-----------------------------------------------------------------------------
+.gb_cstr:
+    xor eax, eax
+.gcs_l:
+    cmp eax, 256
+    jae .gcs_no
+    cmp eax, edx
+    jae .gcs_no
+    movzx r8d, byte [rcx+rax]
+    test r8d, r8d
+    jz .gcs_yes
+    cmp r8d, 0x20
+    jb .gcs_no
+    cmp r8d, 0x7E
+    ja .gcs_no
+    inc eax
+    jmp .gcs_l
+.gcs_yes:
+    ret
+.gcs_no:
+    mov rax, -1
+    ret
+
+;-----------------------------------------------------------------------------
+; .gb_name_emit — nome de DLL como `db "<nome>", 0` (R-5.3 F4).
+; Args: rcx=buf, rdx=img, r8d=off(arquivo), r9d=maxlen(bytes na secao).
+; Ret: rax = consumidos (len+1) | -1 OOM. Sem NUL/nao-imprimivel: 1 byte db.
+; Frame: rbp + 3 pushes (24) + sub 56 = 80 ≡ 0; maxlen[-40] ptr[-48] len[-56].
+;-----------------------------------------------------------------------------
+.gb_name_emit:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    sub rsp, 56
+    mov rbx, rcx                 ; buf
+    mov r12, rdx                 ; img
+    mov r13d, r8d                ; off
+    mov [rbp-40], r9d            ; maxlen
+    mov rax, [r12+PeImage.file_buffer]
+    add rax, r13
+    mov [rbp-48], rax            ; ptr
+    mov rcx, rax
+    mov edx, [rbp-40]
+    sub rsp, 32
+    call .gb_cstr
+    add rsp, 32
+    cmp rax, -1
+    je .gnm_fb
+    mov [rbp-56], rax            ; len
+    mov rcx, rbx
+    mov rdx, [rbp-48]
+    mov r8d, eax
+    sub rsp, 32
+    call dex_emit_qstr
+    add rsp, 32
+    test eax, eax
+    jnz .gnm_oom
+    mov rax, [rbp-56]
+    inc rax                      ; len + 1 (NUL)
+    jmp .gnm_ret
+.gnm_fb:
+    mov rcx, rbx
+    mov rdx, [rbp-48]
+    mov r8, 1
+    mov r9, -1
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .gnm_oom
+    mov eax, 1
+    jmp .gnm_ret
+.gnm_oom:
+    mov rax, -1
+.gnm_ret:
+    add rsp, 56
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .gb_hint_emit — IMAGE_IMPORT_BY_NAME como `dw <hint>` + `db "<nome>", 0`
+; (R-5.3 F4). Valida o nome ANTES de emitir (nao deixa `dw` parcial).
+; Args: rcx=buf, rdx=img, r8d=off(arquivo), r9d=maxlen(bytes na secao).
+; Ret: rax = consumidos (2+len+1) | -1 OOM. Fallback: 1 byte db.
+; Frame: rbp + 3 pushes (24) + sub 56 = 80 ≡ 0; maxlen[-40] ptr[-48] len[-56].
+;-----------------------------------------------------------------------------
+.gb_hint_emit:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    sub rsp, 56
+    mov rbx, rcx                 ; buf
+    mov r12, rdx                 ; img
+    mov r13d, r8d                ; off
+    mov [rbp-40], r9d            ; maxlen
+    mov rax, [r12+PeImage.file_buffer]
+    add rax, r13
+    mov [rbp-48], rax            ; ptr
+    cmp dword [rbp-40], 3
+    jb .ghn_fb                   ; nao cabe hint(2) + NUL
+    lea rcx, [rax+2]
+    mov edx, [rbp-40]
+    sub edx, 2
+    sub rsp, 32
+    call .gb_cstr
+    add rsp, 32
+    cmp rax, -1
+    je .ghn_fb
+    mov [rbp-56], rax            ; len
+    lea rdx, [rel s_dw4]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .ghn_oom
+    lea rdx, [rel s_0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .ghn_oom
+    mov rcx, rbx
+    mov rax, [rbp-48]
+    movzx edx, word [rax]        ; hint
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .ghn_oom
+    lea rdx, [rel s_crlf2]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .ghn_oom
+    mov rcx, rbx
+    mov rdx, [rbp-48]
+    add rdx, 2
+    mov r8d, [rbp-56]
+    sub rsp, 32
+    call dex_emit_qstr
+    add rsp, 32
+    test eax, eax
+    jnz .ghn_oom
+    mov rax, [rbp-56]
+    add rax, 3                   ; 2 (hint) + len + 1 (NUL)
+    jmp .ghn_ret
+.ghn_fb:
+    mov rcx, rbx
+    mov rdx, [rbp-48]
+    mov r8, 1
+    mov r9, -1
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .ghn_oom
+    mov eax, 1
+    jmp .ghn_ret
+.ghn_oom:
+    mov rax, -1
+.ghn_ret:
     add rsp, 56
     pop r13
     pop r12

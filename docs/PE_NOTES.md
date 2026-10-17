@@ -193,3 +193,28 @@ constante da F2; o alvo `IMAGE_IMPORT_BY_NAME` ganha `label_` no stream).
   seguinte — inofensivo (`dq 0` e `db 0×8` são idênticos).
 - **Verificação:** `tests/pe_impdesc.py` percorre OFT/FT do PE original e
   confere cada `dq`/`label_`; a suíte trava o golden em `[47]`.
+
+## 17. `-f bin` simbólico: hint/name + nomes de DLL (R-5.3 F4)
+
+Com a F4 a import table fica **100% regenerada** no `-m bin -native`:
+
+- cada `IMAGE_IMPORT_BY_NAME` (alvo de um thunk by-name) sai
+  `label_<VA>:` + `dw <hint>` + `db "<nome>", 0`;
+- o `Name` do `IMAGE_IMPORT_DESCRIPTOR` sai `label_<VA>:` + `db "<dll>", 0`.
+
+Regras e armadilhas:
+
+- **Fallback honesto.** Só vira string se o cstring é ASCII imprimível
+  (0x20..0x7E), tem NUL **dentro da seção** (`raw - best`) e len ≤ 255; senão
+  emite `db` cru (1 byte por evento, o resto pelo caminho normal) — byte-fiel
+  sempre. O escape de `"` é feito por `dex_emit_qstr` (vira `", 34, "`).
+- **`dex_emit_qstr` é file-scope.** O antigo `.emit_qstr` era um label
+  **local** de `dex_generate_asm`; labels com `.` são escopados ao label
+  não-local anterior, então os `.gb_*` (escopo `dex_generate_bin`) geravam
+  `symbol 'dex_generate_bin.emit_qstr' not defined` (e uma cascata de
+  `label-redef-late`). Promovido a `dex_emit_qstr`.
+- **`dw` validado ANTES de emitir** (`.gb_hint_emit` lê e valida o nome antes
+  de escrever o `dw`) — evita `dw` órfão se o nome for inválido.
+- **Verificação:** `tests/pe_impdesc.py` lê o hint (`<H`) e o nome dos bytes
+  do PE e confere as linhas `dw`/`db`; golden na suíte `[48]` (hello
+  `hint=6 nomes=1`, notepad `hint=620 nomes=50`, `ruins=0`).

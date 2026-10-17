@@ -113,7 +113,7 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
    sairia deslocado (e o bin continuaria montando, mas byte-diferente).
    `K==0` (mesma seção) emite o nome puro. Gates `[36]`/`[37]` exigem
    `[rel __imp_` no `.asm` (o fallback `db` é byte-idêntico e passaria em
-   silêncio). R-5.3 F4 (hint/name + nomes) pendente.
+   silêncio). R-5.3 FECHADA (F1–F4).
 10. **Tabela de imports simbólica no `-f bin` (R-5.3 F2).** Em
    `-m bin -native` o `IMAGE_IMPORT_DESCRIPTOR` sai como `label_<VA>:` +
    5 `dd`: `OriginalFirstThunk`/`Name`/`FirstThunk` viram
@@ -133,7 +133,17 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
    (menor VA ≥ floor), então o alvo precisa ser redescoberto mesmo depois de
    o slot já ter sido emitido. Verificação: `tests/pe_impdesc.py` estendido
    (percorre OFT/FT do PE) + `[47]`.
-12. **`UNWIND_INFO` em qualquer seção (R-5.4).** O MS link funde o `.xdata`
+12. **Strings de import simbólicas no `-f bin` (R-5.3 F4).** Cada
+   `IMAGE_IMPORT_BY_NAME` sai `dw <hint>` + `db "<nome>", 0` e o `Name` do
+   descritor sai `db "<dll>", 0`, via `dex_emit_qstr` (emissor de `db "..."`
+   com escape de `"`) — **promovido a file-scope** porque os `.gb_*` vivem
+   em `dex_generate_bin` e **não** alcançam labels locais de
+   `dex_generate_asm` (labels com `.` são escopados ao label não-local
+   anterior). Legibilidade por `dex_emit_qstr` só quando o cstring é ASCII
+   imprimível (0x20..0x7E), tem NUL dentro da seção e len ≤ 255; senão
+   fallback `db` byte-fiel. Verificação: `tests/pe_impdesc.py` (lê
+   hint/nome dos bytes) + `[48]`.
+13. **`UNWIND_INFO` em qualquer seção (R-5.4).** O MS link funde o `.xdata`
    no `.rdata` em PE real (ex.: `notepad.exe`), então o unwind **não** está
    numa seção nomeada. O núcleo `.uw_bitmap` (inícios na seção, da `.pdata` +
    `chained`) + `.uw_emit` (label + `db` do header/codes + `dd` simbólico dos
