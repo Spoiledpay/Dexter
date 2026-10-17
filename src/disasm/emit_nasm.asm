@@ -80,6 +80,7 @@ s_sp         db " ", 0
 s_strict4    db "strict dword ", 0
 s_strict8    db "strict qword ", 0
 s_abs        db "abs ", 0
+s_rel2       db "rel ", 0
 s_relpre     db "[rel ", 0
 s_crlf       db 13, 10, 0
 s_colon_nl   db ":", 13, 10, 0
@@ -570,6 +571,32 @@ dex_emit_native:
     je .en_nopok
     jmp .en_db
 .en_nopok:
+    ; D-20: p/ byte-fidelidade em PE MS, ALU/mov reg-reg na forma "load"
+    ; (reg=dst: 02/03..3A/3B, 8A/8B) o NASM monta na forma "store"
+    ; (89/31/...) — mesmos bytes semanticos, encoding diferente. Cai p/ db
+    ; (byte-exato; comportamento identico). Só mod==11 e opcode 1-byte.
+    cmp dword [r15+Insn.opcode_len], 1
+    jne .en_form_ok
+    cmp byte [r15+Insn.has_modrm], 0
+    je .en_form_ok
+    movzx eax, byte [r15+Insn.modrm]
+    and eax, 0xC0
+    cmp eax, 0xC0
+    jne .en_form_ok
+    movzx eax, byte [r15+Insn.opcode]
+    cmp eax, 0x8A
+    je .en_db
+    cmp eax, 0x8B
+    je .en_db
+    cmp eax, 0x3F
+    ja .en_form_ok
+    mov ecx, eax
+    and ecx, 7
+    cmp ecx, 2
+    je .en_db
+    cmp ecx, 3
+    je .en_db
+.en_form_ok:
     ; indent
     lea rdx, [rel s_indent]
     mov rcx, rbx
@@ -1606,8 +1633,20 @@ dex_emit_native:
     je .fo_abs32
     cmp byte [r12+Insn.has_sib], 0
     jne .fo_sibabs
-    ; RIP: "[rel " + label + "]"
-    lea rdx, [rel s_relpre]
+    ; RIP: "[" + seg? + "rel " + label + "]"
+    mov rcx, rbx
+    mov edx, '['
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    sub rsp, 32
+    call .fo_segpre
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    lea rdx, [rel s_rel2]
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str
@@ -1637,7 +1676,7 @@ dex_emit_native:
     pop rbp
     ret
 .fo_sibabs:
-    ; "[abs 0x<low32>]": [" + [index*scale+] + hex + "]"
+    ; "[abs 0x<low32>]": "[" + seg? + [index*scale+] + hex + "]"
     mov rcx, rbx
     mov edx, '['
     sub rsp, 32
@@ -1645,6 +1684,15 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .fo_fail
+    movzx eax, byte [r13+DexOp.seg]
+    test eax, eax
+    jz .fo_sib_noseg
+    sub rsp, 32
+    call .fo_segpre
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+.fo_sib_noseg:
     movzx eax, byte [r13+DexOp.index]
     cmp eax, 0xFF
     je .fo_abshex
@@ -1672,11 +1720,16 @@ dex_emit_native:
     jnz .fo_fail
     jmp .fo_abshex0x
 .fo_abs32:
-    ; Fase D1: "[" + "0x" + hex(val) + "]" — r13 = op (val = VA abs).
+    ; Fase D1: "[" + seg? + "0x" + hex(val) + "]" — r13 = op (val = VA abs).
     mov rcx, rbx
     mov edx, '['
     sub rsp, 32
     call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    sub rsp, 32
+    call .fo_segpre
     add rsp, 32
     test eax, eax
     jnz .fo_fail
@@ -1711,6 +1764,36 @@ dex_emit_native:
     pop r12
     pop rbx
     pop rbp
+    ret
+; .fo_segpre — appende "<seg>:" (es/cs/ss/ds/fs/gs) se DexOp.seg != 0. rax=0/1.
+; Sub-rotina de dex_emit_native; realinha a pilha (entra com rsp%16==8).
+.fo_segpre:
+    movzx eax, byte [r13+DexOp.seg]
+    test eax, eax
+    jz .fo_seg_ok
+    sub rsp, 8
+    lea rcx, [rel dex_seg_names]
+    mov rdx, [rcx+rax*8]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_seg_bad
+    mov rcx, rbx
+    mov edx, ':'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_seg_bad
+    add rsp, 8
+.fo_seg_ok:
+    xor eax, eax
+    ret
+.fo_seg_bad:
+    add rsp, 8
+    mov eax, 1
     ret
 .fo_nobase:
     ; base ausente sem ser RIP/SIB-abs? (não deve ocorrer) → db

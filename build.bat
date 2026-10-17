@@ -75,3 +75,13 @@ if errorlevel 1 (
 )
 
 echo OK: out\dexter.exe
+
+rem ---- CTX (diario de contexto): proveniencia + indice (best-effort) ----
+rem A ferramenta ctx esta no PATH. Ver skill.md secao "CTX". Nao falha o build.
+where ctx >nul 2>nul
+if not errorlevel 1 (
+    if not exist .ctx.yaml ctx init --offline >nul 2>nul
+    ctx scan --offline >nul 2>nul
+    ctx build record out\dexter.exe >nul 2>nul
+    echo [ctx] proveniencia + indice atualizados ^(ctx build record / ctx scan^)
+)

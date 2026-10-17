@@ -516,3 +516,48 @@ Por favor, confirme que entendeu todas estas instruções.
 - Flag `--warn-as-error` trata warnings como erros
 - Flag `--max-errors=N` limita número de erros
 - Códigos documentados em `aviso.md` (172 Hxxx + 85 Wxxx)
+
+## 10. CTX — ferramenta de contexto (obrigatória)
+
+`ctx.exe` está no PATH (`C:\ctx\ctx\bin\ctx.exe`) e é a **fonte de verdade** do
+projeto: decisões (ADR), bugs, lições, proveniência de build e auditoria. Usar
+o CTX é pré-requisito operacional — código sem consulta ao CTX é considerado
+não auditado. Guia completo: `C:\ctx\ctx\usectx.md`.
+
+**Antes de qualquer implementação (descoberta):**
+- `ctx explain . --detailed`
+- `ctx decision list --status accepted`
+- `ctx memory list --output table` / `ctx memory search "<tema>"`
+- `ctx grep "<componente>"` (evitar duplicação)
+- `ctx impact <arquivo>` antes de alterar arquivos existentes
+
+**Durante a implementação:**
+- Bug inesperado: `ctx memory add --type bug --title "..." --files <arq> --severity <low|medium|high|critical> --description "..."`
+- Lição não-óbvia: `ctx memory add --type lesson --title "..." --description "..."`
+- Decisão não-trivial: `ctx decision add ...` (além do `docs/adr/NNNN-*.md`)
+
+**Pipeline de build (integrado):**
+- `build.bat` já registra proveniência e atualiza o índice a cada build
+  (`ctx scan --offline` + `ctx build record out\dexter.exe`), **best-effort**
+  (não falha o build se o ctx faltar).
+- Alternativa orquestrada: `ctx build --target build.bat` (o CTX roda o build,
+  parseia erros estruturados e sugere correções de memórias históricas).
+- Falha de build: `ctx build errors` / `ctx build suggest`.
+- **Incremento de fase/milestone**: `ctx memory add --title "Implementado: <fase>"`
+  e/ou `ctx build --target build.bat --phase-tag "<fase>"`.
+
+**Verificação e auditoria:**
+- `ctx review --staged` antes de cada commit.
+- `ctx audit list` / `ctx audit verify` (trilha imutável).
+- `ctx smells -s warning` (cheiros/diagnósticos `file:line:col`), `ctx health`,
+  `ctx verify` (integridade), `ctx bench` (memória de performance), `ctx standup`.
+
+**Higiene específica do Dexter:**
+- `tests/ld.lld.asm` (734 MB gerado) **não** deve ser versionado — removido do
+  git e adicionado ao `.gitignore`; era o que multiplicava o índice do CTX.
+- `.ctx/` (store local) é ignorado; `.ctx.yaml` (índice + memórias/decisões) é
+  versionado.
+- O `ctx scan` **não** respeita `.gitignore` para arquivos avulsos (ignora
+  `out/`/`obj/`/`bin/` por nome). Não rodar `ctx scan` com dumps `.asm`
+  gigantes na árvore (ex.: `tests/*.asm` de PE grande) — mantenha-os em
+  `tests/out/` (nome `out` é ignorado pelo scan).

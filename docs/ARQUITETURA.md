@@ -113,7 +113,35 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
    sairia deslocado (e o bin continuaria montando, mas byte-diferente).
    `K==0` (mesma seção) emite o nome puro. Gates `[36]`/`[37]` exigem
    `[rel __imp_` no `.asm` (o fallback `db` é byte-idêntico e passaria em
-   silêncio). R-5.3 F2–F4 (tabela simbólica) pendentes.
+   silêncio). R-5.3 F4 (hint/name + nomes) pendente.
+10. **Tabela de imports simbólica no `-f bin` (R-5.3 F2).** Em
+   `-m bin -native` o `IMAGE_IMPORT_DESCRIPTOR` sai como `label_<VA>:` +
+   5 `dd`: `OriginalFirstThunk`/`Name`/`FirstThunk` viram
+   `dd label_<alvoVA> + C` (`C = vaddr − raw_ptr` da seção do alvo) e os
+   alvos (ILT/nome/IAT) ganham label no ponto exato do stream (mesmo
+   fatiamento byte-exato do `.gb_db_slots` que injeta `__imp_X:`). O limite
+   do diretório é o **descritor terminador** (o `Size` do dir abarca
+   ILT/IAT/nomes, não só descritores). Alvo sem label garantida
+   (código/`.pdata`/`.xdata`/sem bytes) sai `dd 0x<rva>` cru. Verificação
+   **estrutural**: `tests/pe_impdesc.py` (oráculo = bytes do PE) + `[45]`.
+11. **Thunks ILT/IAT simbólicos no `-f bin` (R-5.3 F3).** Cada entrada
+   não-nula das arrays `OriginalFirstThunk` (ILT) e `FirstThunk` (IAT) sai
+   `dq label_<hint/name VA> + C` (o alvo ganha `label_` no stream); ordinal
+   (bit63) ou IAT *bound* (valor > 32 bits) ou alvo não-rotulável → `dq
+   0x<v>` cru (byte-fiel, sem label indefinido). O alvo é descoberto
+   **independente** do slot: o scanner do bin resolve **1 VA por iteração**
+   (menor VA ≥ floor), então o alvo precisa ser redescoberto mesmo depois de
+   o slot já ter sido emitido. Verificação: `tests/pe_impdesc.py` estendido
+   (percorre OFT/FT do PE) + `[47]`.
+12. **`UNWIND_INFO` em qualquer seção (R-5.4).** O MS link funde o `.xdata`
+   no `.rdata` em PE real (ex.: `notepad.exe`), então o unwind **não** está
+   numa seção nomeada. O núcleo `.uw_bitmap` (inícios na seção, da `.pdata` +
+   `chained`) + `.uw_emit` (label + `db` do header/codes + `dd` simbólico dos
+   campos RVA) é reusado no caminho bin (`.gb_db_slots`), que reemite cada
+   `UNWIND_INFO` intercalado com imports/db — byte-exato. `-m bin -native`
+   do notepad byte-idêntico (**D-20 fechada**: ALU/mov reg-reg "load" → `db`;
+   prefixo de segmento `gs:`/`fs:` reemitido). O `win64` de PE MS real segue
+   **D-19**.
 
 ## Mapa de arquivos
 

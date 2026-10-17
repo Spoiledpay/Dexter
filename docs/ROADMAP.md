@@ -6,6 +6,12 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
 ## Fase 0 — Esqueleto, CLI e I/O `[x]`
 
 - [x] R-0.1 Pastas + `build.bat` (nasm+link autodetect) + `clean.bat`
+- [x] CTX (`ctx.exe`) na pipeline: `build.bat` registra proveniência
+  (`ctx build record out\dexter.exe`) + atualiza índice (`ctx scan`) a cada
+  build (best-effort); uso em `skill.md` §10; `.ctx/` ignorado, `.ctx.yaml`
+  versionado. Higiene: `tests/ld.lld.asm` (734 MB gerado, versionado desde o
+  baseline) destrackeado via `git rm --cached` + `.gitignore` — era o que fazia
+  o índice do CTX ir a ~3 GB
 - [x] R-0.2 `main.asm` (`/ENTRY:main`, sem CRT, ExitProcess com códigos 0/1/2/3/5)
 - [x] R-0.3 CLI completa (`-o -O -m -r -L -N -s -start -end -hex -nop-pad
   -no-imports -no-relocs -strings -v -vv -q -ver -h/--help`), tokenizer
@@ -103,8 +109,23 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   `K = iat_rva − off(slot) − (vaddr_code − raw_code)` (hello/var64:
   0xE00/0x6600). Prova: hello/var64 (e gcc 2 MB + ld.lld 68 MB na lenta)
   `fc /b` 0 diffs **com** `[rel __imp_` no `.asm`; `[36]`/`[37]` travam o
-  gate (db silencioso seria byte-idêntico e passaria). Falta **F2–F4**
-  (descritores/ILT/IAT/hint-name/nomes simbólicos).
+  gate (db silencioso seria byte-idêntico e passaria). **F2 FECHADA** (1.2.347): os `IMAGE_IMPORT_DESCRIPTOR` viram
+  `label_<VA>:` + 5 `dd` no `-m bin -native` — `OriginalFirstThunk`/`Name`/
+  `FirstThunk` saem `dd label_<alvoVA> + C` (`C = vaddr − raw_ptr` da seção do
+  alvo; igual ao `.pdata` da F3) e os alvos (ILT/nome/IAT) são rotulados;
+  limite do dir = **descritor terminador** (o `Size` abarca ILT/nomes, não só
+  descritores); alvo não-rotulável → `dd 0x<rva>` (byte-idêntico, sem label
+  indefinido). Gate **estrutural** `tests/pe_impdesc.py` + `[45]` (330/330).
+  Prova: hello/var64/gcc `fc /b` 0 diffs + comportamento. Limite honesto:
+  `ld.lld -m bin -native` já falhava no nasm **antes** da F2 (PE_NOTES §14).
+  **F3 FECHADA** (1.2.364): as arrays de thunks (OFT/ILT e FT/IAT) deixam de
+  ser `db` — cada entrada não-nula sai `dq label_<hint/name VA> + C` (mesma
+  constante `C`; o alvo ganha `label_`); ordinal (bit63) ou IAT *bound*
+  (valor > 32 bits) ou alvo não-rotulável → `dq 0x<v>` cru (byte-fiel). O
+  alvo é registrado **independente** do slot (o scanner resolve 1 VA por
+  iteração). Gate: `tests/pe_impdesc.py` estendido + `[47]` (343/343);
+  hello/var64/exc/gcc/notepad `fc /b` 0 diffs. Prova do ramo cru: notepad
+  (`thunks=630 sym=620 raw=10`). Falta **F4** (hint/name + nomes simbólicos).
 - [ ] R-5.4 strings em code-flow, jump tables, SEH/unwind reemitido,
   fuzzy corpus expandido, `tests\fuzz_pe.py`
   (PARCIAL 1.2.250, 3b: pré-scan `.collect_strs` insere starts de runs +
@@ -137,6 +158,18 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   `.pdata`/`.xdata` simbólica é funcional, não só fiel. Modo win64 do
   fixture segue **D-19** (`0xC000007B`: o link funde 18→16 seções e o
   Import Directory cego aponta p/ `.bss` — `PE_NOTES §11`).
+- [x] **R-5.4 estendido** — `UNWIND_INFO` em QUALQUER seção (1.2.356): o MS
+  link funde o `.xdata` no `.rdata` em PE real (ex.: `notepad.exe`), então o
+  unwind **não** está numa seção nomeada. Núcleo `.uw_bitmap` (inícios na
+  seção, da `.pdata` + `chained` propagado) + `.uw_emit` (label + `db` do
+  header/codes + `dd` simbólico dos campos RVA via `.pd_field`), reusado no
+  bin (`.gb_db_slots`) intercalado com imports/db — byte-exato. Corpus
+  `tests/notepad.exe` + `[46]` (5 checks): `-m bin` byte-idêntico; `-m bin
+  -native` COMPILA (antes: 386 `symbol not defined` da `.pdata`). **D-20
+  FECHADA**: `-m bin -native` do notepad agora **byte-idêntico** — ALU/mov
+  reg-reg na forma "load" cai p/ `db` + prefixo de segmento (`gs:`/`fs:`)
+  reemitido nos caminhos sem base (`src/disasm/emit_nasm.asm`). win64 de PE
+  MS real segue **D-19**. `PE_NOTES §15`.
 - [x] R-5.4-fuzz `tests\fuzz_pe.py` mínimo (1.2.253, determinístico por
   seed: flips + miradas em MZ/lfanew/seções/imports + truncamento;
   mutante nunca executado; passa = saída em {0,1,2,3,5}; `[22]` com
@@ -446,3 +479,10 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   p/ seção errada após o remanejo — `imp`/`iat` do var64 caíram dentro
   da `.reloc` nova). Consequência: rebuild `-native` via link só
   garante comportamento em PEs simples; PEs reais pedem R-8.2.
+- [x] D-20 FECHADA (2026-10-16): o codegen nativo agora é byte-fiel em PE MS
+  real. Duas classes: (1) ALU/mov **reg-reg na forma "load"** (`02/03..3A/3B`,
+  `8A/8B`: reg=dst) cai p/ `db` (o NASM montaria na forma "store" `89/31`);
+  (2) **prefixo de segmento** (`gs:`/`fs:`) era descartado nos caminhos sem
+  base (`[abs …]`/`[rel …]`) → reemitido via `.fo_segpre`
+  (`src/disasm/emit_nasm.asm`). Prova: `-m bin -native` do `tests/notepad.exe`
+  = `fc /b` 0; gcc/ld.lld seguem byte-idênticos. `[46]`. `PE_NOTES §15`.

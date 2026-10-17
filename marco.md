@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-15, Dexter 1.2.338)
+## 0. Onde estamos (2026-10-16, Dexter 1.2.361)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -24,13 +24,15 @@
 - [x] R-5.4 SEH/unwind reemitido — **F1** parser `.pdata`/`.xdata` (1.2.329, `[40]`), **F2** emissão win64 simbólica `wrt ..imagebase` + EXC dir regenerado (1.2.332, `[41]` var64 `rva=0xD000 size=0x588`; ataca D-19), **F3** emissão bin simbólica **byte-idêntica** `dd label_<VA> + C` + bitmap p/ unwind RVAs não-monotônicos (1.2.338, `[42]`; gcc/ld.lld `fc /b` 0 diffs). **F4** FECHADA (1.2.338, `[43]`, 6 checks): corpus de exceção real `tests/exc.exe` (C++ `throw`/`catch`, 117 `RUNTIME_FUNCTION` com `__CxxFrameHandler3`) `-m bin -native` byte-idêntico **e** reconstruído roda o throw/catch (exit 42); win64 do fixture = D-19 (`0xC000007B`)
 - [x] Removido debug vazado `[cs] sec=` no `-m bin -native` (`-q` agora 0 bytes em stdout)
 - [x] Round-trip `-m bin` byte-idêntico verificado nos apps do usuário: `link/Contador/Color2/Case/Char/color/Calculator` (x32) + `gcc` (x64) — todos `fc /b` 0 diffs (bin e bin-native)
-- Placar honesto: 327 passam, 0 falham (`tests\run_tests.bat → 327/327 OK` em 1.2.341: base 270/270 + `[39]` 29 + `[40]` 4 + `[41]` 7 + `[42]` 4 + `[43]` 6 + `[44]` 4 + 3 gates F1). Lenta `run_slow.bat`: **7/7** (`[S1]` ld.lld 68 MB + `[S2]` gcc byte-idênticos com `.pdata`/`.xdata` simbólicas)
+- [x] R-5.3 F3 thunks ILT/IAT simbólicos no `-m bin -native` (1.2.364, `[47]` 7 checks: `dq label_<hint/name> + C`; ordinal/bound→`dq 0x<v>` cru; notepad `thunks=630 sym=620 raw=10`)
+- Placar honesto: **343 passam, 0 falham** (`tests\run_tests.bat → 343/343 OK` em 1.2.364: base 336/336 + `[47]` 7 checks). Lenta `run_slow.bat`: **7/7** (`[S1]` ld.lld 68 MB + `[S2]` gcc byte-idênticos com `.pdata`/`.xdata` simbólicas). Build: `build.bat` OK (+~2 s do CTX).
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
+- [x] CTX (`ctx.exe`, no PATH): `build.bat` registra proveniência (`ctx build record out\dexter.exe`) + atualiza índice (`ctx scan`) a cada build (best-effort). Uso obrigatório em `skill.md` §10 (descoberta/memórias/decisões/build/auditoria). `.ctx/` ignorado; `.ctx.yaml` versionado. Higiene: `tests/ld.lld.asm` (734 MB gerado) destrackeado (estourava o índice do CTX a ~3 GB).
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[44]`, 327 checks em 1.2.341)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[47]`, 343 checks em 1.2.364)
 - [x] Suite lenta: `tests\run_slow.bat` (`[S1]` round-trip `ld.lld.exe` 68 MB + `[S2]` gcc byte-idêntico+comportamento)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs/jtable/t32` (round-trip bin-native) + `var64/gcc/ld.lld` (bin) + `gcc` (`-native-bin` byte-idêntico + comportamento = R-8.2 FECHADA) + negativos `var32/link` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -137,7 +139,9 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] R-8.2 f2 exatidão + matriz (1.2.315, `[37]` + `[38]`). Prova: var64 byte-idêntico + comportamento; loop/strings/no_relocs/jtable/t32 idem; 5 classes fechadas (disp-zero/nop/branch/imm8/grp2).
 - [x] R-8.2 fatia 3 — PE grande: gcc `-native-bin` byte-idêntico + comportamento (1.2.325, `[S2]`). Critério de aceite da Fase 5 FECHADO.
 - [x] R-2.7 VEX/EVEX/x87/3DNow! rotulado (1.2.327, `[39]` 29 checks). Próximo da ordem: SEH/unwind reemitido.
-- [x] Resto ordenado (após R-2.7): SEH/unwind reemitido **F1–F4 FECHADAS** (F4 = corpus de exceção real `tests/exc.exe` + fuzz `.pdata`/`.xdata`, 1.2.338 `[43]`). **R-5.3 F1 FECHADA** (1.2.341): imports nativos no `-m bin -native` (`call|jmp [rel __imp_X + K]`, K = correção de delta offset↔RVA; `[36]`/`[37]`). Próximo da ordem: → **R-5.3 F2–F4** (tabela simbólica) → loads indexados/jump-to-code → `-s` + RIP.
+- [x] Resto ordenado (após R-2.7): SEH/unwind reemitido **F1–F4 FECHADAS** (F4 = corpus de exceção real `tests/exc.exe` + fuzz `.pdata`/`.xdata`, 1.2.338 `[43]`). **R-5.3 F1 FECHADA** (1.2.341): imports nativos no `-m bin -native` (`call|jmp [rel __imp_X + K]`, K = correção de delta offset↔RVA; `[36]`/`[37]`). **R-5.3 F2 FECHADA** (1.2.347, `[45]`, 3 checks: descritores de import simbólicos — `dd label_<alvoVA> + C` + alvos rotulados; `fc /b` 0 diffs hello/var64/gcc; `tests/pe_impdesc.py`; limite honesto: ld.lld native-bin já falhava no nasm pré-F2, `PE_NOTES §14`). **R-5.3 F3 FECHADA** (1.2.364, `[47]`, 7 checks: thunks ILT/IAT — `dq label_<hint/name VA> + C`; ordinal/bound→`dq 0x<v>` cru; `PE_NOTES §16`). Próximo da ordem: → **R-5.3 F4** (hint/name + nomes) → loads indexados/jump-to-code → `-s` + RIP.
+- [x] **R-5.3 F3 FECHADA** (1.2.364, `[47]`, 7 checks): arrays de thunks (OFT/ILT + FT/IAT) no `-m bin -native` saem `dq label_<hint/name VA> + C` (alvo rotulado; descoberto **independente** do slot — o scanner resolve 1 VA/iteração); ordinal/bound (>32 bits)/alvo não-rotulável → `dq 0x<v>` cru. `tests/pe_impdesc.py` estendido (OFT/FT) + `[47]`; hello/var64/exc/gcc/notepad `fc /b` 0 diffs. Próximo da ordem: → **R-5.3 F4** (hint/name + nomes simbólicos) → loads indexados/jump-to-code → `-s` + RIP.
+- [x] **R-5.4 estendido** — `UNWIND_INFO` em QUALQUER seção (1.2.359, `[46]` 6 checks): o MS link funde o `.xdata` no `.rdata` (ex.: `notepad.exe`), então o unwind reemitido simbólico **onde estiver** (`.uw_bitmap`/`.uw_emit` no bin, byte-exato). `-m bin` E `-m bin -native` do notepad **byte-idênticos**. **D-20 FECHADA** (`src/disasm/emit_nasm.asm`: ALU/mov reg-reg "load" → `db`; prefixo de segmento `gs:`/`fs:` reemitido). win64 de PE MS real segue **D-19**. `PE_NOTES §15`.
 
 ## 9. Como marcar
 

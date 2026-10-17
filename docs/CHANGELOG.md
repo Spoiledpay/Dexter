@@ -2,6 +2,117 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — R-5.3 F3: thunks ILT/IAT simbólicos (`-m bin -native`) (2026-10-17)
+
+### Adicionado
+
+- **R-5.3 F3**: em `-m bin -native` (x64) as arrays de thunks deixam de ser
+  `db` — cada entrada não-nula de `OriginalFirstThunk` (ILT) e `FirstThunk`
+  (IAT) sai `dq label_<hint/name VA> + C` (`C = vaddr − raw_ptr` da seção do
+  alvo, a mesma constante da F2); o alvo `IMAGE_IMPORT_BY_NAME` ganha
+  `label_` no ponto exato do stream. Ordinal (bit63), IAT *bound*
+  (valor > 32 bits) ou alvo não-rotulável → `dq 0x<v>` cru (byte-fiel, sem
+  label indefinido). Em `src/gen/rebuild.asm` (`.gb_db_slots`: varredura
+  OFT/FT + flag de slot no `best`; emissor `.gb_slot_emit`; alvo descoberto
+  independente do slot).
+
+### Verificado
+
+- `build.bat` limpo (1.2.364); `tests\run_tests.bat` **343/343 OK** (336 + 7
+  novos: seção `[47]`); `tests\run_slow.bat` **7/7 OK**.
+- `fc /b` 0 diffs em hello/var64/exc/gcc/notepad (`-m bin -native`); `hi` e
+  `exc` (exit 42) rodam. `tests/pe_impdesc.py` estendido percorre OFT/FT
+  (hello `thunks=6 sym=6 raw=0`; notepad `thunks=630 sym=620 raw=10` — prova
+  do ramo *bound/ordinal → raw*).
+
+## [Unreleased] — CTX (ctx.exe) na pipeline + higiene do repositório (2026-10-16)
+
+### Adicionado
+
+- **CTX integrado** (`ctx.exe`, no PATH — `C:\ctx\ctx\bin\ctx.exe`): `build.bat`
+  registra proveniência (`ctx build record out\dexter.exe`) e atualiza o índice
+  (`ctx scan --offline`) a cada build — best-effort (não falha o build se o ctx
+  faltar). `skill.md` §10 documenta o uso obrigatório: descoberta
+  (`ctx explain/decision/memory/grep/impact`), memórias/decisões, build,
+  verificação/auditoria (`ctx smells/health/verify/audit/review/bench`).
+- **`.ctx.yaml`** (índice + memórias/decisões) versionado; **`.ctx/`** (store
+  local) ignorado.
+
+### Corrigido (higiene)
+
+- `tests/ld.lld.asm` (**734 MB gerados**, o `-m bin` do `ld.lld.exe`) estava
+  versionado desde o baseline (`b3be7b8`) — fazia o `ctx scan` produzir um
+  índice de **~3 GB**. `git rm --cached` + `.gitignore`; arquivo removido do
+  disco (nada o referenciava). Pós-fix: `ctx scan` ~2 s, índice 1,24 MB.
+
+### Verificado
+
+- `build.bat` OK (com o passo CTX, +~2 s); `tests\run_tests.bat` **336/336 OK**.
+- `ctx smells` (4 achados reais) + 2 memórias de lição registradas.
+
+## [Unreleased] — R-5.4: UNWIND_INFO em qualquer seção (`.rdata`) + `notepad.exe` (2026-10-16)
+
+### Adicionado
+
+- **R-5.4 estendido**: o `UNWIND_INFO` é reemitido simbólico **onde ele
+  estiver** (não só numa seção nomeada `.xdata`). Núcleo reutilizável em
+  `src/gen/rebuild.asm` (escopo `dex_generate_asm`): `.uw_bitmap` (bitmap de
+  inícios dentro da seção, da `.pdata` + `chained` propagado) e `.uw_emit`
+  (`label_` + `db` do header/codes + `dd` simbólico dos campos RVA via
+  `.pd_field`). O caminho bin (`.gb_db_slots`) ganhou a varredura de inícios
+  de unwind e reemite cada um intercalado com imports/db, byte-exato. Motivo:
+  o MS link funde o `.xdata` no `.rdata` em PE real (ex.: `notepad.exe`).
+- **Corpus `tests/notepad.exe`** (MS x64 real, 8 seções, 315 imports; sem
+  seção `.xdata`) + seção `[46]` na suíte.
+
+### Verificado
+
+- **`-m bin` E `-m bin -native` do notepad byte-idênticos** (`fc /b` 0).
+  `-native` antes falhava no nasm (386 `symbol not defined` da `.pdata`).
+- `tests\run_tests.bat` **336/336 OK**; `run_slow.bat` **7/7 OK**; corpus
+  antigo (hello/var64/gcc/exc) byte-idêntico (bin e `-native`).
+
+### Corrigido
+
+- **D-20 FECHADA** (`src/disasm/emit_nasm.asm`): o `-m bin -native` do PE MS
+  real já é **byte-idêntico**. Duas classes achadas com `fc`+listing:
+  (1) **ALU/mov reg-reg na forma "load"** (`02/03..3A/3B`, `8A/8B`: reg=dst)
+  o NASM monta na forma "store" (`89/31/…`) → agora cai p/ `db` (byte-exato);
+  (2) **prefixo de segmento** (`gs:`/`fs:`) era **descartado** nos caminhos
+  sem base (`[abs …]`, `[rel …]`) → agora emite `[<seg>:…]` (sub-rotina
+  `.fo_segpre`). `fc /b` = 0 no notepad (360448 B).
+
+## [Unreleased] — R-5.3 F2: descritores de import simbólicos (`-m bin -native`) (2026-10-16)
+
+### Adicionado
+
+- **R-5.3 F2**: em `-m bin -native` (x64), os `IMAGE_IMPORT_DESCRIPTOR`
+  deixam de ser `db` opaco — cada descritor sai `label_<VA>:` + 5 `dd`, com
+  `OriginalFirstThunk`/`Name`/`FirstThunk` como `dd label_<alvoVA> + C`
+  (`C = vaddr − raw_ptr` da seção do alvo, idêntico ao do `.pdata` da F3) e os
+  alvos (ILT/nome/IAT) rotulados. Só o alvo "rotulável" (seção de dados com
+  bytes, não executável, não `.pdata`/`.xdata`) vira simbólico; senão
+  `dd 0x<rva>` cru (byte-idêntico). Em `src/gen/rebuild.asm` (`.gb_db_slots`
+  + `.gsa_upd`/`.gb_desc_emit`/`.gb_field_emit`/`.gb_dd_hex`/`.gb_tgt_c`).
+  O limite do diretório é o **descritor terminador** (não `Size/20`, que
+  abarca ILT/nomes).
+- **`tests/pe_impdesc.py`** + seção `[45]`: verificação **estrutural** do
+  import dir no `.asm` (oráculo = bytes do PE original): cada campo `dd` e
+  cada label conferidos — pega regressão que o `fc` (bytes iguais) não pega,
+  pois `db` e `dd` são byte-idênticos.
+
+### Verificado
+
+- `tests\run_tests.bat` **330/330 OK**; `run_slow.bat` **7/7 OK**.
+- `fc /b` 0 diffs em hello/var64/gcc (`-m bin -native`).
+
+### Limite honesto (pré-existente, não é regressão da F2)
+
+- `tests/ld.lld.exe` (68 MB) `-m bin -native` já falhava no `nasm` **antes**
+  da F2: 59160 `symbol not defined` (RVAs de `.xdata` da `.pdata` simbólica)
+  + 5 `label-redef-late`, assinatura idêntica com e sem F2. Fora do escopo da
+  R-5.3 (tabela de imports). `PE_NOTES §14`.
+
 ## [Unreleased] — Dívidas D-3/D-15/D-16 (2026-10-16)
 
 ### Corrigido

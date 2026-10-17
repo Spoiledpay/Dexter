@@ -940,6 +940,59 @@ if exist tests\out\strpool_check.exe (
     if errorlevel 1 ( echo "  FALHA: golden strpool" & set /a FAIL+=1 ) else ( echo "  OK: golden strpool" & set /a PASS+=1 )
 ) else ( echo "  FALHA: sem strpool_check.exe" & set /a FAIL+=1 )
 
+echo === [45] descritores de import simbolicos (R-5.3 F2) ===
+rem Oraculo (tests\pe_impdesc.py): cada IMAGE_IMPORT_DESCRIPTOR vira label_ + 5
+rem `dd`; campos RVA (OFT/Name/FT) rotulaveis saem `dd label_ + C` e o alvo
+rem ganha label; os .asm sao byte-identicos (fc ja checado em [36]/[37]/[43]).
+python tests\pe_impdesc.py tests\hello.exe tests\out\hello_nb.asm > tests\out\impdesc_hello.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: descritores import (hello)" & type tests\out\impdesc_hello.out & set /a FAIL+=1 ) else ( echo "  OK: descritores import (hello)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\var64.exe tests\out\var64_nb.asm > tests\out\impdesc_var64.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: descritores import (var64)" & type tests\out\impdesc_var64.out & set /a FAIL+=1 ) else ( echo "  OK: descritores import (var64)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\exc.exe tests\out\exc_nb.asm > tests\out\impdesc_exc.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: descritores import (exc)" & type tests\out\impdesc_exc.out & set /a FAIL+=1 ) else ( echo "  OK: descritores import (exc)" & set /a PASS+=1 )
+
+echo === [46] notepad.exe real (MS; UNWIND_INFO em .rdata) ===
+rem Fixture tests\notepad.exe (MS x64, 8 secoes, 315 imports): SEM secao
+rem .xdata — o MS link funde o unwind no .rdata. Exercita o UNWIND_INFO
+rem reemitido em QUALQUER secao (R-5.4; antes: label indefinido no nasm).
+rem Prova: -m bin E -m bin -native byte-identicos + descritores + unwind.
+if not exist tests\notepad.exe ( echo "  FALHA: tests\notepad.exe ausente" & set /a FAIL+=1 )
+"%DX%" tests\notepad.exe -o tests\out\notepad_bin.asm -m bin -r -O tests\out\notepad_bin.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -m bin notepad" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -m bin notepad" & set /a PASS+=1 )
+if exist tests\out\notepad_bin.exe (
+    fc /b tests\notepad.exe tests\out\notepad_bin.exe >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: notepad -m bin difere" & set /a FAIL+=1 ) else ( echo "  OK: notepad -m bin byte-identico" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem notepad_bin.exe" & set /a FAIL+=1 )
+"%DX%" tests\notepad.exe -o tests\out\notepad_nb.asm -m bin -native -r -O tests\out\notepad_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin -native notepad nao compila" & set /a FAIL+=1 ) else ( echo "  OK: -m bin -native notepad compila" & set /a PASS+=1 )
+if exist tests\out\notepad_nb.exe (
+    fc /b tests\notepad.exe tests\out\notepad_nb.exe >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: notepad -m bin -native difere" & set /a FAIL+=1 ) else ( echo "  OK: notepad -m bin -native byte-identico (D-20)" & set /a PASS+=1 )
+) else ( echo "  FALHA: sem notepad_nb.exe" & set /a FAIL+=1 )
+findstr /c:"dd label_" tests\out\notepad_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: notepad unwind nao-simbolico" & set /a FAIL+=1 ) else ( echo "  OK: notepad unwind simbolico (.rdata)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\notepad.exe tests\out\notepad_nb.asm > tests\out\impdesc_notepad.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: descritores import (notepad)" & type tests\out\impdesc_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: descritores import (notepad)" & set /a PASS+=1 )
+
+echo === [47] thunks ILT/IAT simbolicos (R-5.3 F3) ===
+rem Oraculo: entradas nao-nulas de OFT(ILT)/FT(IAT) viram `dq label_<hint/name>
+rem + C`; ordinal/bound -> `dq 0x<v>` cru; o alvo ganha `label_`. Os .asm ja
+rem sao byte-identicos (fc em [36]/[37]/[43]/[46]).
+findstr /c:"dq label_140002186 + 0x1A00" tests\out\hello_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: thunk ILT/IAT nao-simbolico (hello)" & set /a FAIL+=1 ) else ( echo "  OK: thunk ILT/IAT simbolico (hello)" & set /a PASS+=1 )
+findstr /c:"label_140002178:" tests\out\hello_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: label do hint/name ausente (hello)" & set /a FAIL+=1 ) else ( echo "  OK: label do hint/name emitido (hello)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\hello.exe tests\out\hello_nb.asm > tests\out\impthunk_hello.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: thunks (hello)" & type tests\out\impthunk_hello.out & set /a FAIL+=1 ) else ( echo "  OK: thunks conferidos (hello)" & set /a PASS+=1 )
+findstr /c:"thunks=6 sym=6 raw=0 ruins=0" tests\out\impthunk_hello.out >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: golden thunks hello" & type tests\out\impthunk_hello.out & set /a FAIL+=1 ) else ( echo "  OK: golden thunks hello (6/6/0)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\var64.exe tests\out\var64_nb.asm > tests\out\impthunk_var64.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: thunks (var64)" & type tests\out\impthunk_var64.out & set /a FAIL+=1 ) else ( echo "  OK: thunks conferidos (var64)" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\notepad.exe tests\out\notepad_nb.asm > tests\out\impthunk_notepad.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: thunks (notepad)" & type tests\out\impthunk_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: thunks conferidos (notepad)" & set /a PASS+=1 )
+findstr /c:"thunks=630 sym=620 raw=10 ruins=0" tests\out\impthunk_notepad.out >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: golden thunks notepad (bound->raw)" & type tests\out\impthunk_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: golden thunks notepad (620 sym + 10 raw)" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

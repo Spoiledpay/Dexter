@@ -13,6 +13,9 @@ tests/*_rt.exe
 tests/*_bin.exe
 tests/*.out
 tests/*.asm.sha256
+# CTX (diário/índice local) e dumps gerados gigantes
+.ctx/
+tests/ld.lld.asm
 
 # Binários: ignorar por padrão, EXCETO o corpus de teste versionado
 *.exe
@@ -20,4 +23,5 @@ tests/*.asm.sha256
 !tests/var64.exe
 !tests/link.exe
 !tests/exc.exe
+!tests/notepad.exe
 

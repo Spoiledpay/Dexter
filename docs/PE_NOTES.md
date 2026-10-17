@@ -109,3 +109,87 @@ Correção (R-5.3 F1): emitir `[rel __imp_X + K]` — a expressão somada ao
 label devolve o `disp32` original (hello/var64: `K = 0xE00` / `0x6600`).
 Sem K o `.asm` ainda monta, mas o binário fica byte-diferente (falha
 silenciosa se não houver o gate `[rel __imp_` na suíte).
+
+## 13. `-f bin` simbólico: descritores de import (R-5.3 F2)
+
+No `-m bin -native` o `IMAGE_IMPORT_DESCRIPTOR` (20 B) deixa de ser `db`
+opaco: cada descritor vira `label_<VA>:` + 5 `dd`, com
+`OriginalFirstThunk`/`Name`/`FirstThunk` como `dd label_<alvoVA> + C`
+(`C = vaddr − raw_ptr` da seção do alvo — a mesma constante do `.pdata` da
+F3) e o alvo ganhando `label_<VA>:` no stream. `TimeDateStamp`/`ForwarderChain`
+ficam crus (`dd 0x…`).
+
+- **`Import Directory.Size` cobre MAIS que os descritores.** No MSVC/MinGW ele
+  abrange também a ILT/IAT/nomes: `hello` `dir[1].Size = 0x28` (2 descritores),
+  `var64` `Size = 0xC18` = 12 descritores + ILT/IAT/nomes (`size/20` = 154,8).
+  Logo NÃO se pode derivar a contagem de `size/20`; o limite correto é o
+  **descritor terminador** (5 campos u32 zero), com tetos de segurança
+  (`imp_rva+Size`, nº máx., `raw_size` da seção e `offset+20 ≤ file_size`).
+- **Label só para alvo "rotulável".** Só se concede `dd label_ + C` se o alvo
+  cai numa seção de dados com bytes (`raw>0`), não executável e não
+  `.pdata`/`.xdata`; caso contrário sai `dd 0x<rva>` cru (byte-idêntico, sem
+  risco de label indefinido). A referência e a emissão do label concordam por
+  construção.
+- **Evento = menor VA, não item.** Um mesmo VA pode ser descritor, alvo e slot
+  de IAT (ex.: `FirstThunk == início da IAT`); os rótulos são deduplicados por
+  VA. O label da seção já cobre `off==0`.
+- **Verificação estrutural:** `tests/pe_impdesc.py <exe> <asm>` reconstrói cada
+  campo a partir dos bytes originais do PE e confere as linhas `dd` e os
+  labels (seção `[45]`). É mais forte que `findstr`, pois `db` e `dd` são
+  byte-idênticos (o `fc` não distingue simbólico de copiado).
+
+## 14. Limite honesto: `ld.lld -m bin -native` (pré-existente, fora da F2)
+
+`tests/ld.lld.exe` (68 MB) em `-m bin -native` **já falhava no `nasm`** antes
+da F2: a `.pdata` simbólica (F3) referencia RVAs de `.xdata` que não recebem
+label em seções grandes do ld.lld → **59160** `symbol ... not defined` + **5**
+`label-redef-late`. Provado gerando com o binário do HEAD (sem F2): assinatura
+de erro idêntica (58960 "not defined" + 5 "redef-late" nos dois). A suíte
+lenta cobre ld.lld apenas em `-m bin` (`[S1]`, byte-idêntico OK); o caminho
+`-native` de PE grande provado é o `gcc` (`[S2]`) + hello/var64/exc/tiny.
+
+## 15. `UNWIND_INFO` em QUALQUER seção (R-5.4) — MS funde `.xdata` no `.rdata`
+
+MSVC / MS link em PE real (ex.: `tests/notepad.exe`) **não** cria seção
+`.xdata`: o `UNWIND_INFO` vive dentro do `.rdata`. O código SEH antigo só
+rotulava unwinds numa seção **nomeada** `.xdata`, então a `.pdata`
+(`dd label_<UnwindInfo>`) gerava label indefinido (386 no notepad; `win64` e
+`-m bin -native` falhavam no `nasm`). Agora o unwind é reemitido simbólico
+**onde estiver**: núcleo `.uw_bitmap` (bitmap dos inícios na seção, da `.pdata`
++ `chained` propagado) + `.uw_emit` (`label_` + `db` do header/codes + `dd`
+simbólico dos campos RVA via `.pd_field`); o bin (`.gb_db_slots`) varre os
+inícios e os reemite intercalados com imports/db, byte-exato.
+
+**D-20 (FECHADA):** `-m bin -native` do notepad agora é **byte-idêntico**
+(`fc /b` 0), via `src/disasm/emit_nasm.asm`. Duas classes de divergência do
+codegen nativo (achadas com `fc`+listing): (1) ALU/mov **reg-reg na forma
+"load"** (`02/03..3A/3B`, `8A/8B`: reg=dst) — o NASM monta na forma "store"
+(`89/31`) → cai p/ `db`; (2) **prefixo de segmento** (`gs:`/`fs:`) era
+descartado nos caminhos **sem base** (`[abs …]`/`[rel …]`) → reemitido
+`[<seg>:…]` (sub-rotina `.fo_segpre`). O path **fiel** `-m bin` também segue
+byte-idêntico. O `win64` de PE MS real segue **D-19** (link funde seções →
+Import Directory aponta p/ seção errada → `0xC000007B`).
+
+## 16. `-f bin` simbólico: thunks ILT/IAT (R-5.3 F3)
+
+No `-m bin -native` as arrays de thunks deixam de ser `db`: cada entrada
+não-nula de `OriginalFirstThunk` (ILT) e `FirstThunk` (IAT) sai
+`dq label_<hint/name VA> + C` (`C = vaddr − raw_ptr` da seção do alvo — mesma
+constante da F2; o alvo `IMAGE_IMPORT_BY_NAME` ganha `label_` no stream).
+
+- **`bound`/ordinal → `dq 0x<v>` cru.** O valor de um thunk é um RVA de
+  `IMAGE_IMPORT_BY_NAME` **apenas se** o bit63 estiver limpo (senão é ordinal)
+  e o valor couber em 32 bits. IAT *bound* (pré-vinculada) guarda endereços
+  reais (> 4 GiB) → `> 32 bits` → sai cru; ordinal idem. Alvo não-rotulável
+  (`.pdata`/`.xdata`/código/sem bytes) também cai em cru. Byte-fiel em todos
+  os casos (`notepad`: `thunks=630 sym=620 raw=10`).
+- **Alvo ≠ slot no scanner de 1-VA-por-iteração.** O caminho de dados do bin
+  resolve **um** VA por iteração (o menor ≥ `floor`), então registrar o alvo
+  dentro do teste do slot o deixaria órfão quando o slot já tivesse sido
+  emitido (< `floor`) — o `label_` nunca sairia e o nasm acusaria *symbol not
+  defined*. Correção: o alvo é testado **independente** do slot.
+- **Terminador do array fica em `db`.** A varredura para na primeira entrada
+  zero (não registra evento), então os 8 bytes do terminador saem no `db`
+  seguinte — inofensivo (`dq 0` e `db 0×8` são idênticos).
+- **Verificação:** `tests/pe_impdesc.py` percorre OFT/FT do PE original e
+  confere cada `dq`/`label_`; a suíte trava o golden em `[47]`.
