@@ -7,6 +7,7 @@ data/backups/*
 out/
 obj/
 tests/out/
+tests/__pycache__/
 tests/*.obj
 tests/hello.exe
 tests/*_rt.exe
