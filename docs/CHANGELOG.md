@@ -2,6 +2,175 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — D-22: `-s` + `-r` com entry label via `equ` (2026-10-19)
+
+### Corrigido
+
+- **`-s <seção>` + `-r` falhava no link (`LNK2001`) quando o filtro não era a
+  seção do entrypoint.** A seção do entry era emitida como `db` e o
+  `label_<entry>` nunca era definido (o cabeçalho só emitia `global`). Agora
+  `.emit_entry_alias` fecha o `.asm` com
+  `label_<entryVA> equ label_<secVA> + 0x<delta>`; delta 0 e `-s` na seção do
+  entry não emitem alias (sem duplicata nem auto-referência).
+
+### Verificado
+
+- `build.bat` limpo (1.2.390); `tests\run_tests.bat` **391/391 OK** (385 + 6
+  de `[55]`); `run_slow.bat` 7/7.
+- `tests\exc.exe -s .rdata -native -r` e `-s .rdata -r` linkam (antes exit 5);
+  `-s .text -native -r` segue sem `equ` redundante; `tests\tiny32.exe -s
+  .rdata -r` cobre x32 com delta 0.
+- `[0]` agora valida a integridade de **todos** os fontes sagrados do corpus
+  (evita `dexter x.exe -v` sobrescrever `tests\x.asm`).
+- Handoff da sessão: `docs/SESSAO-2026-10-19-D22.md`; ADR:
+  `docs/adr/0002-entry-label-equ.md`.
+
+## [Unreleased] — D-19 fatia 2a: DataDirectories remapeados por (seção, offset) (2026-10-17)
+
+### Corrigido
+
+- **`dex_patch_dirs` copiava a RVA crua dos DataDirectories.** O `link.exe`
+  reordena/funde seções, então a RVA do diretório passa a apontar para outra
+  seção (ex.: IMPORT `0x10000` caiu na `.bss` nova em `exc.exe`) → o loader
+  rejeitava com `0xC000007B`. Agora um novo `.pd_remap` mapeia por **(seção,
+  offset)**: seção original que contém a RVA → offset → `VirtualAddress` da
+  seção homônima na rebuildada (nome com `/NNN` → `_NNN`); sem homônima, o
+  dir não é copiado (nunca RVA velha). SECURITY/DEBUG são regeneráveis.
+
+### Verificado
+
+- `build.bat` limpo (1.2.386); `tests\run_tests.bat` **385/385 OK** (381 + 4
+  novos em `[54]`); `tests\run_slow.bat` **7/7 OK**.
+- Oráculo estrutural `tests/pe_dirs.py`: `exc` 5/5 e `hello` 3/3 dirs OK.
+  `exc -native -r` passou de `0xC000007B` (imagem inválida) para
+  `0xC0000005` (a imagem agora **carrega**). Fatia 2b pendente (RVAs internas
+  do `.idata` → import table simbólica no win64).
+
+## [Unreleased] — D-19 fatia 1: `UNWIND_INFO` em qualquer seção (win64) (2026-10-17)
+
+### Corrigido
+
+- **`notepad.exe -native` (win64) abortava com 386 `symbol not defined`.**
+  O caminho `asm` só reemitia `UNWIND_INFO` simbólico para uma seção
+  literalmente chamada `.xdata`; em PEs do MS link o `.xdata` é fundido na
+  `.rdata`, então a `.pdata` emitia `dd label_<unwind VA> wrt ..imagebase`
+  para 193 alvos (386 refs) que nunca ganhavam label. Fix: `.walk_data_sec`
+  passa a usar `.uw_bitmap` e um novo caminho `.wds_plain_uw` (fatia em
+  inícios de unwind; gaps via `.wds_chunks` p/ preservar R-labels/spans;
+  unwind simbólico via `.uw_emit`), com `.uw_next_bit` novo; desligado sob
+  `-s` (handlers podem estar em seção filtrada — D-17/D-21).
+
+### Verificado
+
+- `build.bat` limpo (1.2.385); `tests\run_tests.bat` **381/381 OK** (376 + 5
+  novos em `[53]`); `tests\run_slow.bat` **7/7 OK**.
+- notepad win64 `-native`: nasm **0 erros** (antes 386); hello/var64/exc/tiny/
+  loop/strings/jtable/no_relocs = 0 erros; `-m bin -native` do notepad segue
+  byte-idêntico. `notepad -native -r` já linka (exit 0).
+
+## [Unreleased] — `-s` × SEH simbólico: fim do símbolo indefinido (2026-10-17)
+
+### Corrigido
+
+- **`-s <seção>` + `.pdata`/`.xdata` (R-5.4)** no modo `asm`/`win64 -native`:
+  as duas seções eram reemitidas simbolicamente mesmo quando a seção dos alvos
+  estava filtrada-fora (e virava `db`, sem `label_` por-VA), gerando
+  `dd label_<VA> wrt ..imagebase` para símbolos nunca definidos → o
+  `nasm -f win64` abortava com 234 erros em `tests/exc.exe -s .rdata -native`
+  (122 `symbol not defined` + 113 `label changed during code generation`).
+  Agora, com `section_filter != 0`, a exceção `.pdata`/`.xdata` é pulada no
+  `.walk_data` e as duas caem no `db` comum (direção segura do D-17, igual ao
+  contrato do `-s`). Sem `-s`, nada muda (o caminho simbólico segue, `[41]`/
+  `[46]` verdes); `-m bin` intacto. Limite honesto documentado: `-s`
+  filtrando a seção do entry + `-r` falha no link (`LNK2001`/exit 5).
+
+### Verificado
+
+- `build.bat` limpo (1.2.382); `tests\run_tests.bat` **376/376 OK** (369 + 7
+  novos em `[52]`); `tests\run_slow.bat` **7/7 OK**.
+- `tests/exc.exe -s .rdata -native` → 0 erros (antes 234);
+  `-s .rdata -m bin -native` → `fc /b` 0 diffs.
+
+## [Unreleased] — jump-to-code em x32: spans de ponteiro de 4 bytes (`dd`) (2026-10-17)
+
+### Adicionado
+
+- **Spans de ponteiro com stride do arch** (8 = `dq`/qword; 4 = `dd`/dword):
+  `.collect_strs` passada B (pré-scan) e `.wds_emit_span` (emissor) passam a
+  ler dword e emitir `dd label_<VA>` em x32. Resultado: a tabela de switch x32
+  que aponta p/ **código** (D-7 via `.code_tgt_ok`) sai
+  `dd label_401017`/`40101E`/... (antes `db 0x..`). Removidos o gate
+  `arch==X64` do pré-scan e o `g_spanflags=1` que forçava db em x32
+  (`.wds_plain`).
+
+### Verificado
+
+- `build.bat` limpo (1.2.381); `tests\run_tests.bat` **369/369 OK** (368 + 1
+  novo em `[51]`); `tests\run_slow.bat` **7/7 OK**.
+- `tests/absidx.asm`: `-native` com `dd label_` + round-trip → exit 42;
+  `[30]`–`[33]` (x32) e `[49]` (x64 SIB-abs) seguem verdes.
+
+## [Unreleased] — índice simbólico x32 (SIB-abs) (2026-10-17)
+
+### Adicionado
+
+- **Índice simbólico em x32**: em `jmp dword [jtab+eax*4]` (tabela de switch
+  absoluta) o disp32 é uma VA do image; o walker/scanner
+  (`rebuild.asm .cs_abs32sib`) registra a RVA no R e o emissor
+  (`emit_nasm.asm`) sai `[nosplit label_<VA>+<idx>*<scale>]` (antes: `0x402008`
+  cru). x64 fica numérico (VA > 32 bits). O emissor consulta o R por globais
+  **definidos nele** (`g_abs_vas`/`g_abs_n`/`g_abs_base`, escritos pelo
+  rebuild) — dados em vez de função, para os drivers que linkam só
+  `emit_nasm.obj` fecharem. Fixes: base do SIB lida nos **bits 2-0**; dispatch
+  de SIB antes do check `rm==101` em `.cs_abs32`.
+
+### Verificado
+
+- `build.bat` limpo (1.2.379); `tests\run_tests.bat` **368/368 OK** (361 + 7
+  novos: seção `[51]` + `tests/absidx.asm`); `tests\run_slow.bat` **7/7 OK**.
+- `absidx` (switch real): `-native` simbólico + round-trip exit 42.
+
+## [Unreleased] — `-strings`: runs com CR/LF numa linha NASM (2026-10-17)
+
+### Adicionado
+
+- **`.str_run` aceita CR(13)/LF(10) dentro do run** (o 1º byte continua
+  imprimível) e **`dex_emit_qstr` fecha/reabre as aspas** em volta de cada
+  escape (estado `open`): `, 13`, `, 10`, `, 34` saem inline, sem `""`, tudo
+  numa linha NASM (`db "alpha-one", 13, 10, 0` /
+  `db "say ", 34, "hi", 34, " ok", 13, 10, 0`). Antes, runs com CR/LF eram
+  rejeitados e saíam como `db` byte a byte. Só afeta o **texto** (bin ignora
+  `-strings`): bytes preservados.
+
+### Verificado
+
+- `build.bat` limpo (1.2.375); `tests\run_tests.bat` **361/361 OK** (357 + 4
+  novos: seção `[50]` + `tests/qstr_check.py`); `tests\run_slow.bat` **7/7 OK**.
+- `[21]` (round-trip comportamental de `strings.exe -strings`) segue verde;
+  `[50]` valida as linhas exatas e o `nasm -f win64`.
+
+## [Unreleased] — SIB-abs com índice: loads indexados (R-5.4) (2026-10-17)
+
+### Adicionado
+
+- **Operandos SIB-abs COM índice** (`[disp32 + idx*scale]`, base ausente)
+  deixam de cair em `db` e passam a ser emitidos textual e **byte-exatos** em
+  `src/disasm/emit_nasm.asm`: `[nosplit abs 0x<disp>+<idx>*<scale>]` (x64) /
+  `[nosplit 0x<disp>+<idx>*<scale>]` (x32); `disp32==0` omite o disp. O
+  `nosplit` é obrigatório porque o NASM re-encoda `[abs 0x2+rax*2]` como
+  `[rax+rax+0x2]` (4 bytes em vez de 7). Refator: a emissão de `index*scale`
+  virou a sub-rotina `.fo_idxemit` (reusada por base+index e SIB-abs). Bug
+  colateral x32 corrigido: o caminho absoluto tomava `.fo_abs32` antes de
+  checar SIB e descartava o índice.
+
+### Verificado
+
+- `build.bat` limpo (1.2.371); `tests\run_tests.bat` **357/357 OK** (350 + 7
+  novos: seção `[49]`); `tests\run_slow.bat` **7/7 OK**.
+- Fixture `tests/sibabs.asm` (`lea [idx*scale]`): `-m bin -native`
+  byte-idêntico + exit 42. Regressão do emissor: notepad `-m bin -native`
+  `fc /b` 0 diffs.
+
 ## [Unreleased] — R-5.3 F4: hint/name + nomes de DLL simbólicos (`-m bin -native`) (2026-10-17)
 
 ### Adicionado

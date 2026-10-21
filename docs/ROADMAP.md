@@ -1,7 +1,31 @@
 # Dexter — Roadmap (requisitos R-x.y + status real)
 
-Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
-`[ ]` futuro. IDs estáveis para branches/commits.
+Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat`
+**391/391 OK** em 1.2.390; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
+IDs estáveis para branches/commits. **Fonte única da fila de execução:**
+`marco.md` §8 — este arquivo registra o status por requisito.
+
+## Pendências abertas (2026-10-19, após 1.2.390)
+
+> Ordem de execução em `marco.md` §8. Nada aqui vira `[x]` sem teste verde.
+
+- [ ] **D-19 fatia 2b** — RVAs internas do `.idata` (OFT/Name/FirstThunk)
+  simbólicas no `win64 -native` (port da R-5.3, hoje só provada em `-m bin`);
+  fecha a import table no win64. Gate novo + `tests/pe_impdesc.py`.
+- [ ] **D-19 fatia 2 (fecho)** — comportamento do `.exe` reconstruído pelo
+  `win64` em PE real: `tests/exc.exe -native -r` hoje **carrega** e dá
+  `0xC0000005` (fatia 2a); alvo é rodar o `throw/catch` (**exit 42**), como o
+  `-m bin -native` já faz.
+- [ ] **Base simbólica do índice em x64** — x32 já sai
+  `[nosplit label_<VA>+idx*scale]` (1.2.379); em x64 o disp32 não é VA
+  (precisa de `+C` no `-f bin`), então segue numérico.
+- [ ] **Semântica de operandos VEX/EVEX/x87** — decodificação/limites são
+  byte-exatos (R-2.7), mas o nativo emite `db`; falta a semântica de
+  label/operando.
+- [ ] **R-6.6 (opção C)** — IR otimizável + backend próprio (`-f bin` sem
+  nasm). Depende de R-6.1–R-6.5 (fechados) e do corpus estável.
+- [ ] **Cobertura de imports por ordinal** no `-overview`/`-json` (R-7.1):
+  limite honesto sem caso no corpus atual.
 
 ## Fase 0 — Esqueleto, CLI e I/O `[x]`
 
@@ -93,7 +117,11 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   (hello: OK). O path fiel p/ PEs reais é `-m bin` (R-5.1).
 - [x] R-4.5 `call|jmp [rel]` p/ IAT regenerada (pago por R-3.3 em `-native`; ver `[13]`)
 
-## Fase 5 — Fidelidade total e modo `bin` (parcial `[x]`, resto `[ ]`)
+## Fase 5 — Fidelidade total e modo `bin` `[x]`
+
+> R-5.1–R-5.4 fechadas. O que resta de fidelidade em PE real no modo
+> `win64` é **layout/link** (D-19, Fase 8), não o motor de desassemblagem
+> nem o modo `bin`.
 
 - [x] R-5.1 `-m bin`: headers+seções+overlay em `db` + `times` pad →
   `nasm -f bin` = **byte-idêntico** (hello 2560 B e var64 91872 B:
@@ -132,15 +160,44 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   `.emit_qstr` de `dex_generate_asm`). Gate `[48]` (350/350); prova:
   hello `hint=6 nomes=1`, notepad `hint=620 nomes=50`, todos `ruins=0`.
   Não-ASCII/não-imprimível ou sem NUL → fallback `db` (byte-fiel).
-- [ ] R-5.4 strings em code-flow, jump tables, SEH/unwind reemitido,
-  fuzzy corpus expandido, `tests\fuzz_pe.py`
-  (PARCIAL 1.2.250, 3b: pré-scan `.collect_strs` insere starts de runs +
+- [x] R-5.4 strings em code-flow, jump tables, SEH/unwind reemitido,
+  fuzz `tests\fuzz_pe.py` — **TODAS as fatias fechadas** (detalhe abaixo).
+  Base 1.2.250 (3b: pré-scan `.collect_strs` insere starts de runs +
   alvos de ponteiros em g_symR; `.wds_emit_span` emite `dq label_` em
-  `-native`, `s_tab` simbólica, round-trip strings provado, `[21]` verde;
-  RESTA: jump-to-code (alvos), loads indexados `[rbx+n]`, `.str_run`
-  com `\r\n`; 1ª fatia 1.2.257: base rotulada via R + corpus
-  `jtable.asm` + `[27]` + fix `jmp/call r64` sem REX (`.l1_ffmem`))
-- [x] R-5.4 SEH/unwind reemitido (F1–F4 FECHADAS): **F1** (1.2.329) —
+  `-native`, `s_tab` simbólica, round-trip strings provado, `[21]` verde)
+  + 1.2.257 (base rotulada via R + corpus `jtable.asm` + `[27]` + fix
+  `jmp/call r64` sem REX (`.l1_ffmem`)).
+  **Fatia "loads indexados" FECHADA** (1.2.371): operandos **SIB-abs COM
+  índice** (`[disp32 + idx*scale]`, base ausente — o `[idx*scale]` de x64 e
+  o `[0x40A000+eax*4]` de x32) deixam de cair em `db` e saem textuais e
+  byte-exatos: `[nosplit abs 0x<disp>+<idx>*<scale>]` (x64) /
+  `[nosplit 0x<disp>+<idx>*<scale>]` (x32); disp32==0 omite o disp. Gate
+  `[49]` (fixture `tests/sibabs.asm`, byte-idêntico + exit 42); notepad
+  `-m bin -native` `fc /b` 0 diffs. Base simbólica na fatia seguinte
+  (x32 fechada; x64 segue numérico — ver "Pendências abertas").
+  **Fatia "base simbólica do índice" FECHADA** (1.2.379, x32): em x32 o
+  disp32 de um SIB-abs é uma VA do image (base ~0x400000, cabe em 32 bits);
+  o scanner (`.cs_abs32sib`) registra a VA no R e o emissor sai
+  `[nosplit label_<VA>+<idx>*<scale>]` (antes `0x402008` cru). O emissor
+  consulta o R via globais próprios (`g_abs_vas`/`g_abs_n`/`g_abs_base`,
+  preenchidos pelo rebuild) — **dados, não função**, p/ os drivers que linkam
+  só `emit_nasm.obj` fecharem. x64 fica numérico (VA da imagem não cabe em
+  32 bits e `-f bin` precisaria de `+C`). Gate `[51]` + `tests/absidx.asm`
+  (`jmp [jtab+eax*4]` switch real, round-trip exit 42).
+  **Fatia "jump-to-code (alvos)" FECHADA** (1.2.381): em **x32** os spans de
+  dados são de **4 bytes** (`dd`), não 8 (`dq`): `.collect_strs` passada B lê
+  dword (arch-aware) e `.wds_emit_span` usa `stride` 4/8 + diretiva `dd`/`dq`.
+  A entrada da tabela que aponta p/ **código** (D-7, `.code_tgt_ok`) sai
+  `dd label_<VA>` (antes `db 0x..`); a `g_spanflags=1` que forçava db em x32
+  foi removida. Prova: `tests/absidx.asm` → `dd label_401017`/`40101E`/... +
+  round-trip exit 42. Gate `[51]`.
+  **Fatia ".str_run com `\r\n`" FECHADA** (1.2.375): `.str_run` aceita
+  CR/LF **dentro** do run (o 1º byte tem de ser imprimível) e o emissor de
+  string (`dex_emit_qstr`) fecha/reabre as aspas em volta de cada escape
+  (`, 13`, `, 10`, `, 34`) — tudo numa linha NASM, sem `""`. Antes, runs
+  com CR/LF eram rejeitados e saíam `db` byte a byte. Gate `[50]` +
+  `tests/qstr_check.py` (fixture `tests/strings.asm` com s1/s2/s3).
+- [x] R-5.4 SEH/unwind reemitido (F1–F4 FECHADAS — detalhe da fatia acima): **F1** (1.2.329) —
   parser `src/pe/pe_unwind.asm` (`dex_unwind_count`/`dex_unwind_rf`/
   `dex_unwind_info`): decodifica `RUNTIME_FUNCTION` (.pdata) e
   `UNWIND_INFO` completo (.xdata) com validação de limites; driver
@@ -184,13 +241,14 @@ Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat` 24/24);
   / `UnwindData` corrompido + flag `--bin-native`; 300 (win64) + 300
   (bin-native) casos em `tests/exc.exe` sem crash/hang)
 
-## Fase 6 — AST / Lexer / Geração de código nativo (nova, incremental `[ ]`)
+## Fase 6 — AST / Lexer / Geração de código nativo `[x]` (R-6.6 futura)
 
 > Decisão documentada em `docs/adr/0001-ast-lexer-codegen.md` (2026-10-07).
-> R-6.1 FECHADO em 2026-10-07: `-native` liga o caminho nativo no walker
+> **R-6.1–R-6.5 FECHADOS**: `-native` liga o caminho nativo no walker
 > (`build_operands` + `emit_native` + fallback `db`, tamanho exato
-> garantido); `db` continua o default. Falta o frontend (lexer/parser/AST
-> por cima, R-6.2+), sem quebrar o round-trip atual.
+> garantido); lexer/parser/AST + lifter/codegen entregues e testados;
+> `db` continua o default. **R-6.6** (IR otimizável/backend próprio)
+> segue `[ ]` na fila de pendências.
 
 - [x] R-6.1 Opção A — emissor nativo opt-in (`-native`, `DF_NATIVE`):
   `walk_code_sec` chama `dex_build_operands` e tenta `dex_emit_native`,
@@ -313,11 +371,12 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `-q` não suprime, existência via open (`ok`/`missing` honesto),
   aceita `-doctor` e `--doctor`; `[20]` na suíte)
 
-## Fase 8 — Layout robusto (R-8.x, nova)
+## Fase 8 — Layout robusto (R-8.x) — R-8.1/R-8.2 fechadas; D-19 2b aberta
 
 > PEs reais têm `.bss`/`.tls`/seções que o path win64 (link.exe) não
-> preserva. N.1 (R-8.1) fecha o nível asm; comportamento em PE grande
-> pede R-8.2 (backend próprio). Detalhe e sondas em `docs/REVISAO.md`.
+> preserva. N.1 (R-8.1) fecha o nível asm; R-8.2 fechou o **caminho fiel**
+> `-m bin` (byte-idêntico em PE grande). O que resta é o **win64** em PE
+> real (D-19). Detalhe e sondas em `docs/REVISAO.md`.
 
 - [x] R-8.1 `.bss` com `resb` + labels (`src/gen/rebuild.asm`: `.wds_bss`
   (label do início + `resb` fatiado nos alvos R) + `.ptr_tgt_ok` que
@@ -325,7 +384,8 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   (resb/labels/`dq` no var64, resb no gcc)). Oráculo capstone: 24 VAs
   interiores distintas referenciadas no var64 (start-label só não
   bastava); soma `resb` == vsize exato (0xB90); monta com 0 erros.
-  Limite honesto: comportamento em PE grande segue pendente (D-19).
+  Limite honesto: no modo **win64** o comportamento em PE grande segue
+  pendente (D-19); o caminho `-m bin` foi fechado em R-8.2 f3.
 - [x] R-8.2 fatia 1 — bin com `.text` nativa em PE simples (1.2.308,
   `[36]` 7 checks): `-m bin` + `-native` em x64 gera CODE via walker
   (gate mesma-seção + imp→db; refs `dex_generate_asm.*` sem reescopo)
@@ -351,32 +411,42 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   MEM sem prefixo de tamanho (nasm assumia byte, `D3→D2`) →
   `emit_nasm .fo_mem` força prefixo por op0.size. `[S2]` em
   `tests\run_slow.bat`.
+- [x] Núcleo da Fase 8 fechado (R-8.1 + R-8.2 f1–f3): o caminho fiel
+  `-m bin` é byte-idêntico do corpus pequeno ao PE grande (gcc/ld.lld).
+- [ ] D-19 fatia 2b (win64) — import table simbólica no `-native` (port
+  R-5.3), seguida do fecho da fatia 2 (comportamento do `.exe` em PE real).
+  Detalhe na fila do topo e em `marco.md` §8.
 
-## Dívida técnica conhecida (honesta, com ID)
+## Dívida técnica conhecida e regras (honestas, com ID)
 
-- D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
+> `[x]` = fechada/provada por teste. **D-8..D-18** são regras/lições
+> consolidadas (não pendências); **D-19** é a única dívida de layout aberta
+> (fatia 2b + fecho da fatia 2).
+
+- [x] D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
   existe e numerado; dívida original ("sem ADRs numerados") superada;
   novas decisões seguem `NNNN-<título>.md`.
-- D-2 `.bss` com `resb` + labels (R-8.1 FECHADA 1.2.303: `.wds_bss` +
+- [x] D-2 `.bss` com `resb` + labels (R-8.1 FECHADA 1.2.303: `.wds_bss` +
   `.ptr_tgt_ok` aceita `off<vsize`; soma `resb`==vsize, 100+ refs
   simbólicas no var64, monta 0 erros; `[35]` trava). Comportamento em
-  PE grande pendente de layout (D-19 → R-8.2); caminho fiel `-m bin`.
-- D-3 `symtab`/`strpool` FECHADOS com testes dedicados: `symtab`
+  PE grande no **win64** pendente de layout (D-19); o caminho fiel
+  `-m bin` foi fechado em R-8.2 f3.
+- [x] D-3 `symtab`/`strpool` FECHADOS com testes dedicados: `symtab`
   (`tests/sym_check.asm` + `[15]`, golden `SYM n=5`) e `strpool`/
   `asm_buffer` (`tests/strpool_check.asm` + `[44]`, golden
   `STRPOOL o=0 6 B len=11`: offsets estáveis 0/6/11, len 17, `get` por
   offset com `dex_streq`, borda `off>=len -> 0`). `labels-imp` segue
   coberto indiretamente pelo `[13]`/`[14]` (imp_check).
-- D-4 I/O posicional removido de vez (2026-10-12): externs mortos
+- [x] D-4 I/O posicional removido de vez (2026-10-12): externs mortos
   `dex_file_read_at`/`dex_file_write_at` extirpados de `rebuild.asm`
   (declarados, nunca chamados); `mmap_rw` é o desenho.
-- D-5 `-no-imports` × `-native` seguro (2026-10-12): sem parse cai em
+- [x] D-5 `-no-imports` × `-native` seguro (2026-10-12): sem parse cai em
   `db` (0 `__imp_`, rebuild `hi`); `[26]` trava o combo.
-- D-6 `-start`/`-end` auditados (2026-10-12): dados sempre inteiros,
+- [x] D-6 `-start`/`-end` auditados (2026-10-12): dados sempre inteiros,
   como documentado — MAIS bug real: `-end` ignorado com `-start`
   presente (`.wcs_oor_l` só conhecia `< start`, lote vazio reentrava
   como in-range); fix 2 linhas + `[25]` com round-trip.
-- D-7 Tabela D REATIVADA como bitmap (1.2.266, fecha a dívida): 1 bit por
+- [x] D-7 Tabela D REATIVADA como bitmap (1.2.266, fecha a dívida): 1 bit por
   RVA até max(vaddr+raw) das seções, 1 `malloc` zerado, `bts`/`bt` O(1)
   (o hash antigo — 2 `HeapAlloc` + lookup O(n²/256) — travava o `ld.lld`);
   OOM/desligado degrada p/ `db` (legado), sem erro. Leitores reais:
@@ -478,13 +548,34 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `arch`; goldens viraram CALL/DATA sem IMPORT e a suíte pegou).
   Regra: todo `fake_*` em `tests/` deve espelhar o layout exato do
   `struc` (comparar campo a campo) + zerar `arch` (x64).
-- D-19 `link.exe` funde seções (2026-10-14, R-8.1: provado por 3 sondas
+- [ ] D-19 `link.exe` funde seções (2026-10-14, R-8.1: provado por 3 sondas
   + `secdump` — `.bss`/`.tls`/`.xdata` do `.obj` somem no `.exe`,
   conteúdo fundido em `.data`; `resb` no nasm vira zeros inicializados,
   nunca nobits; `dex_patch_dirs` (R-4.3) copia RVAs cegamente e aponta
   p/ seção errada após o remanejo — `imp`/`iat` do var64 caíram dentro
   da `.reloc` nova). Consequência: rebuild `-native` via link só
-  garante comportamento em PEs simples; PEs reais pedem R-8.2.
+  garante comportamento em PEs simples; PEs reais pedem o fecho da D-19
+  (win64) — o caminho `-m bin` já é fiel (R-8.2).
+  **Fatia 1 FECHADA** (2026-10-17, 1.2.385): `UNWIND_INFO` em QUALQUER seção
+  também no win64. O caminho `asm` só emitia unwind simbólico p/ seção
+  `.xdata` literal; com o `.xdata` do MS link fundido na `.rdata`, a `.pdata`
+  referenciava 193 alvos (386 refs) sem label → nasm abortava com 386
+  `symbol not defined` (`notepad.exe -native`). Fix: `.walk_data_sec` +
+  `.uw_bitmap` + caminho `.wds_plain_uw` (fatia por início de unwind; gaps via
+  `.wds_chunks` p/ preservar R-labels/spans; unwind via `.uw_emit`), com
+  `.uw_next_bit` novo; desligado sob `-s` (D-17/D-21). `[53]` (5 checks).
+  Prova: notepad win64 0 erros (antes 386) + 8 outros alvos; `-m bin` intacto;
+  `-native -r` já linka (exit 0). **Fatia 2 pendente:** `dex_patch_dirs` cego
+  + fusão de seções (comportamento do exe reconstruído). `PE_NOTES §23`.
+  **Fatia 2a FECHADA** (2026-10-17, 1.2.386): `dex_patch_dirs` remapeia cada
+  DataDirectory por **(seção, offset)** — novo `.pd_remap` (seção original →
+  offset → seção homônima rebuildada, `/NNN`→`_NNN`); não copia se não houver
+  homônima (nunca RVA velha). Provado: `exc -native -r` mudou de `0xC000007B`
+  (imagem inválida; IMPORT apontava p/ a `.bss` nova) para `0xC0000005` (AV) —
+  a imagem **carrega**. Oráculo `tests/pe_dirs.py` + `[54]` (4 checks).
+  **Fatia 2b pendente:** as RVAs *internas* do `.idata` copiado seguem
+  absolutas (OFT/Name/FirstThunk) → import table tem de virar simbólica no
+  win64 (port da R-5.3). `PE_NOTES §24`.
 - [x] D-20 FECHADA (2026-10-16): o codegen nativo agora é byte-fiel em PE MS
   real. Duas classes: (1) ALU/mov **reg-reg na forma "load"** (`02/03..3A/3B`,
   `8A/8B`: reg=dst) cai p/ `db` (o NASM montaria na forma "store" `89/31`);
@@ -492,3 +583,24 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   base (`[abs …]`/`[rel …]`) → reemitido via `.fo_segpre`
   (`src/disasm/emit_nasm.asm`). Prova: `-m bin -native` do `tests/notepad.exe`
   = `fc /b` 0; gcc/ld.lld seguem byte-idênticos. `[46]`. `PE_NOTES §15`.
+- [x] D-21 FECHADA (2026-10-17): `-s <seção>` × reemissão simbólica SEH. A
+  `.pdata`/`.xdata` simbólica (R-5.4) era emitida mesmo com a seção dos alvos
+  filtrada-fora (que vira `db` sem `label_` por-VA) → 234 erros de nasm
+  (`symbol not defined` + `label changed during code generation`) em
+  `tests/exc.exe -s .rdata -native`; sem `-s` o mesmo binário montava 0 erros.
+  Fix: `section_filter != 0` pula a exceção `.pdata`/`.xdata` no `.walk_data`
+  (caem no `db` comum) — D-17/direção segura. O gap chamado "-s + RIP" **não
+  era o RIP** (19 probes em `-m bin` byte-idênticos): era o cruzamento com a
+  R-5.4. Limite honesto (fechado pela D-22 em 1.2.390): `-s` filtrando a
+  seção do entry + `-r` falhava no link (`LNK2001`/exit 5). `[52]` (7 checks).
+  `PE_NOTES §22`.
+- [x] D-22 FECHADA (2026-10-19, 1.2.390): `-s <seção>` + `-r` no win64/win32
+  falhava no link (`LNK2001: unresolved external symbol label_<entry>`) quando
+  o filtro não era a seção do entrypoint: a seção do entry vira `db` e o
+  `label_<entry>` nunca era definido (o header só emitia `global`). Fix:
+  `.emit_entry_alias` fecha o `.asm` com `label_<entryVA> equ
+  label_<secVA> + 0x<delta>`; delta 0 não emite (o label da seção já é o
+  entry) e `-s` na seção do entry não emite alias (sem duplicata). Gate
+  `[55]` 6 checks: x64 native/db, `-s .text` sem equ redundante e x32 delta 0;
+  suíte **391/391**. `PE_NOTES §25`. Detalhe/handoff:
+  `docs/SESSAO-2026-10-19-D22.md`.

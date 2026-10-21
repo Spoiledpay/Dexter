@@ -32,7 +32,7 @@ dex_generate_asm → .asm ──────────────► dex_rebu
                                            bin: nasm -f bin (byte-fiel)
 ```
 
-## Fase 6 — AST / Lexer / Codegen (2026-10-07, em andamento)
+## Fase 6 — AST / Lexer / Codegen (2026-10-07, R-6.1–R-6.5 fechados; R-6.6 futura)
 
 ```
 dex_disasm_one + dex_build_operands (semantics.asm)
@@ -46,7 +46,8 @@ dex_disasm_one + dex_build_operands (semantics.asm)
               ─► R-6.4 lift (DexOp->IR) + codegen (IR->AsmBuf via emit_native)
 ```
 
-Estado em 2026-10-07 (R-6.1 + R-6.2 + R-6.3 fechados): `-native` liga
+Estado em 2026-10-19 (R-6.1–R-6.5 fechados; suíte 391/391 em 1.2.390):
+`-native` liga
 `dex_build_operands` + `dex_emit_native` no walker (`.wcs_emit` →
 `.wcs_oploop` valida refs com label via `.cs_in_code` → snapshot/rollback
 + fallback `db`); tamanho exato via `strict`/regras de forma em
@@ -60,8 +61,11 @@ ownership com free no mesmo nível) montam `Func → Blocks → Instr → Op`
 golden em `[11]`) classifica e resolve alvos (code/data/import);
 `dex_codegen_ir` (`src/back/codegen.asm`, fatia 2: label + nativo com
 rollback) emite via walker; R-labels (`symtab_to_sorted` + split de
-dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
-`db` continua default; tabela D desligada (D-7), R ativa.
+dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) FECHADA em 1.2.181
+(`[13]`/`[14]`/`[15]`); `-ast-dump`/`-emit` são plumbing sobre `DF_NATIVE`
+(R-6.5). `db` continua o default; tabela D como bitmap (D-7) e R ativa.
+R-6.6 (IR otimizável + backend próprio) segue futura — ver
+`docs/ROADMAP.md` "Pendências abertas".
 
 ## Contratos entre módulos
 
@@ -124,7 +128,14 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
    ILT/IAT/nomes, não só descritores). Alvo sem label garantida
    (código/`.pdata`/`.xdata`/sem bytes) sai `dd 0x<rva>` cru. Verificação
    **estrutural**: `tests/pe_impdesc.py` (oráculo = bytes do PE) + `[45]`.
-11. **Thunks ILT/IAT simbólicos no `-f bin` (R-5.3 F3).** Cada entrada
+11. **SIB-abs com índice (loads indexados).** Operando sem base
+    (`SIB base=101`): `disp32 + idx*scale`. Emitido textual e byte-exato com
+    `nosplit` (o NASM "splitaria" `[abs 0x2+rax*2]` para `[rax+rax+0x2]`,
+    encurtando); `abs` primeiro em x64; disp32==0 → disp omitido. O disp32
+    **não é rotulado** (o emissor compartilhado não tem canal de label p/
+    operando absoluto nem correção `+C` fora de `-f bin`) — base simbólica
+    do índice fica como fatia futura. Verificação: `tests/sibabs.asm` + `[49]`.
+12. **Thunks ILT/IAT simbólicos no `-f bin` (R-5.3 F3).** Cada entrada
    não-nula das arrays `OriginalFirstThunk` (ILT) e `FirstThunk` (IAT) sai
    `dq label_<hint/name VA> + C` (o alvo ganha `label_` no stream); ordinal
    (bit63) ou IAT *bound* (valor > 32 bits) ou alvo não-rotulável → `dq
@@ -133,7 +144,7 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
    (menor VA ≥ floor), então o alvo precisa ser redescoberto mesmo depois de
    o slot já ter sido emitido. Verificação: `tests/pe_impdesc.py` estendido
    (percorre OFT/FT do PE) + `[47]`.
-12. **Strings de import simbólicas no `-f bin` (R-5.3 F4).** Cada
+13. **Strings de import simbólicas no `-f bin` (R-5.3 F4).** Cada
    `IMAGE_IMPORT_BY_NAME` sai `dw <hint>` + `db "<nome>", 0` e o `Name` do
    descritor sai `db "<dll>", 0`, via `dex_emit_qstr` (emissor de `db "..."`
    com escape de `"`) — **promovido a file-scope** porque os `.gb_*` vivem
@@ -143,7 +154,7 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
    imprimível (0x20..0x7E), tem NUL dentro da seção e len ≤ 255; senão
    fallback `db` byte-fiel. Verificação: `tests/pe_impdesc.py` (lê
    hint/nome dos bytes) + `[48]`.
-13. **`UNWIND_INFO` em qualquer seção (R-5.4).** O MS link funde o `.xdata`
+14. **`UNWIND_INFO` em qualquer seção (R-5.4).** O MS link funde o `.xdata`
    no `.rdata` em PE real (ex.: `notepad.exe`), então o unwind **não** está
    numa seção nomeada. O núcleo `.uw_bitmap` (inícios na seção, da `.pdata` +
    `chained`) + `.uw_emit` (label + `db` do header/codes + `dd` simbólico dos
@@ -152,6 +163,24 @@ dados, `[12b]`) resolvem refs RIP→dados; IAT (fatia 3) segue.
    do notepad byte-idêntico (**D-20 fechada**: ALU/mov reg-reg "load" → `db`;
    prefixo de segmento `gs:`/`fs:` reemitido). O `win64` de PE MS real segue
    **D-19**.
+15. **Runs de string com CR/LF (`-strings`).** `.str_run` aceita CR/LF dentro
+   do run (1º byte imprimível) e `dex_emit_qstr` **fecha/reabre as aspas** em
+   volta de cada escape (estado `open`): `, 13`, `, 10`, `, 34` ficam inline,
+   sem `""`, numa única linha NASM — bytes exatos. Verificação:
+   `tests/qstr_check.py` + `[50]` (fixture `tests/strings.asm`).
+16. **Índice simbólico em x32 (SIB-abs).** Em x32 o disp32 de
+   `[disp32+idx*scale]` é uma VA do image (cabe em 32 bits): o scanner
+   (`.cs_abs32sib`) registra a **RVA** no R e o emissor sai
+   `[nosplit label_<VA>+<idx>*<scale>]`. x64 fica numérico (VA > 32 bits).
+   O canal emissor↔rebuild é por **dados** (`g_abs_vas`/`g_abs_n`/
+   `g_abs_base`, definidos em `emit_nasm.asm`) — função nova quebraria o link
+   dos drivers que não linkam `rebuild.obj`. Verificação: `tests/absidx.asm`
+   + `[51]`.
+17. **Spans de ponteiro em x32 = 4 bytes (`dd`).** O pré-scan (`.collect_strs`
+   passada B) e o emissor (`.wds_emit_span`) usam **stride do arch** (8 = `dq`
+   qword; 4 = `dd` dword): tabelas de ponteiro x32 (`dd VA`) viram
+   `dd label_<VA>` (código via D-7). Antes: gate `arch==X64` no pré-scan +
+   `g_spanflags=1` forçando db em x32. Verificação: `tests/absidx.asm` + `[51]`.
 
 ## Mapa de arquivos
 

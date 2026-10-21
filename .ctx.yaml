@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-17T11:03:08.5997428-03:00
+updated_at: 2026-10-21T07:58:26.5929131-03:00
 files:
     include\dexter.inc:
         imports:
@@ -1196,6 +1196,7 @@ files:
             - s_strict4
             - s_strict8
             - s_abs
+            - s_nosplit
             - s_rel2
             - s_relpre
             - s_crlf
@@ -1209,6 +1210,9 @@ files:
             - s_rb
             - s_global
             - g_emit_hex
+            - g_abs_vas
+            - g_abs_n
+            - g_abs_base
             - dex_emit_set_hex
             - dex_emit_label
             - dex_emit_data
@@ -1293,13 +1297,13 @@ files:
             - DEX_NOBASE
             - DexOp.seg
             - DexOp.index
-            - DexOp.scale
             - Insn.disp_size
             - Insn.has_sib
+            - DexOp.scale
         package: ""
-        size: 42812
-        modified_at: 2026-10-16T20:47:17.2085924-03:00
-        hash: 5416807eaa5956eb5f46297d0bb1f7edd8d0ddd454c5d9062b60ec5be25dea94
+        size: 44888
+        modified_at: 2026-10-19T18:37:31.6755138-03:00
+        hash: b4a0ca10b424e401b591a05d46fcebde54a41f39d77f9bbce5d62e1233727149
     src\disasm\modrm.asm:
         imports:
             - dexter.inc
@@ -2188,11 +2192,11 @@ files:
             - s_dw4
             - s_reloc
             - s_lab
+            - s_equ
             - s_uscore
             - s_dotname
-            - s_db_pre
-            - s_q34
-            - s_q0
+            - s_comma
+            - s_c0
             - s_dot_o
             - s_dot_e
             - s_dot_rb
@@ -2231,6 +2235,7 @@ files:
             - g_bin_img
             - g_spancfg
             - g_spanflags
+            - g_uwbm
             - dex_generate_asm
             - dex_emit_qstr
             - dex_rebuild
@@ -2243,6 +2248,7 @@ files:
             - asmbuf_new
             - asmbuf_append
             - asmbuf_append_str
+            - asmbuf_append_char
             - asmbuf_append_u64_hex
             - asmbuf_free
             - dex_emit_set_hex
@@ -2255,6 +2261,10 @@ files:
             - dex_memcmp
             - dex_streq
             - dex_u64_to_hex
+            - dex_u64_to_dec
+            - g_abs_vas
+            - g_abs_n
+            - g_abs_base
             - dex_disasm_one
             - dex_build_operands
             - dex_emit_insn
@@ -2294,7 +2304,6 @@ files:
             - PeImage.image_base
             - PeImage.entry_point
             - DF_NATIVE
-            - DEX_ARCH_X64
             - PeImage.num_sections
             - SIZEOF_PE_SECTION
             - PeImage.sections_ptr
@@ -2307,9 +2316,11 @@ files:
             - DexConfig.section_filter
             - DexConfig.output_asm
             - DF_ASTDUMP
-            - PeImage.file_buffer
+            - DF_REBUILD
             - PeSection.vaddr
+            - PeSection.vsize
             - PeSection.raw_size
+            - PeImage.file_buffer
             - DexConfig.has_start
             - DexConfig.start_rva
             - DexConfig.has_end
@@ -2325,7 +2336,7 @@ files:
             - PeImage.imports_count
             - SIZEOF_IMPORT_ENTRY
             - ImportEntry.iat_rva
-            - PeSection.vsize
+            - Insn.sib
             - PeSection.raw_ptr
             - DF_NOP_PAD
             - Insn.length
@@ -2347,6 +2358,7 @@ files:
             - PeImage.opt_header
             - OH64_SECTION_ALIGN
             - DF_STRINGS
+            - DEX_ARCH_X64
             - SIZEOF_RUNTIME_FUNCTION
             - UnwindInfo.rvacnt
             - UnwindInfo.total
@@ -2375,9 +2387,9 @@ files:
             - dex_generate_asm.uw_emit
             - DF_QUIET
         package: ""
-        size: 183867
-        modified_at: 2026-10-17T10:51:42.4825023-03:00
-        hash: 8c0ab8534570736bdc3a6121d1779b149448b558eb21fd29897fa04056a59896
+        size: 194971
+        modified_at: 2026-10-19T18:37:31.1446199-03:00
+        hash: 33cf988b5da2d231f55da6113e99317dd9f59a0856a8dffa1d5ff9e6485083de
     src\gen\strings.asm:
         imports:
             - dexter.inc
@@ -2959,6 +2971,24 @@ files:
         size: 5999
         modified_at: 2026-10-06T18:57:27.7569346-03:00
         hash: eb87503104d1b9a5fa41028f677fc231aef004cabedc3f5061aa402e645a2bd0
+    tests\absidx.asm:
+        imports: []
+        functions:
+            - main
+            - c0
+            - c1
+            - c2
+            - c3
+            - dflt
+            - out
+            - jtab
+            - jtab2
+        calls:
+            - _ExitProcess@4
+        package: ""
+        size: 907
+        modified_at: 2026-10-17T12:38:37.4545005-03:00
+        hash: 7a8535b9df8945b71fb2579ce1235ec2eea654ab24b4f1f3c3274ebe01b21db5
     tests\ast_check.asm:
         imports:
             - dexter.inc
@@ -3393,6 +3423,38 @@ files:
         size: 872
         modified_at: 2026-10-06T20:29:20.5256799-03:00
         hash: 96251c1f23acda56868f60954a4aa48aab8db2c5d762a674517aa90c59ab0762
+    tests\pe_dirs.py:
+        imports:
+            - struct
+        functions:
+            - load
+            - locate
+            - norm
+            - main
+        calls:
+            - load
+            - open
+            - read
+            - len
+            - SystemExit
+            - PE
+            - unpack_from
+            - range
+            - rstrip
+            - decode
+            - append
+            - locate
+            - max
+            - norm
+            - startswith
+            - main
+            - print
+            - por
+            - exit
+        package: ""
+        size: 3527
+        modified_at: 2026-10-17T19:48:53.7427983-03:00
+        hash: 3e4a9527c09f372c0220032eb6a7954751549c3e2fdcd355a27162ad6b72cb44
     tests\pe_exc_dir.py:
         imports:
             - struct
@@ -3444,6 +3506,23 @@ files:
         size: 8265
         modified_at: 2026-10-17T10:48:44.7528373-03:00
         hash: 148ef121e7071f19453b3414bbe6592bdab518a7121af61b689bae7c609cbba3
+    tests\qstr_check.py:
+        imports:
+            - sys
+        functions: []
+        calls:
+            - len
+            - print
+            - exit
+            - open
+            - read
+            - split
+            - strip
+            - sum
+        package: ""
+        size: 1213
+        modified_at: 2026-10-17T12:09:49.9327004-03:00
+        hash: 79b32a7bff47ee2b8d39747ee966af1a438a3501535238dc6bb5417c7895e6dc
     tests\ref_native\ref_hello.asm:
         imports: []
         functions:
@@ -4666,6 +4745,16 @@ files:
         size: 13009
         modified_at: 2026-10-11T18:14:26.5697581-03:00
         hash: c8da98a8e7767a9f421e83a306ab3b6babe36ec0a855a7a4b5ad6487fcf0958e
+    tests\sibabs.asm:
+        imports: []
+        functions:
+            - main
+        calls:
+            - ExitProcess
+        package: ""
+        size: 1018
+        modified_at: 2026-10-17T11:49:43.2487293-03:00
+        hash: e37f89fcca257f8017128e535d3c00bc451820ce0a1add26e615bf5ba4c4eba7
     tests\strings.asm:
         imports: []
         functions:
@@ -4748,9 +4837,9 @@ files:
         calls:
             - _ExitProcess@4
         package: ""
-        size: 451
-        modified_at: 2026-10-13T20:44:36.4983201-03:00
-        hash: 4c96995374640fded7c62835d9289b3438b616398f3c8f30dfbef6cef5fc7180
+        size: 465
+        modified_at: 2026-10-19T18:24:14.1689681-03:00
+        hash: 780694c8ca22c330d806a96f0eada68c51c3b82e6990789dad432fad8d1d4350
     tests\unwind_check.asm:
         imports:
             - dexter.inc
@@ -4904,7 +4993,465 @@ memories:
       confidence: 1
       last_verified: 2026-10-17T11:03:08.4773296-03:00
       created_by: human
-decisions: []
+    - id: 81550596-c428-985b-8130-d556cb1a642c
+      title: NASM re-encoda [abs 0x2+rax*2] como [rax+rax+0x2] (split) - usar nosplit
+      description: 'Em SIB-abs (base ausente, SIB base=101) o endereco e disp32+index*scale. O NASM PREFERE a forma splitada quando index*2 == base+index com o MESMO registrador (so scale 2), encurtando a instrucao: [abs 0x2+rax*2] monta 8D 44 00 02 (4 B) em vez de 8D 04 45 02 00 00 00 (7 B) => bytes diferentes. Solucao: nosplit na expressao. Em x64 abs vem PRIMEIRO ([nosplit abs 0x10+rcx*4]); [rcx*4+abs 0x10] e expression syntax error. Em x32 nao ha abs ([nosplit 0x40A000+eax*4]). O disp32 e obrigatorio nessa forma (nunca cai em db por disp==0).'
+      type: lesson
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T11:39:46.1633568-03:00
+      updated_at: 2026-10-17T11:39:46.1633568-03:00
+      confidence: 1
+      last_verified: 2026-10-17T11:39:46.0564554-03:00
+      created_by: human
+    - id: 7b0fb95f-9994-5723-e543-3abfd9a68697
+      title: 'Implementado: SIB-abs com indice (loads indexados, R-5.4)'
+      description: 'Dexter 1.2.370: operandos [disp32+idx*scale] (sem base) deixam de cair em db e saem [nosplit abs 0x<disp>+<idx>*<scale>] (x64) / [nosplit 0x<disp>+<idx>*<scale>] (x32), byte-exatos; disp32==0 omite o disp; refator .fo_idxemit; bug x32 (fo_abs32 tomado antes do check de SIB) corrigido. Gate [49] + fixture tests/sibabs.asm. run_tests 356/356 OK; run_slow 7/7; notepad bin-native fc /b 0.'
+      type: milestone
+      severity: medium
+      files:
+        - src/disasm/emit_nasm.asm
+        - tests/sibabs.asm
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T11:39:46.3363481-03:00
+      updated_at: 2026-10-17T11:39:46.3363481-03:00
+      confidence: 1
+      last_verified: 2026-10-17T11:39:46.2464959-03:00
+      created_by: human
+    - id: 33b83af2-f507-f609-4e3e-b1cb588e9196
+      title: 'Emissor de string NASM: usar estado de aspas (open) em vez de escapes com aspa embutida'
+      description: 'O emissor de db string emitia escapes como ", 13, " (com aspa embutida), o que gera "" (aspas vazias) quando dois escapes sao adjacentes (ex.: \r\n) ou quando o run termina em CR/LF. Solucao: manter um estado open (dentro/fora das aspas) e fechar a aspa antes de um escape e reabrir com '', "'' antes do proximo byte cru - linha NASM limpa (db "alpha-one", 13, 10, 0). ARMADILHA: al/eax e volatil; o byte cru tem de ser RECARREGADO da fonte depois dos call de reabertura, senao o 1o byte de cada segmento vira lixo (db " lpha-one").'
+      type: lesson
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T12:20:47.254982-03:00
+      updated_at: 2026-10-17T12:20:47.254982-03:00
+      confidence: 1
+      last_verified: 2026-10-17T12:20:47.1387594-03:00
+      created_by: human
+    - id: d11f0969-be8d-2954-9860-10588f988e29
+      title: 'Implementado: -strings com runs CR/LF (uma linha NASM, sem aspas vazias)'
+      description: 'Dexter 1.2.375: .str_run aceita CR(13)/LF(10) dentro do run (1o byte imprimivel) e dex_emit_qstr fecha/reabre as aspas por estado (open) -> db "alpha-one", 13, 10, 0 e db "say ", 34, "hi", 34, " ok", 13, 10, 0. Or├ículo tests/qstr_check.py + secao [50]. run_tests 361/361 OK; run_slow 7/7; [21] round-trip comportamental verde.'
+      type: milestone
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - tests/qstr_check.py
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T12:20:47.4252274-03:00
+      updated_at: 2026-10-17T12:20:47.4252274-03:00
+      confidence: 1
+      last_verified: 2026-10-17T12:20:47.3248475-03:00
+      created_by: human
+    - id: ea8ef06b-167b-0609-62bb-41f6d8e4cd6b
+      title: SIB base sao os bits 2-0 (shr 5 le bits 7-5) e driver de teste linka emit_nasm sem rebuild
+      description: 'Duas armadilhas da fatia do indice simbolico x32. (1) O campo base do byte SIB sao os BITS 2-0; extrai-lo com shr 5 (bits 7-5) faz o check base==101 nunca casar -> a VA nao entra no R e o operando sai numerico em SILENCIO (sem erro). SIB=0x85 (eax*4 sem base) -> base = 0x85 & 7 = 5. (2) O driver codegen_check ([12]) linka emit_nasm.obj SEM rebuild.obj: qualquer extern de FUNCAO novo no emissor (ou global no rebuild) quebra o link da suite. Solucao: o emissor DEFINE os globais de dados (g_abs_vas/g_abs_n/g_abs_base, 0=desligado) e o rebuild so escreve; o emissor consulta localmente.'
+      type: lesson
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T13:01:23.2876633-03:00
+      updated_at: 2026-10-17T13:01:23.2876633-03:00
+      confidence: 1
+      last_verified: 2026-10-17T13:01:23.1665001-03:00
+      created_by: human
+    - id: 3c13aaac-279f-2809-8467-4a885b948787
+      title: 'Implementado: indice simbolico x32 (SIB-abs, tabela de switch)'
+      description: 'Dexter 1.2.379: jmp dword [jtab+eax*4] (VA x32 cabe em 32 bits) agora sai [nosplit label_<VA>+eax*4]; .cs_abs32sib registra a RVA no R; canal por dados (g_abs_vas/g_abs_n/g_abs_base definidos em emit_nasm, escritos pelo rebuild); x64 segue numerico. Fixture tests/absidx.asm + secao [51]. run_tests 368/368 OK; run_slow 7/7; round-trip -native exit 42.'
+      type: milestone
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - src/disasm/emit_nasm.asm
+        - tests/absidx.asm
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T13:01:23.4760957-03:00
+      updated_at: 2026-10-17T13:01:23.4760957-03:00
+      confidence: 1
+      last_verified: 2026-10-17T13:01:23.365656-03:00
+      created_by: human
+    - id: f3ef1cf1-99bd-2e0c-2528-b47f57307183
+      title: 'x32 spans de ponteiro: 3 lugares (pre-scan, emissor, g_spanflags no .wds_plain)'
+      description: 'Para spans de ponteiro em x32 (4 bytes, dd VA) nao basta o emissor: (1) .collect_strs passada B lia qword (8B) e era gated em arch==X64 -> nao inseria os alvos; (2) .wds_emit_span usava stride 8 fixo e diretiva dq; (3) .wds_plain punha g_spanflags=1 p/ x32 (''corpos db''), que faz o emissor cair em db ANTES de olhar os spans. Corrigir so o (2) nao muda nada (silencioso). Stride vem do arch: 8=dq/qword, 4=dd/dword; leitura dword precisa zero-estender (mov eax,[mem]).'
+      type: lesson
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T13:35:52.6877085-03:00
+      updated_at: 2026-10-17T13:35:52.6877085-03:00
+      confidence: 1
+      last_verified: 2026-10-17T13:35:52.5762876-03:00
+      created_by: human
+    - id: 5bcaf064-a468-39c0-4102-59445c488e79
+      title: 'Implementado: jump-to-code x32 (spans de 4 bytes, dd label_)'
+      description: 'Dexter 1.2.381: tabela de switch x32 (dd VAs de codigo) sai dd label_<VA> via D-7; .collect_strs passada B l├¬ dword e .wds_emit_span usa stride do arch (4/8) + dd/dq; removidos gate arch==X64 e g_spanflags=1 do x32. Fixture tests/absidx.asm + [51]. run_tests 369/369 OK; run_slow 7/7; round-trip exit 42.'
+      type: milestone
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - tests/absidx.asm
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T13:35:52.8634153-03:00
+      updated_at: 2026-10-17T13:35:52.8634153-03:00
+      confidence: 1
+      last_verified: 2026-10-17T13:35:52.7588186-03:00
+      created_by: human
+    - id: 15000dad-3e72-63cd-ffb8-65ed323c3e41
+      title: 'D-21: -s <secao> ignora label por-VA das secoes filtradas; .pdata/.xdata simbolica gerava simbolo indefinido'
+      description: 'No asm/win64 -native o contrato do -s (demais secoes viram db) era furado pela excecao simbolica da R-5.4: .pdata/.xdata emitiam dd label_<code VA> wrt ..imagebase mesmo com a secao dos alvos filtrada-fora (db, sem label por-VA) -> 234 erros de nasm (122 symbol not defined + 113 label changed) em tests/exc.exe -s .rdata -native. Fix: section_filter != 0 pula a excecao no .walk_data (cai no db comum) = D-17 (nunca simbolo indefinido). Sem -s: 0 erros. Fila ''-s + RIP'' NAO era o RIP: 19 probes -m bin byte-identicos.'
+      type: lesson
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:07:54.3939491-03:00
+      updated_at: 2026-10-17T19:07:54.3939491-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:07:54.2880457-03:00
+      created_by: human
+    - id: e8191eb3-c6f9-3eb2-3b55-8aa10997dbc2
+      title: 'Ambiente: nasm do PATH e 2.16.01 (Strawberry), nao o C:\Nasm\nasm.exe 3.01 do projeto'
+      description: 'O projeto usa C:\Nasm\nasm.exe (3.01). O PATH desta sessao resolvia nasm para C:\Strawberry\c\bin\nasm.exe (2.16.01), que acusa 19 ''mismatch in operand sizes'' FALSOS no mesmo .asm (ex.: sub rsp, strict dword 0x88) -> quase levou a conclusao errada. Sempre invocar C:\Nasm\nasm.exe; a suite ja forca NASM=C:\Nasm\nasm.exe.'
+      type: lesson
+      severity: medium
+      files:
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:07:54.6250055-03:00
+      updated_at: 2026-10-17T19:07:54.6250055-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:07:54.5150784-03:00
+      created_by: human
+    - id: 84bc22d8-5e41-2dd4-36fd-e0f69d9a75fb
+      title: 'Implementado: -s + SEH simbolico (D-21, [52] 7 checks, 1.2.382)'
+      description: Fix do cruzamento -s x reemissao simbolica SEH (.pdata/.xdata). build.bat limpo (1.2.382); run_tests.bat 376/376 OK; run_slow.bat 7/7; -s .rdata -native 0 erros (antes 234); -s .rdata -m bin -native fc /b 0. PE_NOTES 22, ROADMAP D-21.
+      type: note
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:07:54.7974479-03:00
+      updated_at: 2026-10-17T19:07:54.7974479-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:07:54.6904939-03:00
+      created_by: human
+    - id: 1aea4829-1007-a883-3c6a-283b5ca7a0a0
+      title: 'D-19 f1: .emit_xdata_sec NAO substitui o walker de dados (perde R-labels); unwind tem de ser integrado ao .wds_chunks'
+      description: 'Para UNWIND_INFO em secao arbitraria no win64, rotear a secao para .emit_xdata_sec gera 48.840 ''symbol not defined'': a .text referencia VAs da .rdata via [rel label_] e .emit_xdata_sec emite db puro nos gaps (sem R-labels/spans). Correcao: .walk_data_sec calcula .uw_bitmap e usa .wds_plain_uw, fatiando [cur,next-mark) para .wds_chunks (preserva R-labels) e cada inicio para .uw_emit; novo .uw_next_bit. Desligado sob -s (D-17/D-21).'
+      type: lesson
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:31:10.0386127-03:00
+      updated_at: 2026-10-17T19:31:10.0386127-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:31:09.9353223-03:00
+      created_by: human
+    - id: dcd715ea-6381-7c3b-831c-3f0d6ad8dab0
+      title: 'Perf: cuidado com clobber de eax ao inserir chamadas no meio de blocos que assumiam eax vivo'
+      description: .wds_plain_chunks usava 'mov r10d, eax' (k1=raw) assumindo eax do .wds_plain; inserir o call .uw_bitmap antes clobrou eax => k1 errado. Trocado por 'mov r10d, [rbp-80]'.
+      type: lesson
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:31:10.236394-03:00
+      updated_at: 2026-10-17T19:31:10.236394-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:31:10.1229589-03:00
+      created_by: human
+    - id: 58642707-63f7-98fb-8aad-0b296fb9197e
+      title: 'Implementado: D-19 fatia 1 (UNWIND_INFO em qualquer secao no win64, [53] 5 checks, 1.2.384)'
+      description: 'notepad -native win64: 386 erros de nasm -> 0. Fix: .walk_data_sec + .uw_bitmap + .wds_plain_uw + .uw_next_bit. build.bat limpo (1.2.384); run_tests.bat 381/381 OK; run_slow.bat 7/7; -m bin intacto; -native -r linka (exit 0). Fatia 2 pendente: dex_patch_dirs cego + fusao de secoes.'
+      type: note
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:31:10.4121871-03:00
+      updated_at: 2026-10-17T19:31:10.4121871-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:31:10.3082497-03:00
+      created_by: human
+    - id: 327d3c15-de20-e342-01b2-64aea76636de
+      title: 'D-19 f2a: dex_patch_dirs tem de remapear DataDirectories por (secao, offset); RVA crua aponta p/ secao errada apos o link reordenar'
+      description: 'link.exe reordena/funde secoes (exc: .idata 0x10000 -> 0xE000). Copiar a RVA crua punha o IMPORT dir na .bss nova -> loader 0xC000007B. Fix: .pd_remap (secao original da RVA -> offset -> VirtualAddress da homonima rebuildada, /NNN->NNN); sem homonima nao copia. Efeito: 0xC000007B -> 0xC0000005 (imagem carrega). SECURITY/DEBUG regeneraveis. Falta 2b: RVAs internas do .idata (OFT/Name/FirstThunk).'
+      type: lesson
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:56:28.0490143-03:00
+      updated_at: 2026-10-17T19:56:28.0490143-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:56:27.9394008-03:00
+      created_by: human
+    - id: 31ba3d6b-6ec0-ef91-755c-09796d1666e9
+      title: 'Oráculo de comportamento: notepad.exe (Win11) sai 0 imediatamente; usar exc.exe (exit 42 + stdout)'
+      description: 'tests\\notepad.exe e um launcher/stub que sai 0 logo, entao ''nao crashar'' nao prova nada. Para aceite comportamental do win64 usar tests\\exc.exe (console MinGW com .pdata/.xdata): original imprime caught=7 cleanups=6 e sai 42.'
+      type: lesson
+      severity: medium
+      files:
+        - tests/pe_dirs.py
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:56:28.227446-03:00
+      updated_at: 2026-10-17T19:56:28.227446-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:56:28.1248895-03:00
+      created_by: human
+    - id: 40001ad4-6090-159b-6cad-983b8533eade
+      title: 'Implementado: D-19 fatia 2a (DataDirectories remapeados por secao+offset, [54] 4 checks, 1.2.386)'
+      description: 'Novo .pd_remap em rebuild.asm; oraculo tests/pe_dirs.py (exc 5/5, hello 3/3). build.bat limpo (1.2.386); run_tests.bat 385/385 OK; run_slow.bat 7/7; -m bin intacto. exc -native -r: 0xC000007B -> 0xC0000005 (imagem carrega). Fatia 2b pendente: import table simbolica no win64.'
+      type: note
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:56:28.3986833-03:00
+      updated_at: 2026-10-17T19:56:28.3986833-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:56:28.295087-03:00
+      created_by: human
+    - id: b0d9cb2a-dac1-881a-465a-52b7a90569ed
+      title: 'Retomada (handoff): D-19 fatia 2b - import table simbolica no win64'
+      description: 'Estado: 1.2.386, run_tests 385/385, run_slow 7/7, exc -native -r = 0xC0000005 (imagem carrega, IAT lixo). Alvo: exc -native -r -> exit 42 + ''caught=7 cleanups=6''. Causa: RVAs internas do .idata copiado (OFT/Name/FirstThunk, ILT/IAT->IMAGE_IMPORT_BY_NAME) seguem absolutas. Modelo no caminho bin (rebuild.asm): .gb_db_slots/.gb_slot_emit/.gb_hint_emit/.gb_name_emit + dex_emit_qstr (file-scope); win64 usa dd label_ wrt ..imagebase (.pd_field) e dq label_ p/ thunks. Hook: walker de dados .walk_data_sec (events como os inicios de unwind da fatia 1) ou caminho dedicado p/ Import Directory; .gb_* sao locais de dex_generate_bin (promover ou reimplementar no escopo asm). Teste primeiro: [55] com o oraculo exc. Depois 2c: RESOURCE/TLS/LOADCFG/DELAYIMP + .bss/.tls. Detalhe: docs/SESSAO-2026-10-17-D19-F2A.md secao 6 e PE_NOTES secao 24.'
+      type: note
+      severity: medium
+      files: []
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-17T19:57:25.0052263-03:00
+      updated_at: 2026-10-17T19:57:25.0052263-03:00
+      confidence: 1
+      last_verified: 2026-10-17T19:57:24.9038607-03:00
+      created_by: human
+    - id: 1dc75508-2227-3f3d-a945-7edd3690fcbd
+      title: 'D-22: -s fora da secao do entry + -r -> LNK2001 label_<entry>'
+      description: Com -s <secao> diferente da secao do entrypoint e -r, a secao do entry e emitida como db/chunks e o label_<entry> nunca era definido (o header so emitia global). O link falhava com LNK2001 unresolved external symbol label_<VA> (exit 5), mesmo com o .asm correto. Reproduzido em tests/exc.exe -s .rdata -native -r e -s .rdata -r.
+      type: bug
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      solution: Novo .emit_entry_alias em src/gen/rebuild.asm emite label_<entryVA> equ label_<secVA> + 0x<delta> no fim do .asm; delta 0 e -s na secao do entry nao emitem. Gate [55] 6 checks; suite 391/391 (1.2.390).
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-19T18:33:58.05098-03:00
+      updated_at: 2026-10-19T18:36:35.2580112-03:00
+      resolved_at: 2026-10-19T00:00:00Z
+      confidence: 1
+      last_verified: 2026-10-19T18:33:57.8535497-03:00
+      created_by: human
+    - id: 6e4a001a-b2d9-e1ee-799e-6dd16e565a7d
+      title: 'Implementado: D-22 (entry label via equ no -s + -r)'
+      description: 'Fecha o LNK2001 de -s <secao> + -r no win64/win32. .emit_entry_alias emite label_<entryVA> equ label_<secVA> + 0x<delta> no fim do .asm (sem forward reference; delta 0 e -s na secao do entry nao emitem). [55] 6 checks: x64 native/db, -s .text sem equ redundante e tiny32 x32 delta 0. build.bat 1.2.389; run_tests 391/391; run_slow 7/7.'
+      type: note
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      tags:
+        - d-22
+        - rebuild
+        - entry
+        - equ
+        - x32
+      author: Dexter Engineer
+      created_at: 2026-10-19T18:33:58.0924388-03:00
+      updated_at: 2026-10-19T18:33:58.0924388-03:00
+      confidence: 1
+      last_verified: 2026-10-19T18:33:57.85945-03:00
+      created_by: human
+    - id: cc8af0d2-4149-e631-eba8-7615aabc0ce6
+      title: dexter <in>.exe -v grava <in>.asm por default e sobrescreve fonte do corpus
+      description: O default de -o e <input>.asm; rodar out/dexter.exe tests/tiny32.exe -v (diagnostico) sobrescreveu tests/tiny32.asm (fonte sagrada). A suite caiu em 14 checks de x32 porque o link procurava _start. Restaurado com git checkout. [0] agora valida FONTE SAGRADA DO CORPUS em todos os .asm do corpus (absidx/hello/jtable/loop/memsz/no_relocs/sibabs/strings/tiny/tiny32/vex).
+      type: lesson
+      severity: medium
+      files:
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-19T18:33:58.1389115-03:00
+      updated_at: 2026-10-19T18:33:58.1389115-03:00
+      confidence: 1
+      last_verified: 2026-10-19T18:33:57.8780888-03:00
+      created_by: human
+    - id: b0d3f533-61f5-11f3-b27d-52d2bd701656
+      title: 'Build: build.bat bem-sucedido'
+      description: BUILD-00001 passou (detected, build.bat).
+      type: note
+      severity: low
+      files:
+        - build.bat
+        - include/dexter.inc
+        - include/errors.inc
+        - include/macros.inc
+        - include/pe.inc
+        - include/win64.inc
+        - runtime/imports_stub.inc
+        - runtime/pe_stub.inc
+        - src/back/codegen.asm
+        - src/back/lift.asm
+        - src/cli/help.asm
+        - src/cli/parse_args.asm
+        - src/diag/compare.asm
+        - src/diag/doctor.asm
+        - src/diag/func.asm
+        - src/diag/overview.asm
+        - src/diag/snapshot.asm
+        - src/diag/trace.asm
+        - src/diag/xref.asm
+        - src/disasm/decoder.asm
+        - src/disasm/emit_nasm.asm
+        - src/disasm/modrm.asm
+        - src/disasm/opcode_tbl.asm
+        - src/disasm/operands.asm
+        - src/disasm/prefixes.asm
+        - src/disasm/semantics.asm
+        - src/disasm/x87.asm
+        - src/front/ast.asm
+        - src/front/lexer.asm
+        - src/front/parser.asm
+        - src/gen/asm_buffer.asm
+        - src/gen/labels.asm
+        - src/gen/rebuild.asm
+        - src/gen/strings.asm
+        - src/gen/symbols.asm
+        - src/io/console.asm
+        - src/io/file_read.asm
+        - src/io/file_write.asm
+        - src/io/mmap.asm
+        - src/main.asm
+        - src/pe/pe_exports.asm
+        - src/pe/pe_imports.asm
+        - src/pe/pe_load.asm
+        - src/pe/pe_relocs.asm
+        - src/pe/pe_resources.asm
+        - src/pe/pe_sections.asm
+        - src/pe/pe_unwind.asm
+        - src/pe/rva.asm
+        - src/util/hash.asm
+        - src/util/log.asm
+        - src/util/memory.asm
+        - src/util/string.asm
+        - tests/absidx.asm
+        - tests/ast_check.asm
+        - tests/codegen_check.asm
+        - tests/exc_cpp.cpp
+        - tests/fuzz_pe.py
+        - tests/hello.asm
+        - tests/hello_f3.c
+        - tests/imp_check.asm
+        - tests/jtable.asm
+        - tests/lex_check.asm
+        - tests/lift_check.asm
+        - tests/loop.asm
+        - tests/memsz.asm
+        - tests/no_relocs.asm
+        - tests/pe_dirs.py
+        - tests/pe_exc_dir.py
+        - tests/pe_impdesc.py
+        - tests/qstr_check.py
+        - tests/ref_native/ref_hello.asm
+        - tests/ref_native/ref_loop.asm
+        - tests/ref_native/ref_no_relocs.asm
+        - tests/ref_native/ref_strings.asm
+        - tests/ref_native/ref_tiny.asm
+        - tests/sibabs.asm
+        - tests/strings.asm
+        - tests/strpool_check.asm
+        - tests/sym_check.asm
+        - tests/tiny.asm
+        - tests/tiny32.asm
+        - tests/unwind_check.asm
+        - tests/vex.asm
+        - tests/x87_check.asm
+      tags:
+        - build
+        - D-22
+      author: mcp
+      created_at: 2026-10-19T18:34:44.6324891-03:00
+      updated_at: 2026-10-19T18:34:44.6324891-03:00
+      confidence: 1
+      last_verified: 2026-10-19T18:34:44.6221597-03:00
+      created_by: ctx build
+    - id: 342e8481-8e69-e720-469a-061545899c2c
+      title: 'Handoff: D-22 (docs/SESSAO-2026-10-19-D22.md)'
+      description: 'Estado para retomada: 1.2.390, suite 391/391, slow 7/7, D-22 fechada. Proximo bloqueador: D-19 fatia 2b (import table simbolica no win64 -native). Inclui causa raiz, fix, comandos, CTX IDs, estado do Git (nada commitado; ultimo commit 0563b8b), armadilhas (default -o sobrescreve .asm, nasm PATH 2.16) e checklist de retomada.'
+      type: note
+      severity: medium
+      files:
+        - docs/SESSAO-2026-10-19-D22.md
+      branch: master
+      tags:
+        - handoff
+        - d-22
+        - docs
+      author: Dexter Engineer
+      created_at: 2026-10-19T18:42:42.7312186-03:00
+      updated_at: 2026-10-19T18:42:42.7312186-03:00
+      confidence: 1
+      last_verified: 2026-10-19T18:42:42.5861197-03:00
+      created_by: human
+decisions:
+    - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
+      title: 'D-22: entry label via equ no -s + -r'
+      description: ""
+      decision: Emitir label_<entryVA> equ label_<secVA> + 0x<delta> no fim do .asm quando -r e -s != secao do entry (win64/win32); delta 0 e -s na secao do entry nao emitem.
+      rationale: Preserva o contrato de -s (nao forca a secao do entry a virar codigo), evita forward reference (equ no fim), nao toca -m bin e evita duplicata/auto-referencia.
+      alternatives:
+        - Forcar a secao do entry a code-walk com -r (muda escopo de -s); recusar -s + -r com exit 1 (quebra uso legitimo); emitir label no stream db em duas partes (duplica logica plain/chunks/uw/bss).
+      files:
+        - src/gen/rebuild.asm
+      participants: []
+      date: 2026-10-19T00:00:00Z
+      status: accepted
+      confidence: 1
+      last_verified: 2026-10-19T18:34:27.5649363-03:00
+      tags: []
+      related:
+        - 1dc75508-2227-3f3d-a945-7edd3690fcbd
+      created_by: human
 dependencies:
     include\dexter.inc:
         - include\errors.inc
@@ -5148,6 +5695,7 @@ dependencies:
         - include\win64.inc
         - include\errors.inc
     src\util\string.asm: []
+    tests\absidx.asm: []
     tests\ast_check.asm:
         - include\dexter.inc
         - src\front\parser.asm
@@ -5173,13 +5721,16 @@ dependencies:
     tests\loop.asm: []
     tests\memsz.asm: []
     tests\no_relocs.asm: []
+    tests\pe_dirs.py: []
     tests\pe_exc_dir.py: []
     tests\pe_impdesc.py: []
+    tests\qstr_check.py: []
     tests\ref_native\ref_hello.asm: []
     tests\ref_native\ref_loop.asm: []
     tests\ref_native\ref_no_relocs.asm: []
     tests\ref_native\ref_strings.asm: []
     tests\ref_native\ref_tiny.asm: []
+    tests\sibabs.asm: []
     tests\strings.asm: []
     tests\strpool_check.asm:
         - src\gen\strings.asm

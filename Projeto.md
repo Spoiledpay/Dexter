@@ -768,7 +768,7 @@ Isso já é uma base sólida e testável para plugar o decoder depois.
 
 na pasta tests, tem algums arquivos .exe de exemplos que podemos usar eles como nossos trabalhos iniciais. 
 ------------------------------------------------------------
-15. STATUS DE IMPLEMENTAÇÃO (sessão 2026-10-06, Dexter v0.2.0)
+15. STATUS DE IMPLEMENTAÇÃO (sessão 2026-10-06, Dexter v0.2.0 — snapshot histórico; estado atual em `marco.md`/`docs/ROADMAP.md`)
 Ferramenta real, testada no Windows. Build: nasm 3.01 + link 14.34.
 Suíte: tests\\run_tests.bat -> 24/24 OK. Detalhe por requisito: docs/ROADMAP.md.
 
@@ -886,5 +886,10 @@ Onde paramos (ponto exato):
   Causa: colisão de slots `[rbp-96]`/`[rbp-100]` em `.wds_chunks`
   (fix: `img`→`[rbp-104]`); `[13]` verde, `[14]`/`[15]` criados,
   goldens `ref_native/` regenerados. Detalhe:
-  `docs/SESSAO-2026-10-11-R643.md`. Próximo: R-6.5 resto, R-3.3/R-4.5
-  (docs finais), tag, e Fase 3 do `marco.md` (views + JSON mínimo).
+  `docs/SESSAO-2026-10-11-R643.md`.
+- ESTADO ATUAL (2026-10-19, Dexter 1.2.390, suíte 391/391): R-6.1–R-6.5,
+  R-7.1–R-7.5, R-8.1/R-8.2 e R-5.3/R-5.4 estão FECHADOS; D-22 (`-s`+`-r`
+  com entry via `equ`) fechada. Fila de execução vigente em `marco.md` §8:
+  D-19 fatia 2b (import table simbólica no win64), fecho da fatia 2
+  (comportamento em PE real), base simbólica do índice em x64, semântica
+  VEX/EVEX, R-6.6 (opção C).
