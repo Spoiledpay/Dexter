@@ -173,7 +173,8 @@ g_rn:      resq 1                  ; count (qword)
 g_chunkimg: resq 1                 ; img p/ .wds_chunks (evita 7º arg pilha)
 g_ui_tmp:   resb 32                ; UnwindInfo scratch (F2 walk .xdata)
 g_unwind_bin: resb 1               ; F3: 1 = modo bin (dd label + C), 0 = win64 (wrt)
-g_pad_ub:   resb 7
+g_impwds:   resb 1                 ; D-19 2b: 1 = gaps do walker de imports via .wds_chunks
+g_pad_ub:   resb 6
 g_bin_img:  resq 1                 ; F3: img p/ .pd_field achar a seção do alvo
 g_spancfg: resq 1                  ; cfg p/ validador de alvo dq (NO_RELOCS)
 g_spanflags: resq 1                ; bit0 nodq: span sai db puro (.reloc: verbatim)
@@ -1599,6 +1600,22 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .wcs_emit_db             ; nome impossível: db honesto
+    ; nomes duplicados (mesma dll+func em 2 slots IAT): sufixo _<iat_rva>
+    mov rax, [rel g_ir+DexIR.imp]
+    mov rcx, r15
+    mov rdx, rax
+    sub rsp, 32
+    call dex_imp_name_dup
+    add rsp, 32
+    test eax, eax
+    jz .wcs_imp_nosuf
+    mov rax, [rel g_ir+DexIR.imp]
+    lea rcx, [rel g_impname]
+    mov edx, [rax+ImportEntry.iat_rva]
+    sub rsp, 32
+    call dex_imp_append_rva
+    add rsp, 32
+.wcs_imp_nosuf:
     ; R-5.3 F1: em -f bin os labels valem FILE-OFFSET, então o disp32
     ; RIP-relativo precisa da correção de delta entre a seção do slot
     ; (IAT) e a do código: K = iat_rva - off(slot) - (vaddr_code-raw_code).
@@ -1895,6 +1912,54 @@ dex_generate_asm:
     jz .wds_flagnodq_done
     mov qword [rel g_spanflags], 1
 .wds_flagnodq_done:
+    ; ---- D-19 fatia 2b: import table simbólica no win64 -native ----
+    ; Reusa o walker do bin (dex_generate_bin.gb_db_slots) com os gaps via
+    ; .wds_chunks (R-labels/spans preservados). Só na seção que contém
+    ; metadados de import; -s/-no-imports seguem db (D-17, direção segura).
+    cmp qword [rbx+DexConfig.section_filter], 0
+    jne .wds_impno
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_NATIVE
+    jz .wds_impno
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    jne .wds_impno
+    cmp dword [r15+PeImage.imports_count], 0
+    je .wds_impno
+    mov rcx, r15
+    mov rdx, r12
+    sub rsp, 32
+    call .imp_sec_has
+    add rsp, 32
+    test eax, eax
+    jz .wds_impno
+    ; label da seção (o walker de imports não emite no offset 0)
+    mov rax, [r15+PeImage.image_base]
+    mov ecx, [r12+PeSection.vaddr]
+    add rax, rcx
+    mov rcx, r14
+    mov rdx, rax
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .wds_fail
+    mov byte [rel g_unwind_bin], 0
+    mov byte [rel g_impwds], 1
+    mov [rel g_bin_img], r15
+    mov [rel g_chunkimg], r15
+    mov rcx, r14                 ; buf
+    mov rdx, [r15+PeImage.file_buffer] ; file base
+    mov r8, r12                  ; sec
+    mov r9d, [rbp-80]            ; raw
+    sub rsp, 32
+    call dex_generate_bin.gb_db_slots
+    add rsp, 32
+    mov byte [rel g_impwds], 0
+    mov qword [rel g_bin_img], 0
+    test eax, eax
+    jnz .wds_fail
+    jmp .wds_ok
+.wds_impno:
     mov eax, [rbx+DexConfig.flags]
     test eax, DF_STRINGS
     jz .wds_plain
@@ -2263,6 +2328,188 @@ dex_generate_asm:
     pop rdi
     pop rbx
     pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .imp_sec_has — a seção contém metadados de import? (D-19 fatia 2b)
+; Args: rcx=img (PeImage*), rdx=sec (PeSection*) -> eax=1 sim | 0 não.
+; Checa ImportDirectory, IATs, OFT/Name/FT e hint/name (by-name) por RVA.
+; Frame: rbp + 5 pushes (40) + sub 88 = 128 ≡ 0.
+; Slots: [rbp-48]dcur [rbp-56]imp_end [rbp-64]desc_off [rbp-72]desc_ptr
+;        [rbp-80]tbase [rbp-88]tk [rbp-96]toff
+;-----------------------------------------------------------------------------
+.imp_sec_has:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 88
+    mov rbx, rcx                 ; img
+    mov r13, rdx                 ; sec
+    mov rax, [rbx+PeImage.opt_header]
+    mov r14d, [rax+OH64_DATA_DIR+8]   ; imp_rva
+    test r14d, r14d
+    jz .ish_no
+    mov r15d, [rax+OH64_DATA_DIR+12]  ; imp_size
+    test r15d, r15d
+    jz .ish_no                   ; size 0: walker bin também não varre
+    add r15d, r14d               ; imp_end
+    mov edx, r14d
+    call .ish_in
+    test eax, eax
+    jnz .ish_yes
+    ; IATs (ImportEntry.iat_rva)
+    xor r12d, r12d
+.ish_iat:
+    mov ecx, [rbx+PeImage.imports_count]
+    cmp r12d, ecx
+    jae .ish_desc
+    mov rax, [rbx+PeImage.imports_ptr]
+    test rax, rax
+    jz .ish_desc
+    mov edx, r12d
+    imul edx, SIZEOF_IMPORT_ENTRY
+    mov edx, [rax+rdx+ImportEntry.iat_rva]
+    call .ish_in
+    test eax, eax
+    jnz .ish_yes
+    inc r12d
+    jmp .ish_iat
+    ; descritores + alvos + hint/name
+.ish_desc:
+    mov [rbp-48], r14d           ; dcur = imp_rva
+    mov [rbp-56], r15d           ; imp_end
+    xor r12d, r12d               ; dcnt
+.ish_dl:
+    mov eax, [rbp-48]
+    cmp eax, [rbp-56]
+    jae .ish_no
+    cmp r12d, 8192
+    jae .ish_no                  ; backstop determinístico
+    mov rcx, rbx
+    mov edx, eax
+    call dex_rva_to_offset
+    test rax, rax
+    jz .ish_no
+    mov [rbp-64], rax            ; desc_off
+    lea rdx, [rax+20]
+    cmp rdx, [rbx+PeImage.file_size]
+    ja .ish_no
+    mov r10, [rbx+PeImage.file_buffer]
+    add r10, rax
+    mov [rbp-72], r10            ; desc_ptr
+    mov eax, [r10]
+    or eax, [r10+4]
+    or eax, [r10+8]
+    or eax, [r10+12]
+    or eax, [r10+16]
+    jz .ish_no                   ; terminador
+    ; OFT (0), Name (12), FT (16)
+    mov edx, [r10]
+    call .ish_in
+    test eax, eax
+    jnz .ish_yes
+    mov r10, [rbp-72]
+    mov edx, [r10+12]
+    call .ish_in
+    test eax, eax
+    jnz .ish_yes
+    mov r10, [rbp-72]
+    mov edx, [r10+16]
+    call .ish_in
+    test eax, eax
+    jnz .ish_yes
+    ; arrays de thunks: OFT e FT (hint/name pode cair em outra seção)
+    mov r10, [rbp-72]
+    mov eax, [r10]
+    call .ish_thunks
+    test eax, eax
+    jnz .ish_yes
+    mov r10, [rbp-72]
+    mov eax, [r10+16]
+    call .ish_thunks
+    test eax, eax
+    jnz .ish_yes
+    add dword [rbp-48], 20
+    inc r12d
+    jmp .ish_dl
+.ish_yes:
+    mov eax, 1
+    jmp .ish_ret
+.ish_no:
+    xor eax, eax
+.ish_ret:
+    add rsp, 88
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+; .ish_in — edx=rva -> eax=1 se dentro da seção (r13). Clobbra rax/rcx/rdx.
+.ish_in:
+    xor eax, eax
+    mov ecx, [r13+PeSection.vaddr]
+    cmp edx, ecx
+    jb .ish_in_no
+    sub edx, ecx
+    cmp edx, [r13+PeSection.raw_size]
+    jae .ish_in_no
+    mov eax, 1
+.ish_in_no:
+    ret
+
+; .ish_thunks — eax=tbase_rva -> eax=1 se algum hint/name by-name cai na
+; seção (r13). Usa os slots do frame de .imp_sec_has. Clobbra voláteis.
+; Entry: rsp ≡ 8; sub 40 -> shadow 32 + alinhamento 16.
+.ish_thunks:
+    sub rsp, 40
+    test eax, eax
+    jz .ish_th_zero
+    mov [rbp-80], eax            ; tbase
+    mov rcx, rbx
+    mov edx, eax
+    call dex_rva_to_offset
+    test rax, rax
+    jz .ish_th_zero
+    mov [rbp-96], rax            ; toff
+    mov dword [rbp-88], 0        ; tk
+.ish_th_l:
+    cmp dword [rbp-88], 4096
+    jae .ish_th_zero
+    mov eax, [rbp-88]
+    shl eax, 3
+    mov ecx, eax
+    add rcx, [rbp-96]
+    lea rdx, [rcx+8]
+    cmp rdx, [rbx+PeImage.file_size]
+    ja .ish_th_zero
+    mov rax, [rbx+PeImage.file_buffer]
+    mov rax, [rax+rcx]
+    test rax, rax
+    jz .ish_th_zero
+    mov rdx, rax
+    shr rdx, 32
+    jnz .ish_th_n                ; ordinal/bound: sem hint/name
+    mov edx, eax
+    call .ish_in
+    test eax, eax
+    jnz .ish_th_one
+.ish_th_n:
+    inc dword [rbp-88]
+    jmp .ish_th_l
+.ish_th_one:
+    mov eax, 1
+    add rsp, 40
+    ret
+.ish_th_zero:
+    xor eax, eax
+    add rsp, 40
     ret
 
 ;-----------------------------------------------------------------------------
@@ -3674,6 +3921,157 @@ dex_generate_asm:
     add rsp, 40
     pop rsi
     pop rdi
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .wds_gap_win — gap [k0,k1) de seção com imports no win64 (D-19 2b).
+; Reproduz o contrato de -strings (.wds_loop): runs viram `db "..."` e o
+; resto vai por .wds_chunks (R-labels/spans preservados). Run com alvo R
+; estritamente no interior degrada p/ chunks (splits somariam NULs).
+; Args: rcx=buf, rdx=fptr(seção), r8=va_base, r9d=k0, r10d=k1, r11=lab0.
+; Ret: eax=0 ok | 1 OOM. Frame: 5 pushes (40) + sub 56 = 96 ≡ 0.
+; Slots: [rbp-64]lab0 [rbp-72]run [rbp-80]j.
+;-----------------------------------------------------------------------------
+.wds_gap_win:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 56
+    mov rbx, rcx                 ; buf
+    mov r12, rdx                 ; fptr
+    mov r13, r8                  ; va_base
+    mov r14d, r9d                ; cur
+    mov r15d, r10d               ; k1
+    mov [rbp-64], r11            ; lab0
+.gw_l:
+    cmp r14d, r15d
+    jae .gw_done
+    mov rcx, r12
+    mov eax, r14d
+    add rcx, rax
+    mov edx, r15d
+    sub edx, r14d
+    call .str_run
+    test eax, eax
+    jz .gw_gap
+    mov [rbp-72], eax            ; run
+    ; alvo R estritamente dentro de (run_start, run_end+NUL)?
+    mov r8, r13
+    mov eax, r14d
+    add r8, rax
+    inc r8                       ; lo = va(cur)+1
+    mov r9, r8
+    mov eax, [rbp-72]
+    add r9, rax                  ; hi = lo+run
+    mov rcx, [rel g_rarr]
+    mov rdx, [rel g_rn]
+    xor r10d, r10d
+.gw_rl:
+    cmp r10, rdx
+    jae .gw_run
+    mov rax, [rcx+r10*8]
+    add rax, r13                 ; va do alvo
+    cmp rax, r8
+    jbe .gw_rn
+    cmp rax, r9
+    jb .gw_deg                   ; interior: degrada p/ chunks
+    jmp .gw_run                  ; ordenado: resto fora
+.gw_rn:
+    inc r10
+    jmp .gw_rl
+.gw_deg:
+    mov eax, [rbp-72]
+    add eax, r14d
+    inc eax
+    mov [rbp-80], eax            ; j = cur+run+1
+    jmp .gw_emit
+.gw_run:
+    ; off 0 já tem o label da seção (emitido pelo caller) — não duplicar
+    test r14d, r14d
+    jz .gw_run_nolab
+    mov rcx, rbx
+    mov rdx, r13
+    mov eax, r14d
+    add rdx, rax
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .gw_fail
+.gw_run_nolab:
+    mov rcx, rbx
+    mov rdx, r12
+    mov eax, r14d
+    add rdx, rax
+    mov r8d, [rbp-72]
+    sub rsp, 32
+    call dex_emit_qstr
+    add rsp, 32
+    test eax, eax
+    jnz .gw_fail
+    mov eax, [rbp-72]
+    add r14d, eax
+    inc r14d
+    mov qword [rbp-64], -1
+    jmp .gw_l
+.gw_gap:
+    mov [rbp-80], r14d           ; j = cur
+.gw_gl:
+    mov eax, [rbp-80]
+    cmp eax, r15d
+    jae .gw_emit
+    mov ecx, eax
+    sub ecx, r14d
+    cmp ecx, 256
+    jae .gw_emit
+    mov rcx, r12
+    mov eax, [rbp-80]
+    add rcx, rax
+    mov edx, r15d
+    sub edx, [rbp-80]
+    call .str_run
+    test eax, eax
+    jnz .gw_emit                 ; próximo run: fecha o gap
+    inc dword [rbp-80]
+    jmp .gw_gl
+.gw_emit:
+    mov rcx, rbx
+    mov rdx, r12
+    mov r8, r13
+    mov r9d, r14d
+    mov r10d, [rbp-80]
+    mov r11, [rbp-64]
+    sub rsp, 32
+    call .wds_chunks
+    add rsp, 32
+    test eax, eax
+    jnz .gw_fail
+    mov r14d, [rbp-80]
+    mov qword [rbp-64], -1
+    jmp .gw_l
+.gw_done:
+    xor eax, eax
+    add rsp, 56
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.gw_fail:
+    mov eax, 1
+    add rsp, 56
     pop r15
     pop r14
     pop r13
@@ -6384,10 +6782,12 @@ dex_generate_bin:
     mov rax, [rbp-80]
     cmp rax, -1
     je .gbs_rest                 ; sem evento à frente: emite o resto
-    ; db [cur, best)
+    ; db [cur, best) — ou chunks no modo win64 (D-19 2b)
     mov rax, [rbp-80]
     cmp rax, [rbp-64]
     jbe .gbs_nodb
+    cmp byte [rel g_impwds], 0
+    jne .gbs_gap_chunks
     mov rdx, r12
     mov eax, [r13+PeSection.raw_ptr]
     add rdx, rax
@@ -6399,6 +6799,39 @@ dex_generate_bin:
     sub rsp, 32
     call dex_emit_data
     add rsp, 32
+    test eax, eax
+    jnz .gbs_fail
+    jmp .gbs_nodb
+.gbs_gap_chunks:
+    ; D-19 2b (win64): gap via .wds_chunks (R-labels/spans preservados);
+    ; o label da seção já foi emitido pelo caller (lab0 = -1). Com -strings
+    ; usa .wds_gap_win (runs viram qstr; mesma assinatura).
+    mov rcx, rbx                 ; buf
+    mov rdx, r12                 ; file base
+    mov eax, [r13+PeSection.raw_ptr]
+    add rdx, rax                 ; fptr = file_base + raw_ptr
+    mov r8, [r15+PeImage.image_base]
+    mov eax, [r13+PeSection.vaddr]
+    add r8, rax                  ; va_base
+    mov r9d, [rbp-64]            ; k0 = cur
+    mov r10d, [rbp-80]           ; k1 = best
+    mov r11, -1                  ; lab0 (seção já rotulada)
+    mov [rel g_chunkimg], r15
+    mov rax, [rel g_spancfg]
+    test rax, rax
+    jz .gbs_gap_plain
+    test dword [rax+DexConfig.flags], DF_STRINGS
+    jnz .gbs_gap_str
+.gbs_gap_plain:
+    sub rsp, 32
+    call dex_generate_asm.wds_chunks
+    add rsp, 32
+    jmp .gbs_gap_done
+.gbs_gap_str:
+    sub rsp, 32
+    call dex_generate_asm.wds_gap_win
+    add rsp, 32
+.gbs_gap_done:
     test eax, eax
     jnz .gbs_fail
 .gbs_nodb:
@@ -6418,6 +6851,12 @@ dex_generate_bin:
     cmp dword [rbp-248], 0       ; hint/name precisa label? (F4)
     jne .gbs_lab
     cmp dword [rbp-256], 0       ; nome de DLL precisa label? (F4)
+    jne .gbs_lab
+    ; D-19 2b: no win64 o slot da IAT também pode ser alvo de label_ (refs
+    ; RIP ao slot); o bin só precisa do __imp_.
+    cmp byte [rel g_impwds], 0
+    je .gbs_lab_done
+    cmp dword [rbp-120], 0
     je .gbs_lab_done
 .gbs_lab:
     mov rcx, rbx
@@ -6574,6 +7013,8 @@ dex_generate_bin:
     mov rax, [rbp-64]
     cmp eax, r14d
     jae .gbs_done
+    cmp byte [rel g_impwds], 0
+    jne .gbs_rest_chunks
     mov rdx, r12
     mov eax, [r13+PeSection.raw_ptr]
     add rdx, rax
@@ -6585,6 +7026,38 @@ dex_generate_bin:
     sub rsp, 32
     call dex_emit_data
     add rsp, 32
+    test eax, eax
+    jnz .gbs_fail
+    jmp .gbs_done
+.gbs_rest_chunks:
+    ; D-19 2b (win64): resto da seção via .wds_chunks (ou .wds_gap_win
+    ; com -strings; mesma assinatura)
+    mov rcx, rbx
+    mov rdx, r12
+    mov eax, [r13+PeSection.raw_ptr]
+    add rdx, rax
+    mov r8, [r15+PeImage.image_base]
+    mov eax, [r13+PeSection.vaddr]
+    add r8, rax
+    mov r9d, [rbp-64]            ; k0 = cur
+    mov r10d, r14d               ; k1 = raw
+    mov r11, -1
+    mov [rel g_chunkimg], r15
+    mov rax, [rel g_spancfg]
+    test rax, rax
+    jz .gbs_rest_plain
+    test dword [rax+DexConfig.flags], DF_STRINGS
+    jnz .gbs_rest_str
+.gbs_rest_plain:
+    sub rsp, 32
+    call dex_generate_asm.wds_chunks
+    add rsp, 32
+    jmp .gbs_rest_done
+.gbs_rest_str:
+    sub rsp, 32
+    call dex_generate_asm.wds_gap_win
+    add rsp, 32
+.gbs_rest_done:
     test eax, eax
     jnz .gbs_fail
 .gbs_done:
@@ -6809,6 +7282,26 @@ dex_generate_bin:
     add rsp, 32
     test eax, eax
     jnz .gfe_fail
+    cmp byte [rel g_unwind_bin], 0
+    jne .gfe_plus
+    ; win64 (D-19 2b): `dd label_<VA> wrt ..imagebase` (ADDR32NB)
+    lea rdx, [rel s_wrtim]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .gfe_fail
+    lea rdx, [rel s_crlf2]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .gfe_fail
+    xor eax, eax
+    jmp .gfe_ret
+.gfe_plus:
     lea rdx, [rel s_plus0x]
     mov rcx, rbx
     sub rsp, 32
@@ -7086,6 +7579,42 @@ dex_generate_bin:
     cmp rax, -1
     je .gse_raw
     mov [rbp-56], rax            ; C
+    cmp byte [rel g_unwind_bin], 0
+    jne .gse_bin
+    ; win64 (D-19 2b): IAT pré-load = RVA de 32 bits zero-estendida:
+    ;   `    dd label_<VA> wrt ..imagebase, 0` (8 bytes, ADDR32NB)
+    lea rdx, [rel s_dd4]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .gse_fail
+    mov rcx, rbx
+    mov rdx, [r12+PeImage.image_base]
+    add rdx, [rbp-48]            ; VA = image_base + name_rva
+    sub rsp, 32
+    call dex_label_emit_va
+    add rsp, 32
+    test eax, eax
+    jnz .gse_fail
+    lea rdx, [rel s_wrtim]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .gse_fail
+    lea rdx, [rel s_c0]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .gse_fail
+    xor eax, eax
+    jmp .gse_ret
+.gse_bin:
     lea rdx, [rel s_dqpre]
     mov rcx, rbx
     sub rsp, 32
@@ -7380,6 +7909,7 @@ dex_emit_imp_label:
     mov rbx, rcx                 ; buf
     mov r12, rdx                 ; va
     mov r13, r8                  ; img
+    mov [rbp-48], r8             ; img (r13d vira count no loop)
     mov rax, [r13+PeImage.image_base]
     cmp r12, rax
     jb .wil_no
@@ -7405,6 +7935,7 @@ dex_emit_imp_label:
     inc r11d
     jmp .wil_l
 .wil_hit:
+    mov [rbp-56], rax            ; entry
     mov r8, [rax+ImportEntry.dll_name]
     mov r9, [rax+ImportEntry.func_name]
     movzx edx, byte [rax+ImportEntry.is_ordinal]
@@ -7415,6 +7946,21 @@ dex_emit_imp_label:
     add rsp, 32
     test eax, eax
     jnz .wil_no                  ; nome impossível: skip (nasm apontará)
+    ; nomes duplicados (mesma dll+func em 2 slots): sufixo _<iat_rva>
+    mov rcx, [rbp-48]            ; img
+    mov rdx, [rbp-56]            ; entry
+    sub rsp, 32
+    call dex_imp_name_dup
+    add rsp, 32
+    test eax, eax
+    jz .wil_nosuf
+    lea rcx, [rel g_impname]
+    mov rdx, [rbp-56]
+    mov edx, [rdx+ImportEntry.iat_rva]
+    sub rsp, 32
+    call dex_imp_append_rva
+    add rsp, 32
+.wil_nosuf:
     lea rdx, [rel g_impname]
     mov rcx, rbx
     sub rsp, 32
@@ -7639,5 +8185,146 @@ dex_build_impname:
     jnz .ud_r
     mov byte [rbx+r8], 0
     add rsp, 16
+    pop rbx
+    ret
+
+;-----------------------------------------------------------------------------
+; dex_imp_name_dup — rcx=img, rdx=entry -> eax=1 se uma entry ANTERIOR tem o
+; mesmo (dll, func|ordinal); 0 caso contrário (inclui a 1ª ocorrência).
+; Necessário p/ PEs que importam o mesmo nome em 2 slots IAT (gcc: _fileno,
+; _open, _read, _close): sem sufixo o label __imp_X colide. A 1ª ocorrência
+; mantém o nome puro; as seguintes recebem `_<iat_rva hex>` (mesma regra no
+; walker e em dex_emit_imp_label, senão a ref não casa). Frame: 5 pushes +
+; sub 40 = 80 ≡ 0. Slots: [rbp-48]entry alvo [rbp-56]entry candidata.
+;-----------------------------------------------------------------------------
+dex_imp_name_dup:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
+    mov rbx, rcx                 ; img
+    mov [rbp-48], rdx            ; entry alvo
+    mov r13, [rbx+PeImage.imports_ptr]
+    test r13, r13
+    jz .dup_no
+    mov r14d, [rbx+PeImage.imports_count]
+    xor r15d, r15d               ; i
+.dup_l:
+    cmp r15d, r14d
+    jae .dup_no
+    mov eax, r15d
+    imul eax, SIZEOF_IMPORT_ENTRY
+    lea r10, [r13+rax]
+    mov [rbp-56], r10
+    mov rdx, [rbp-48]
+    cmp r10, rdx
+    je .dup_no                   ; chegou no alvo sem duplicata anterior
+    ; dll igual?
+    mov rcx, [r10+ImportEntry.dll_name]
+    mov rdx, [rdx+ImportEntry.dll_name]
+    test rcx, rcx
+    jz .dup_n
+    test rdx, rdx
+    jz .dup_n
+    sub rsp, 32
+    call dex_streq
+    add rsp, 32
+    test eax, eax
+    jz .dup_n
+    ; func igual? (ambos by-name)
+    mov r10, [rbp-56]
+    mov rdx, [rbp-48]
+    mov rcx, [r10+ImportEntry.func_name]
+    mov rdx, [rdx+ImportEntry.func_name]
+    test rcx, rcx
+    jz .dup_ord
+    test rdx, rdx
+    jz .dup_n
+    sub rsp, 32
+    call dex_streq
+    add rsp, 32
+    test eax, eax
+    jnz .dup_yes
+    jmp .dup_n
+.dup_ord:
+    test rdx, rdx
+    jnz .dup_n                   ; um ordinal, outro by-name
+    mov r10, [rbp-56]
+    mov rdx, [rbp-48]
+    mov al, [r10+ImportEntry.is_ordinal]
+    cmp al, [rdx+ImportEntry.is_ordinal]
+    jne .dup_n
+    mov ax, [r10+ImportEntry.ordinal]
+    cmp ax, [rdx+ImportEntry.ordinal]
+    jne .dup_n
+    jmp .dup_yes
+.dup_n:
+    inc r15d
+    jmp .dup_l
+.dup_yes:
+    mov eax, 1
+    jmp .dup_ret
+.dup_no:
+    xor eax, eax
+.dup_ret:
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; dex_imp_append_rva — rcx=dst (cstr), edx=rva. Anexa `_<hex minusculo sem
+; zeros a esquerda>` no NUL. Leaf (preserva só rbx).
+;-----------------------------------------------------------------------------
+dex_imp_append_rva:
+    push rbx
+    mov rbx, rcx
+.a_rl:
+    cmp byte [rbx], 0
+    je .a_found
+    inc rbx
+    jmp .a_rl
+.a_found:
+    mov byte [rbx], '_'
+    inc rbx
+    mov eax, edx
+    xor r8d, r8d                 ; já emitiu dígito?
+    mov ecx, 28
+.a_l:
+    mov edx, eax
+    shr edx, cl
+    and edx, 15
+    test r8d, r8d
+    jnz .a_emit
+    test edx, edx
+    jz .a_next
+    mov r8d, 1
+.a_emit:
+    cmp edx, 9
+    jbe .a_dig
+    add edx, 'a' - 10
+    jmp .a_store
+.a_dig:
+    add edx, '0'
+.a_store:
+    mov [rbx], dl
+    inc rbx
+.a_next:
+    sub ecx, 4
+    jns .a_l
+    test r8d, r8d
+    jnz .a_done
+    mov byte [rbx], '0'
+    inc rbx
+.a_done:
+    mov byte [rbx], 0
     pop rbx
     ret

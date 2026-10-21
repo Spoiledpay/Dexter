@@ -302,7 +302,7 @@ if exist tests\out\iat_norelocs.exe (
     if errorlevel 1 ( echo "  FALHA: comportamento difere" & set /a FAIL+=1 ) else ( echo "  OK: comportamento identico" & set /a PASS+=1 )
 )
 
-echo === [14] imp label-at-slot (driver imp_check: HIT+MISS) ===
+echo === [14] imp label-at-slot (driver imp_check: HIT/dup/MISS) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp_check.obj tests\imp_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm imp_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm imp_check" & set /a PASS+=1 )
 if exist tests\out\imp_check.obj (
@@ -314,6 +314,10 @@ if exist tests\out\imp_check.exe (
     if errorlevel 1 ( echo "  FALHA: imp_check exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: imp_check exit 0" & set /a PASS+=1 )
     findstr /c:"__imp_KERNEL32_dll_ExitProcess:" tests\out\imp.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: sem label HIT" & set /a FAIL+=1 ) else ( echo "  OK: label HIT" & set /a PASS+=1 )
+    findstr /c:"__imp_KERNEL32_dll_ExitProcess_2008:" tests\out\imp.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: sem sufixo no duplicado" & set /a FAIL+=1 ) else ( echo "  OK: duplicado com sufixo _rva" & set /a PASS+=1 )
+    findstr /c:"__imp_KERNEL32_dll_WriteFile:" tests\out\imp.out >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: sem label do nome unico" & set /a FAIL+=1 ) else ( echo "  OK: nome unico puro" & set /a PASS+=1 )
 )
 
 echo === [15] symtab (driver sym_check: golden ordenado) ===
@@ -351,8 +355,8 @@ if errorlevel 1 ( echo "  FALHA: -q suprimiu overview" & set /a FAIL+=1 ) else (
 if exist tests\out\should_not_exist.asm ( echo "  FALHA: overview escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: inspect-only" & set /a PASS+=1 )
 "%DX%" tests\var64.exe -overview -json -q > tests\out\ovv.txt 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: overview var64 exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: overview var64 exit 0" & set /a PASS+=1 )
-findstr /c:"\"imports_count\":14" tests\out\ovv.txt >nul 2>&1
-if errorlevel 1 ( echo "  FALHA: imports_count!=14" & set /a FAIL+=1 ) else ( echo "  OK: imports_count=14" & set /a PASS+=1 )
+findstr /c:"\"imports_count\":62" tests\out\ovv.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: imports_count!=62" & set /a FAIL+=1 ) else ( echo "  OK: imports_count=62" & set /a PASS+=1 )
 
 echo === [17] -func/-xrefs/-trace (navegacao, inspect-only) ===
 "%DX%" tests\hello.exe -func 0x140001000 > tests\out\fn.txt 2>&1
@@ -1152,6 +1156,34 @@ if errorlevel 1 ( echo "  OK: sem equ redundante (-s .text)" & set /a PASS+=1 ) 
 rem x32: delta 0 nao pode gerar `equ label_X equ label_X` circular
 "%DX%" tests\tiny32.exe -s .rdata -r -O tests\out\sr32.exe -o tests\out\sr32.asm -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild x32 -s .rdata" & set /a FAIL+=1 ) else ( echo "  OK: rebuild x32 -s .rdata" & set /a PASS+=1 )
+
+echo === [56] D-19 fatia 2b: import table simbolica no win64 -native ===
+rem A .idata do win64 saia db cru com RVAs do layout antigo (OFT/Name/FT);
+rem agora descritores/thunks/hint/name saem simbolicos (`wrt ..imagebase`) e
+rem o link recalcula as RVAs. O oraculo pe_impdesc.py ganhou o modo win64.
+rem Regressao do parser: imports_count do exc = 69 (antes 1; di volátil).
+"%DX%" tests\exc.exe -o tests\out\imp64.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate exc -native" & set /a FAIL+=1 ) else ( echo "  OK: generate exc -native" & set /a PASS+=1 )
+python tests\pe_impdesc.py tests\exc.exe tests\out\imp64.asm win64 > tests\out\imp64.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: tabela de imports win64 nao simbolica" & type tests\out\imp64.out & set /a FAIL+=1 ) else ( echo "  OK: import table win64 simbolica" & set /a PASS+=1 )
+findstr /c:"ruins=0" tests\out\imp64.out >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: ruins!=0 (impdesc win64)" & set /a FAIL+=1 ) else ( echo "  OK: impdesc win64 ruins=0" & set /a PASS+=1 )
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp64.obj tests\out\imp64.asm > tests\out\imp64.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm import win64" & type tests\out\imp64.err & set /a FAIL+=1 ) else ( echo "  OK: nasm import win64 (0 erros)" & set /a PASS+=1 )
+"%DX%" tests\exc.exe -native -r -O tests\out\imp64.exe -o tests\out\imp64r.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native exc (2b)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native exc (2b)" & set /a PASS+=1 )
+"%DX%" tests\out\imp64.exe -overview -json -q > tests\out\imp64_ov.txt 2>&1
+findstr /c:"\"imports_count\":69" tests\out\imp64_ov.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: imports_count do rebuildado != 69" & set /a FAIL+=1 ) else ( echo "  OK: imports do rebuildado = 69" & set /a PASS+=1 )
+python tests\pe_dirs.py tests\exc.exe tests\out\imp64.exe > tests\out\imp64_dirs.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: dirs pos-2b" & type tests\out\imp64_dirs.out & set /a FAIL+=1 ) else ( echo "  OK: dirs pos-2b (5/5)" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -native -r -O tests\out\hi64.exe -o tests\out\hi64.asm -q >nul 2>&1
+tests\out\hi64.exe > tests\out\hi64.txt 2>&1
+findstr /c:"hi" tests\out\hi64.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: hello -native pos-2b" & set /a FAIL+=1 ) else ( echo "  OK: hello -native pos-2b (hi)" & set /a PASS+=1 )
+"%DX%" tests\exc.exe -m bin -native -o tests\out\imp64b.asm -q >nul 2>&1
+python tests\pe_impdesc.py tests\exc.exe tests\out\imp64b.asm >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin -native regrediu" & set /a FAIL+=1 ) else ( echo "  OK: -m bin -native intacto" & set /a PASS+=1 )
 
 echo.
 echo =====================================================

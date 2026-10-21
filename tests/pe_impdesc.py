@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # tests/pe_impdesc.py — valida que a tabela de imports ficou SIMBOLICA no .asm
-# gerado por `dexter -m bin -native` (R-5.3 F2/F3). Oráculo = bytes do PE
-# original:
+# gerado por `dexter -native` (R-5.3 F2/F3 e D-19 fatia 2b). Oráculo = bytes do
+# PE original. Modo `bin` (default): `dd label_<VA> + C` / `dq label_<VA> + C`.
+# Modo `win64` (arg 3): `dd label_<VA> wrt ..imagebase` e, nos thunks,
+# `dd label_<VA> wrt ..imagebase, 0` (RVA de 8B zero-estendida).
 #   * cada descritor IMAGE_IMPORT_DESCRIPTOR vira `label_<VA>:` + 5 linhas `dd`;
 #   * cada campo RVA (OriginalFirstThunk/Name/FirstThunk) cujo alvo cai numa
 #     seção de dados com bytes (não executável, não `.pdata`/`.xdata`) sai
@@ -17,11 +19,16 @@
 import struct
 import sys
 
-if len(sys.argv) != 3:
-    print("uso: pe_impdesc.py <exe> <asm>")
+if len(sys.argv) not in (3, 4):
+    print("uso: pe_impdesc.py <exe> <asm> [bin|win64]")
     sys.exit(1)
 
 exe, asm = sys.argv[1], sys.argv[2]
+mode = sys.argv[3].lower() if len(sys.argv) == 4 else "bin"
+if mode not in ("bin", "win64"):
+    print("modo invalido:", mode)
+    sys.exit(1)
+win64 = mode == "win64"
 try:
     d = open(exe, "rb").read()
     e = struct.unpack_from("<I", d, 0x3C)[0]
@@ -150,7 +157,10 @@ while True:
             continue
         c = (va - rp) & 0xFFFFFFFF
         tgt_va = imgbase + rva
-        exp = f"dd label_{tgt_va:X} + 0x{c:X}"
+        if win64:
+            exp = f"dd label_{tgt_va:X} wrt ..imagebase"
+        else:
+            exp = f"dd label_{tgt_va:X} + 0x{c:X}"
         if exp in text:
             symbolic += 1
         else:
@@ -204,7 +214,10 @@ for oft, nm, ft in descs:
                 if labelable(s) and (v - s[1]) < s[3]:
                     c = (s[1] - s[4]) & 0xFFFFFFFF
                     tgt_va = imgbase + v
-                    exp = f"dq label_{tgt_va:X} + 0x{c:X}"
+                    if win64:
+                        exp = f"dd label_{tgt_va:X} wrt ..imagebase, 0"
+                    else:
+                        exp = f"dq label_{tgt_va:X} + 0x{c:X}"
                     if f"label_{tgt_va:X}:" not in text:
                         print(f"  FALTA label do hint/name: label_{tgt_va:X}:")
                         bad += 1
@@ -243,7 +256,7 @@ for oft, nm, ft in descs:
                 print("IMPDESC thunk runaway")
                 sys.exit(1)
 
-print(f"IMPDESC descs={n + 1} simbolicos={symbolic} crus={rawf} "
+print(f"IMPDESC[{mode}] descs={n + 1} simbolicos={symbolic} crus={rawf} "
       f"thunks={thunks_sym + thunks_raw} sym={thunks_sym} raw={thunks_raw} "
       f"hint={hint_sym} nomes={dll_names} ruins={bad}")
 sys.exit(1 if bad else 0)

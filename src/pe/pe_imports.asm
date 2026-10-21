@@ -190,6 +190,7 @@ dex_pe_parse_imports:
     ; corrompido; achado via fuzz 2026-10-12). Slots em [rbp-64..].
     mov [rbp-64], r10d           ; spill di
     mov [rbp-68], r11d           ; spill vi
+    mov [rbp-72], r10d           ; spill di p/ .thunk_end (r10 morre nos calls)
     cmp r10d, r14d
     jae .fill_done
     cmp r11d, r13d
@@ -239,7 +240,6 @@ dex_pe_parse_imports:
     jz .fill_next
     mov [rbp-112], rax         ; int_off
     mov r11d, [rbp-124]        ; restore vi
-    mov [rbp-72], r10d         ; spill di
     xor r9d, r9d               ; k
 .thunk2:
     cmp dword [rbx+PeImage.arch], DEX_ARCH_X32
