@@ -2,6 +2,46 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — D-19 fatia 2b: import table simbólica no `win64 -native` (2026-10-21)
+
+### Adicionado
+
+- **Import table 100% simbólica no win64** (`-native`): descritores com
+  `dd label_<VA> wrt ..imagebase`, thunks ILT/IAT com
+  `dd label_<VA> wrt ..imagebase, 0` (RVA de 32 bits zero-estendida em 8 B),
+  `dw <hint>` + `db "<nome>", 0` e `db "<dll>", 0`. O `link.exe` recalcula
+  as RVAs mesmo reordenando/fundindo seções.
+- `tests\pe_impdesc.py` ganhou o modo `win64` (arg 3) para validar a grafia
+  simbólica; `[56]` na suíte (9 checks).
+
+### Corrigido
+
+- **`dex_pe_parse_imports` perdia descritores**: `di` (r10d, volátil) era
+  gravado em `[rbp-72]` depois de três `call`s e restaurado já como lixo, então
+  o laço morria no 1º descritor. `tests\exc.exe` passou de **1 para 69**
+  imports e `tests\var64.exe` de **14 para 62** (o gate `[16]` agora exige 62).
+- `-strings` × imports: `.wds_gap_win` mantém os runs como qstr nos gaps da
+  seção de imports (o `[50]` segue verde) e só degrada p/ chunks quando há
+  alvo R no interior do run.
+- **`__imp_<dll>_<func>` colidia** quando o mesmo nome aparece em **dois
+  slots IAT** (gcc: `_fileno`, `_open`, `_read`, `_close`). A 1ª ocorrência
+  mantém o nome puro; as seguintes recebem `_<iat_rva hex>` (regra idêntica no
+  walker e em `dex_emit_imp_label`, senão a referência não casa). O `[14]`
+  ganhou 2 checks (duplicado com sufixo + nome único puro).
+
+### Verificado
+
+- `build.bat` limpo (1.2.407); `tests\run_tests.bat` **402/402 OK**
+  (391 + 9 de `[56]` + 2 de `[14]`).
+- `pe_impdesc.py win64` no `exc`: `descs=15 simbolicos=42 thunks=138
+  sym=138 hint=138 nomes=14 ruins=0`; `nasm -f win64` 0 erros; `link` 0.
+- Rebuildado `exc -native -r`: `-overview` mostra `imports_count=69`
+  (14 DLLs) e `pe_dirs.py` 5/5; `hello -native -r` segue `hi`.
+- Limite honesto: o `.exe` win64 do `exc` ainda dá `0xC0000005` (fecho da
+  fatia 2 — fusão de seções/`.bss`/`.tls`); `-m bin -native` segue exit 42.
+- ADR: `docs/adr/0003-win64-import-table-simbolica.md`; notas:
+  `docs/PE_NOTES.md §26`; handoff: `docs/SESSAO-2026-10-21-D19-2B.md`.
+
 ## [Unreleased] — D-22: `-s` + `-r` com entry label via `equ` (2026-10-19)
 
 ### Corrigido

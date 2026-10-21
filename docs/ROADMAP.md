@@ -1,21 +1,25 @@
 # Dexter — Roadmap (requisitos R-x.y + status real)
 
 Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat`
-**391/391 OK** em 1.2.390; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
+**402/402 OK** em 1.2.407; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
 IDs estáveis para branches/commits. **Fonte única da fila de execução:**
 `marco.md` §8 — este arquivo registra o status por requisito.
 
-## Pendências abertas (2026-10-19, após 1.2.390)
+## Fila de execução (2026-10-21, após 1.2.407)
 
 > Ordem de execução em `marco.md` §8. Nada aqui vira `[x]` sem teste verde.
 
-- [ ] **D-19 fatia 2b** — RVAs internas do `.idata` (OFT/Name/FirstThunk)
-  simbólicas no `win64 -native` (port da R-5.3, hoje só provada em `-m bin`);
-  fecha a import table no win64. Gate novo + `tests/pe_impdesc.py`.
+- [x] **D-19 fatia 2b** — import table simbólica no `win64 -native` (port da
+  R-5.3 F1–F4): descritores `dd label wrt ..imagebase`, thunks
+  `dd label wrt ..imagebase, 0`, hint/name e nomes de DLL simbólicos; gaps
+  via `.wds_chunks`/`.wds_gap_win`. Fechada 1.2.407, `[56]` 9 checks
+  (suíte **402/402**). No caminho, corrigido o parser de imports (spill de
+  `di` volátil): `exc` 1→69, `var64` 14→62. `PE_NOTES §26`, ADR-0003.
 - [ ] **D-19 fatia 2 (fecho)** — comportamento do `.exe` reconstruído pelo
-  `win64` em PE real: `tests/exc.exe -native -r` hoje **carrega** e dá
-  `0xC0000005` (fatia 2a); alvo é rodar o `throw/catch` (**exit 42**), como o
-  `-m bin -native` já faz.
+  `win64` em PE real: `tests/exc.exe -native -r` hoje **carrega** (imports
+  69/14 DLLs válidos) e dá `0xC0000005` (fatia 2a/2b); alvo é rodar o
+  `throw/catch` (**exit 42**), como o `-m bin -native` já faz. Bloqueadores
+  prováveis: fusão de `.bss`/`.tls`/`.CRT` (`LNK4078`), layout do `.tls`.
 - [ ] **Base simbólica do índice em x64** — x32 já sai
   `[nosplit label_<VA>+idx*scale]` (1.2.379); em x64 o disp32 não é VA
   (precisa de `+C` no `-f bin`), então segue numérico.
@@ -342,7 +346,7 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `-ast-dump`); texto no vocabulário do `-v` + JSON compacto de 1
   linha (todos os imports sem cap silencioso, escapes `"`/`\`,
   controle→`?` com cap 255 de dst, hex como string, counts decimais);
-  `[16]` na suíte (texto/json/inspect-only/`imports_count`=14 no
+  `[16]` na suíte (texto/json/inspect-only/`imports_count`=62 no
   var64). Limite honesto: imports por ordinal (`func` vazio) sem
   cobertura no corpus atual.
 - [x] R-7.2 `-func` (`src/diag/func.asm`, linear-sweep até ret/jmp/
@@ -371,7 +375,7 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `-q` não suprime, existência via open (`ok`/`missing` honesto),
   aceita `-doctor` e `--doctor`; `[20]` na suíte)
 
-## Fase 8 — Layout robusto (R-8.x) — R-8.1/R-8.2 fechadas; D-19 2b aberta
+## Fase 8 — Layout robusto (R-8.x) — R-8.1/R-8.2 fechadas; D-19 2b fechada
 
 > PEs reais têm `.bss`/`.tls`/seções que o path win64 (link.exe) não
 > preserva. N.1 (R-8.1) fecha o nível asm; R-8.2 fechou o **caminho fiel**
@@ -413,15 +417,20 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `tests\run_slow.bat`.
 - [x] Núcleo da Fase 8 fechado (R-8.1 + R-8.2 f1–f3): o caminho fiel
   `-m bin` é byte-idêntico do corpus pequeno ao PE grande (gcc/ld.lld).
-- [ ] D-19 fatia 2b (win64) — import table simbólica no `-native` (port
-  R-5.3), seguida do fecho da fatia 2 (comportamento do `.exe` em PE real).
-  Detalhe na fila do topo e em `marco.md` §8.
+- [x] D-19 **fatia 2b FECHADA** (2026-10-21, 1.2.407): import table
+  simbólica no `win64 -native` (port R-5.3 F1–F4). `[56]` 9 checks; suíte
+  **402/402**; `pe_impdesc.py win64` no `exc` = 42 campos / 138 thunks /
+  138 hints / 14 nomes, `ruins=0`; rebuildado com `imports_count=69` e
+  `pe_dirs.py` 5/5. Corrigido junto o parser de imports (spill de `di`
+  volátil em `.fill`): `exc` 1→69, `var64` 14→62. Falta o **fecho da
+  fatia 2** (comportamento do `.exe`: fusão de `.bss`/`.tls`/`.CRT`).
+  `PE_NOTES §26`, ADR-0003. Detalhe na fila do topo e em `marco.md` §8.
 
 ## Dívida técnica conhecida e regras (honestas, com ID)
 
 > `[x]` = fechada/provada por teste. **D-8..D-18** são regras/lições
-> consolidadas (não pendências); **D-19** é a única dívida de layout aberta
-> (fatia 2b + fecho da fatia 2).
+> consolidadas (não pendências); **D-19** segue aberta apenas no **fecho da
+> fatia 2** (comportamento do `.exe` win64 em PE real).
 
 - [x] D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
   existe e numerado; dívida original ("sem ADRs numerados") superada;
@@ -472,6 +481,10 @@ no corpus simples; PEs complexos continuam em `-m bin`.
    early-paths → `inc` nunca alcançava `n_desc` (hang em PE corrompido);
    fix: spill `[rbp-64]/[rbp-68]` no topo + reload no `.fill_next`
    (com refresh no `.thunk_end` p/ não perder `vi`).
+   Instância 2026-10-21 (D-19 2b): o spill de `di` em `[rbp-72]` ficava
+   **depois** de três calls no mesmo `.fill`; `r10d` já era lixo e o laço
+   morria no 1º descritor (`exc` 1 import, `var64` 14). Fix: spill de `di`
+   no topo (junto de `[rbp-64]/[rbp-68]`), antes dos calls.
 - D-9 Regras do frontend textual (2026-10-07, R-6.3; todos com
   reproduzir→fix→suite 52/52):
   `div` nunca com divisor vindo de call sem spill (`ast_grow_arr`:
@@ -573,9 +586,14 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   homônima (nunca RVA velha). Provado: `exc -native -r` mudou de `0xC000007B`
   (imagem inválida; IMPORT apontava p/ a `.bss` nova) para `0xC0000005` (AV) —
   a imagem **carrega**. Oráculo `tests/pe_dirs.py` + `[54]` (4 checks).
-  **Fatia 2b pendente:** as RVAs *internas* do `.idata` copiado seguem
-  absolutas (OFT/Name/FirstThunk) → import table tem de virar simbólica no
-  win64 (port da R-5.3). `PE_NOTES §24`.
+  **Fatia 2b FECHADA** (2026-10-21, 1.2.407): as RVAs internas do `.idata`
+  (OFT/Name/FirstThunk, thunks ILT/IAT, hint/name e nomes de DLL) agora são
+  simbólicas no win64 (`dd label_<VA> wrt ..imagebase`; IAT como
+  `dd label, 0`), com gaps via `.wds_chunks`/`.wds_gap_win`. O link recalcula
+  as RVAs mesmo reordenando seções. Bug de parser achado junto (di volátil no
+  `.fill`): `exc` 69 imports (antes 1), `var64` 62 (antes 14). `[56]` 9 checks;
+  `PE_NOTES §26`, ADR-0003. **Falta o fecho da fatia 2**: comportamento do
+  `.exe` (fusão `.bss`/`.tls`/`.CRT`; `exc` ainda `0xC0000005`).
 - [x] D-20 FECHADA (2026-10-16): o codegen nativo agora é byte-fiel em PE MS
   real. Duas classes: (1) ALU/mov **reg-reg na forma "load"** (`02/03..3A/3B`,
   `8A/8B`: reg=dst) cai p/ `db` (o NASM montaria na forma "store" `89/31`);

@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-19, Dexter 1.2.390)
+## 0. Onde estamos (2026-10-21, Dexter 1.2.407)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -30,14 +30,23 @@
 - [x] `-strings` com CR/LF (1.2.375, `[50]` 4 checks: `.str_run` aceita CR/LF dentro do run + qstr fecha/reabre aspas → uma linha sem `""`; `tests/qstr_check.py`)
 - [x] Índice simbólico x32 (1.2.379, `[51]` 7 checks: `jmp [jtab+eax*4]` sai `[nosplit label_<VA>+eax*4]`; fixture `tests/absidx.asm` round-trip exit 42; x64 segue numérico)
 - [x] jump-to-code x32 — spans de 4 bytes (`dd label_`) (1.2.381, `[51]` +1 check: tabela de switch aponta p/ código via D-7; `.collect_strs`/`.wds_emit_span` com stride do arch)
-- Placar honesto: **391 passam, 0 falham** (`tests\run_tests.bat → 391/391 OK` em 1.2.390: base 336 + `[47]` 7 + `[48]` 7 + `[49]` 7 + `[50]` 4 + `[51]` 8 + `[52]` 7 + `[53]` 5 + `[54]` 4 + `[55]` 6). Lenta `run_slow.bat`: **7/7**. Build: `build.bat` OK (+~2 s do CTX).
+- [x] **D-19 fatia 2b FECHADA** (1.2.407, `[56]` 9 checks): import table
+  simbólica no `win64 -native` — descritores `dd label wrt ..imagebase`,
+  thunks `dd label, 0` (RVA zero-estendida de 8B), hint/name + nomes de DLL;
+  gaps via `.wds_chunks`/`.wds_gap_win` (preserva `-strings`). Provado:
+  `pe_impdesc.py win64` no `exc` = 42 campos/138 thunks/138 hints/14 nomes,
+  `ruins=0`; rebuildado `imports_count=69` (14 DLLs) + `pe_dirs.py` 5/5;
+  `hello -native -r` = `hi`. **Bug real junto:** parser de imports com `di`
+  volátil no `.fill` (`exc` 1→69, `var64` 14→62; `[16]` atualizado).
+  `PE_NOTES §26`, ADR-0003. Comportamento do `.exe` segue na fatia 2.
+- Placar honesto: **402 passam, 0 falham** (`tests\run_tests.bat → 402/402 OK` em 1.2.407: base 391 + `[56]` 9 + `[14]` 2). Lenta `run_slow.bat`: **7/7**. Build: `build.bat` OK (+~2 s do CTX).
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] CTX (`ctx.exe`, no PATH): `build.bat` registra proveniência (`ctx build record out\dexter.exe`) + atualiza índice (`ctx scan`) a cada build (best-effort). Uso obrigatório em `skill.md` §10 (descoberta/memórias/decisões/build/auditoria). `.ctx/` ignorado; `.ctx.yaml` versionado. Higiene: `tests/ld.lld.asm` (734 MB gerado) destrackeado (estourava o índice do CTX a ~3 GB).
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[55]`, 391 checks em 1.2.390)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[56]`, 402 checks em 1.2.407)
 - [x] Suite lenta: `tests\run_slow.bat` (`[S1]` round-trip `ld.lld.exe` 68 MB + `[S2]` gcc byte-idêntico+comportamento)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs/jtable/t32` (round-trip bin-native) + `var64/gcc/ld.lld` (bin) + `gcc` (`-native-bin` byte-idêntico + comportamento = R-8.2 FECHADA) + negativos `var32/link` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -154,7 +163,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
 - [x] **jump-to-code x32** (1.2.381, `[51]` +1): spans de ponteiro com stride do arch (4=`dd`, 8=`dq`) — tabela de switch x32 aponta p/ código via D-7 → `dd label_<VA>`; `.collect_strs`/`.wds_emit_span` arch-aware; removidos o gate `arch==X64` e o `g_spanflags=1` do x32. `PE_NOTES §21`. Próximo da ordem: → `-s` + RIP.
 - [x] **`-s` + SEH simbólico — fecha a fila "`-s` + RIP"** (1.2.382, `D-21`, `[52]` 7 checks): o gap **não era o RIP** (19 probes em `-m bin`, `fc /b` 0: exc/notepad/var64/tiny/loop/strings/jtable/no_relocs); era o `-s` cruzando com a reemissão simbólica da `.pdata`/`.xdata` (R-5.4) no `win64 -native` → 234 erros de nasm (`symbol not defined`) em `tests/exc.exe -s .rdata`. Fix: `section_filter != 0` pula a exceção SEH no `.walk_data` (cai no `db` comum, D-17). Limite honesto: `-s` filtrando a seção do entry + `-r` → LNK2001/exit 5. `PE_NOTES §22`.
 - [x] **D-19 fatia 1** — `UNWIND_INFO` em qualquer seção também no win64 (1.2.385, `[53]` 5 checks): `.walk_data_sec` + `.uw_bitmap` + novo `.wds_plain_uw` (fatia em início de unwind; gaps via `.wds_chunks` p/ preservar R-labels/spans; unwind simbólico via `.uw_emit`) + `.uw_next_bit`; desligado sob `-s` (D-17/D-21). Prova: `notepad.exe -native` win64 **0 erros** (antes 386) + 8 alvos win64 0 erros; `-m bin` intacto; `-native -r` já linka (exit 0). **Fatia 2 pendente** (`dex_patch_dirs` cego + fusão de seções pelo link: comportamento do exe). `PE_NOTES §23`.
-- [x] **D-19 fatia 2a** — `dex_patch_dirs` remapeia DataDirectories por (seção, offset) (1.2.386, `[54]` 4 checks + `tests/pe_dirs.py`): novo `.pd_remap` (seção original → offset → homônima rebuildada, `/NNN`→`_NNN`; sem homônima não copia). Prova: `exc -native -r` de `0xC000007B` (imagem inválida) para `0xC0000005` (imagem carrega); exc 5/5 e hello 3/3 dirs. **Fatia 2b pendente**: RVAs internas do `.idata` (OFT/Name/FirstThunk) → import table simbólica no win64 (port R-5.3). `PE_NOTES §24`.
+- [x] **D-19 fatia 2a** — `dex_patch_dirs` remapeia DataDirectories por (seção, offset) (1.2.386, `[54]` 4 checks + `tests/pe_dirs.py`): novo `.pd_remap` (seção original → offset → homônima rebuildada, `/NNN`→`_NNN`; sem homônima não copia). Prova: `exc -native -r` de `0xC000007B` (imagem inválida) para `0xC0000005` (imagem carrega); exc 5/5 e hello 3/3 dirs. **Fatia 2b FECHADA em 1.2.407** (import table simbólica; ver abaixo). `PE_NOTES §24`.
 - [x] **R-5.4 estendido** — `UNWIND_INFO` em QUALQUER seção (1.2.359, `[46]` 6 checks): o MS link funde o `.xdata` no `.rdata` (ex.: `notepad.exe`), então o unwind reemitido simbólico **onde estiver** (`.uw_bitmap`/`.uw_emit` no bin, byte-exato). `-m bin` E `-m bin -native` do notepad **byte-idênticos**. **D-20 FECHADA** (`src/disasm/emit_nasm.asm`: ALU/mov reg-reg "load" → `db`; prefixo de segmento `gs:`/`fs:` reemitido). win64 de PE MS real segue **D-19**. `PE_NOTES §15`.
 - [x] **D-22 FECHADA** (1.2.390, `[55]` 6 checks): `-s <seção>` + `-r` no
   win64/win32 falhava no link (`LNK2001`, `label_<entry>` indefinido) quando o
@@ -163,14 +172,22 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   entry não emitem; sem duplicata nem auto-referência). Prova: x64 native/db,
   `-s .text` sem equ e x32 delta 0; suite 391/391. `PE_NOTES §25`.
   Detalhe/handoff: `docs/SESSAO-2026-10-19-D22.md`.
-- [ ] **Fila após 1.2.390 (ordem fixa):** (1) **D-19 fatia 2b** — RVAs
-  internas do `.idata` (OFT/Name/FirstThunk) simbólicas no `win64 -native`
-  (port R-5.3); (2) **D-19 fatia 2 fecho** — comportamento do `.exe`
-  reconstruído pelo `win64` em PE real (`exc` roda o `throw/catch`, exit 42);
-  (3) **base simbólica do índice em x64** (x32 fechada em 1.2.379);
-  (4) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
-  (5) **R-6.6 opção C** — IR otimizável + backend próprio. Espelho em
-  `docs/ROADMAP.md` ("Pendências abertas").
+- [x] **D-19 fatia 2b FECHADA** (1.2.407, `[56]` 9 checks): import table
+  simbólica no `win64 -native` (descritores `dd label wrt ..imagebase`,
+  thunks `dd label, 0`, hint/name + nomes de DLL; gaps
+  `.wds_chunks`/`.wds_gap_win`). Prova: `pe_impdesc.py win64` no `exc` =
+  42/138/138/14, `ruins=0`; rebuildado `imports_count=69` (14 DLLs) +
+  `pe_dirs.py` 5/5; `hello -native -r` = `hi`. **Bug real junto:** parser de
+  imports (spill de `di` volátil no `.fill`): `exc` 1→69, `var64` 14→62
+  (`[16]` agora exige 62). `PE_NOTES §26`, ADR-0003.
+- [ ] **Fila após 1.2.407 (ordem fixa):** (1) **D-19 fatia 2 fecho** —
+  comportamento do `.exe` reconstruído pelo `win64` em PE real (`exc` roda o
+  `throw/catch`, exit 42; hoje `0xC0000005`; suspeitos: fusão de
+  `.bss`/`.tls`/`.CRT`, `LNK4078`);
+  (2) **base simbólica do índice em x64** (x32 fechada em 1.2.379);
+  (3) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
+  (4) **R-6.6 opção C** — IR otimizável + backend próprio. Espelho em
+  `docs/ROADMAP.md` ("Fila de execução").
 
 ## 9. Como marcar
 

@@ -887,9 +887,9 @@ Onde paramos (ponto exato):
   (fix: `img`→`[rbp-104]`); `[13]` verde, `[14]`/`[15]` criados,
   goldens `ref_native/` regenerados. Detalhe:
   `docs/SESSAO-2026-10-11-R643.md`.
-- ESTADO ATUAL (2026-10-19, Dexter 1.2.390, suíte 391/391): R-6.1–R-6.5,
+- ESTADO ATUAL (2026-10-21, Dexter 1.2.407, suíte 402/402): R-6.1–R-6.5,
   R-7.1–R-7.5, R-8.1/R-8.2 e R-5.3/R-5.4 estão FECHADOS; D-22 (`-s`+`-r`
-  com entry via `equ`) fechada. Fila de execução vigente em `marco.md` §8:
-  D-19 fatia 2b (import table simbólica no win64), fecho da fatia 2
-  (comportamento em PE real), base simbólica do índice em x64, semântica
-  VEX/EVEX, R-6.6 (opção C).
+  com entry via `equ`) e **D-19 fatia 2b** (import table simbólica no
+  `win64 -native`) fechadas. Fila de execução vigente em `marco.md` §8:
+  fecho da D-19 fatia 2 (comportamento em PE real), base simbólica do índice
+  em x64, semântica VEX/EVEX, R-6.6 (opção C).

@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-21T07:58:26.5929131-03:00
+updated_at: 2026-10-21T08:52:47.6728193-03:00
 files:
     include\dexter.inc:
         imports:
@@ -2231,6 +2231,7 @@ files:
             - g_chunkimg
             - g_ui_tmp
             - g_unwind_bin
+            - g_impwds
             - g_pad_ub
             - g_bin_img
             - g_spancfg
@@ -2244,6 +2245,8 @@ files:
             - gen_astdump_emit
             - dex_emit_imp_label
             - dex_build_impname
+            - dex_imp_name_dup
+            - dex_imp_append_rva
         calls:
             - asmbuf_new
             - asmbuf_append
@@ -2357,8 +2360,11 @@ files:
             - ERR_OOM
             - PeImage.opt_header
             - OH64_SECTION_ALIGN
-            - DF_STRINGS
             - DEX_ARCH_X64
+            - dex_generate_bin.gb_db_slots
+            - DF_STRINGS
+            - OH64_DATA_DIR
+            - PeImage.file_size
             - SIZEOF_RUNTIME_FUNCTION
             - UnwindInfo.rvacnt
             - UnwindInfo.total
@@ -2376,20 +2382,20 @@ files:
             - DexConfig.quiet
             - dex_generate_asm.coded_alloc
             - dex_generate_asm.collect_syms
-            - PeImage.file_size
             - OH64_SIZE_OF_HEADERS
             - dex_generate_asm.walk_code_sec
             - dex_generate_asm.secname_eq
             - dex_generate_asm.emit_pdata_sec
             - dex_generate_asm.emit_xdata_sec
-            - OH64_DATA_DIR
             - dex_generate_asm.uw_bitmap
+            - dex_generate_asm.wds_chunks
+            - dex_generate_asm.wds_gap_win
             - dex_generate_asm.uw_emit
             - DF_QUIET
         package: ""
-        size: 194971
-        modified_at: 2026-10-19T18:37:31.1446199-03:00
-        hash: 33cf988b5da2d231f55da6113e99317dd9f59a0856a8dffa1d5ff9e6485083de
+        size: 212515
+        modified_at: 2026-10-21T08:42:11.6663394-03:00
+        hash: 300990c7aeb12e898d5b5049862a7b145a7f6cefe4de714bb1e87a6ee84115e5
     src\gen\strings.asm:
         imports:
             - dexter.inc
@@ -2681,9 +2687,9 @@ files:
             - PeImage.imports_ptr
             - PeImage.imports_count
         package: ""
-        size: 11061
-        modified_at: 2026-10-13T19:58:26.6150104-03:00
-        hash: 9fdbc8ead7a3b998f86f8fd3eccffb047e41e7662538f3b6c08344a2b0825ee5
+        size: 11099
+        modified_at: 2026-10-21T08:26:41.3223787-03:00
+        hash: 75673f37bbfd3d78c29a9164e9cc998a56490fdd630db167e9c4694f6ba0dd75
     src\pe\pe_load.asm:
         imports:
             - win64.inc
@@ -3236,6 +3242,7 @@ files:
         functions:
             - s_dll
             - s_fn
+            - s_fn2
             - fake_imp
             - fake_img
             - g_abuf
@@ -3251,9 +3258,9 @@ files:
             - AsmBuf.len
             - AsmBuf.cap
         package: ""
-        size: 3417
-        modified_at: 2026-10-07T22:49:17.6533858-03:00
-        hash: 5a39acde0a802cd72a0862f1bbf05b1791d4b7d9b3ef6bc95a5e26ebf6c968f1
+        size: 4841
+        modified_at: 2026-10-21T08:46:11.1845287-03:00
+        hash: 389de2f4d0860ed886b33a9073fd4a28a60ab0bbf852aa4142c7e2c08417153f
     tests\jtable.asm:
         imports: []
         functions:
@@ -3485,6 +3492,7 @@ files:
             - len
             - print
             - exit
+            - lower
             - open
             - read
             - unpack_from
@@ -3503,9 +3511,9 @@ files:
             - find
             - any
         package: ""
-        size: 8265
-        modified_at: 2026-10-17T10:48:44.7528373-03:00
-        hash: 148ef121e7071f19453b3414bbe6592bdab518a7121af61b689bae7c609cbba3
+        size: 8896
+        modified_at: 2026-10-21T08:12:29.67963-03:00
+        hash: 0df2a13b3ac4eebf187d71d52c0964a8b40f1a43ef6f5038b16cb6c5b412f886
     tests\qstr_check.py:
         imports:
             - sys
@@ -5433,6 +5441,70 @@ memories:
       confidence: 1
       last_verified: 2026-10-19T18:42:42.5861197-03:00
       created_by: human
+    - id: 7ce3cb07-3bde-8db3-f1d6-8a33c769839a
+      title: 'Parser de imports perdia descritores: di volatil gravado depois dos calls em .fill'
+      description: 'Em dex_pe_parse_imports .fill, di (r10d) era gravado em [rbp-72] depois de tres call (rva_to_offset/bounded_cstr/rva_to_offset). r10d e volatil: .thunk_end restaurava lixo e o laco morria no 1o descritor. exc.exe: imports_count=1 (correto 69); var64: 14 (correto 62).'
+      type: bug
+      severity: high
+      files:
+        - src/pe/pe_imports.asm
+      branch: master
+      solution: Spill de di no topo de .fill, antes dos calls; removido o spill tardio. [16] passou a exigir 62; [56] trava 69.
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T08:49:19.5099888-03:00
+      updated_at: 2026-10-21T08:49:19.5099888-03:00
+      confidence: 1
+      last_verified: 2026-10-21T08:49:19.3505876-03:00
+      created_by: human
+    - id: 82d9dbe3-7d09-424a-9fab-48acf2712fee
+      title: Nomes __imp_ colidiam quando a mesma dll+func aparece em 2 slots IAT (gcc)
+      description: 'gcc importa _fileno/_open/_read/_close duas vezes (2 slots IAT, 2 IMAGE_IMPORT_BY_NAME). O nome __imp_<dll>_<func> era o mesmo -> nasm -f bin: label inconsistently redefined; gcc deixava de montar.'
+      type: bug
+      severity: high
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      solution: 'dex_imp_name_dup + dex_imp_append_rva: 1a ocorrencia fica pura, as seguintes recebem _<iat_rva hex>. Mesma regra no walker (ref) e em dex_emit_imp_label (definicao). [14] +2 checks.'
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T08:49:19.7689998-03:00
+      updated_at: 2026-10-21T08:49:19.7689998-03:00
+      confidence: 1
+      last_verified: 2026-10-21T08:49:19.6186879-03:00
+      created_by: human
+    - id: 5bda4f60-885e-3268-0b0d-082a268c6859
+      title: IAT pre-load no PE e RVA de 32 bits zero-estendida, nao VA
+      description: No win64 o slot da IAT tem 8 bytes mas o valor pre-load e a RVA do IMAGE_IMPORT_BY_NAME (32 bits). dq label daria VA de 64 bits; o correto e dd label wrt ..imagebase, 0.
+      type: lesson
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T08:49:20.0629622-03:00
+      updated_at: 2026-10-21T08:49:20.0629622-03:00
+      confidence: 1
+      last_verified: 2026-10-21T08:49:19.8944581-03:00
+      created_by: human
+    - id: 51777c6f-f4fe-8cee-bb64-8af2d0b708b4
+      title: 'Implementado: D-19 fatia 2b (import table simbolica no win64 -native)'
+      description: Descritores/thunks/hint-name/DLL simbolicos no win64 (wrt ..imagebase; IAT dd label,0); gaps via .wds_chunks/.wds_gap_win; .imp_sec_has; -s/-no-imports db. Suite 402/402, [56] 9 checks. Comportamento do .exe segue no fecho da fatia 2 (exc ainda 0xC0000005).
+      type: note
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - tests/pe_impdesc.py
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T08:49:20.3870383-03:00
+      updated_at: 2026-10-21T08:49:20.3870383-03:00
+      confidence: 1
+      last_verified: 2026-10-21T08:49:20.2164249-03:00
+      created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
       title: 'D-22: entry label via equ no -s + -r'
@@ -5451,6 +5523,23 @@ decisions:
       tags: []
       related:
         - 1dc75508-2227-3f3d-a945-7edd3690fcbd
+      created_by: human
+    - id: f4775b76-7d2f-4e5d-a7c3-d0f0c9500e8a
+      title: 'D-19 2b: import table simbolica no win64 -native'
+      description: ""
+      decision: Reusar o walker de eventos do bin (.gb_db_slots) no win64 com grafia por modo (dd label wrt ..imagebase; thunk de 8B como dd label, 0), gaps via .wds_chunks/.wds_gap_win e selecao por .imp_sec_has; -s/-no-imports seguem db.
+      rationale: O link reordena/funde secoes; RVAs absolutas do .idata copiado apontavam para o layout antigo. Reusar o walker evita duplicar F1-F4 e mantem bin/win64 consistentes. O linker recalcula as RVAs via relocacoes ADDR32NB.
+      alternatives:
+        - walker dedicado no win64; RVA absoluta com pos-patch no .exe; congelar layout com /FIXED
+      files:
+        - src/gen/rebuild.asm
+        - docs/adr/0003-win64-import-table-simbolica.md
+      participants: []
+      date: 2026-10-21T00:00:00Z
+      status: accepted
+      confidence: 1
+      last_verified: 2026-10-21T08:49:20.5041779-03:00
+      tags: []
       created_by: human
 dependencies:
     include\dexter.inc:

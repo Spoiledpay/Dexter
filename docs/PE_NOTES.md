@@ -439,3 +439,53 @@ afetado (não usa `/ENTRY`).
 - **Verificação:** `[55]` (6 checks): `exc -s .rdata -native -r` e `-r` (db)
   linkam; `-s .text` sem `equ` redundante; `tiny32 -s .rdata -r` (x32,
   delta 0). Suíte **391/391**; `run_slow.bat` **7/7**.
+
+## 26. Import table simbólica no `win64 -native` (D-19 fatia 2b)
+
+O `link.exe` reordena/funde seções, então copiar a `.idata` como `db`
+congelava as RVAs do layout antigo (`OFT=0x10130`, `Name=0x10AD4`,
+`FirstThunk=0x103C8` no `exc.exe` → `0xC0000005`). A fatia 2a acertou o
+ponteiro do DataDirectory; a 2b torna a tabela inteira simbólica:
+
+| Elemento | win64 (`-native`) | bin (`-m bin -native`) |
+|---|---|---|
+| campo do descritor (OFT/Name/FT) | `dd label_<VA> wrt ..imagebase` | `dd label_<VA> + 0x<C>` |
+| thunk ILT/IAT (by-name) | `dd label_<VA> wrt ..imagebase, 0` | `dq label_<VA> + 0x<C>` |
+| thunk ordinal/bound | `dq 0x<v>` | `dq 0x<v>` |
+| `IMAGE_IMPORT_BY_NAME` | `dw <hint>` + `db "<nome>", 0` | idem |
+| nome da DLL | `db "<dll>", 0` | idem |
+
+O slot da IAT tem 8 bytes mas o valor pré-load é uma **RVA de 32 bits
+zero-estendida**, por isso `dd label ... wrt ..imagebase, 0` (duas dwords) e
+não `dq label` (que daria VA de 64 bits).
+
+Implementação: o walker de eventos do bin (`.gb_db_slots`) é reusado; a
+grafia vem de `g_unwind_bin` (0 = win64) e os gaps usam `.wds_chunks`
+(R-labels/spans preservados); com `-strings`, `.wds_gap_win` reemite os runs
+como qstr e só degrada p/ chunks quando há alvo R no interior do run. A
+seleção é por metadado (`.imp_sec_has`); `-s`/`-no-imports` seguem `db`
+(D-17).
+
+**Bug de parser encontrado no caminho:** `dex_pe_parse_imports .fill`
+gravava `di` (r10d) em `[rbp-72]` **depois** de três `call`s; como `r10d` é
+volátil, o valor já era lixo e `.thunk_end` restaurava lixo — o laço morria
+no 1º descritor. Sintoma: `exc.exe` com `imports_count=1` (correto 69);
+`var64.exe` mascarado em 14 (correto 62). Fix: spill de `di` no topo de
+`.fill`, antes dos calls. O gate `[16]` passou a exigir 62 e `[56]` trava 69.
+
+**Nomes `__imp_` duplicados:** o parser corrigido expôs PEs que importam o
+mesmo nome em dois slots IAT (gcc: `_fileno`, `_open`, `_read`, `_close`).
+O label `__imp_<dll>_<func>` colidia ("inconsistently redefined" no
+`nasm -f bin`). Regra: a **1ª** ocorrência (ordem do vetor) fica com o nome
+puro; as seguintes recebem `_<iat_rva hex>` (`__imp_..._fileno_1f8b80`),
+calculado por `dex_imp_name_dup`/`dex_imp_append_rva` e usado **igualmente**
+pelo walker (refs) e por `dex_emit_imp_label` (definições). `[14]` cobre os
+dois casos com um `fake_imp` de 3 entradas.
+
+- **Verificação:** `[56]` 9 checks; suíte **402/402**; `pe_impdesc.py ...
+  win64` no `exc` = `descs=15 simbolicos=42 thunks=138 sym=138 hint=138
+  nomes=14 ruins=0`; `nasm -f win64` 0 erros; `link` 0; o rebuildado
+  `-overview` mostra `imports_count=69` (14 DLLs) e `pe_dirs.py` 5/5;
+  `hello -native -r` segue `hi`. Limite honesto: o `.exe` win64 do `exc`
+  ainda dá `0xC0000005` (fatia 2 — fusão de seções/`.bss`/`.tls`); o
+  `-m bin -native` segue exit 42. ADR: `docs/adr/0003-win64-import-table-simbolica.md`.

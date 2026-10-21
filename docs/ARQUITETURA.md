@@ -46,7 +46,8 @@ dex_disasm_one + dex_build_operands (semantics.asm)
               ─► R-6.4 lift (DexOp->IR) + codegen (IR->AsmBuf via emit_native)
 ```
 
-Estado em 2026-10-19 (R-6.1–R-6.5 fechados; suíte 391/391 em 1.2.390):
+Estado em 2026-10-21 (R-6.1–R-6.5 fechados; suíte 402/402 em 1.2.407;
+D-19 2b fechada — import table simbólica no `win64 -native`):
 `-native` liga
 `dex_build_operands` + `dex_emit_native` no walker (`.wcs_emit` →
 `.wcs_oploop` valida refs com label via `.cs_in_code` → snapshot/rollback
@@ -86,10 +87,13 @@ R-6.6 (IR otimizável + backend próprio) segue futura — ver
 
 ## Decisões (resumo; detalhes em `docs/adr/` quando houver)
 
-1. **Cópia byte-exata + `db`, sem rewrite de IAT.** O linker reordena
-   seções, então qualquer reescrita de `disp32`/IAT seria invalidada. Com
-   layout idêntico (`/BASE` + `/DYNAMICBASE:NO`), os `disp32` RIP-rel
-   originais continuam válidos. Rewrite desativado e documentado.
+1. **Default `db` + cópia byte-exata; estrutura simbólica só no `-native`.**
+   Sem `-native` o `.asm` copia os bytes; reescrever `disp32` arbitrário
+   seria invalidado pelo linker. Com `-native` o que é regenerado é o que
+   tem semântica (labels de código/dados, IAT e import table — R-5.3,
+   D-19 2b), sempre com o linker recalculando a RVA
+   (`dd ... wrt ..imagebase` no win64; `dd label + C` no bin). O layout
+   fixo (`/BASE` + `/DYNAMICBASE:NO`) continua para os `disp32` restantes.
 2. **Modo `bin` (padrão p/ round-trip fiel).** `nasm -f bin` com headers +
    seções + overlay copiados = binário byte-idêntico, sem linker no caminho
    (sem reordenação, sem validação de `.pdata`, sem seções extras).
@@ -128,6 +132,20 @@ R-6.6 (IR otimizável + backend próprio) segue futura — ver
    ILT/IAT/nomes, não só descritores). Alvo sem label garantida
    (código/`.pdata`/`.xdata`/sem bytes) sai `dd 0x<rva>` cru. Verificação
    **estrutural**: `tests/pe_impdesc.py` (oráculo = bytes do PE) + `[45]`.
+10b. **Import table simbólica no `win64 -native` (D-19 fatia 2b).** O
+   `link.exe` reordena/funde seções, então a `.idata` copiada como `db`
+   congelava RVAs do layout antigo. O walker de eventos do bin
+   (`.gb_db_slots`) é reusado; a grafia vem do modo: campos do descritor
+   `dd label_<VA> wrt ..imagebase`; thunk de 8 B `dd label_<VA> wrt
+   ..imagebase, 0` (a IAT pré-load é RVA de 32 bits zero-estendida, não VA);
+   hint/name e nome de DLL em `dw`+`db`. Gaps via `.wds_chunks`; com
+   `-strings`, `.wds_gap_win` preserva qstr. `.imp_sec_has` seleciona só a
+   seção com metadados de import; `-s`/`-no-imports` seguem `db` (D-17).
+   Nomes `__imp_` repetidos (mesmo dll+func em 2 slots, ex.: gcc) recebem
+   sufixo `_<iat_rva>` a partir da 2ª ocorrência, na mesma regra do walker e
+   de `dex_emit_imp_label`. Verificação: `[56]`, `tests/pe_impdesc.py`
+   (modo `win64`) e `[14]`; ADR-0003. Comportamento do `.exe` em PE real
+   segue no fecho da fatia 2.
 11. **SIB-abs com índice (loads indexados).** Operando sem base
     (`SIB base=101`): `disp32 + idx*scale`. Emitido textual e byte-exato com
     `nosplit` (o NASM "splitaria" `[abs 0x2+rax*2]` para `[rax+rax+0x2]`,
