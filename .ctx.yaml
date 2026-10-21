@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-21T08:52:47.6728193-03:00
+updated_at: 2026-10-21T20:24:13.1406755-03:00
 files:
     include\dexter.inc:
         imports:
@@ -5504,6 +5504,37 @@ memories:
       updated_at: 2026-10-21T08:49:20.3870383-03:00
       confidence: 1
       last_verified: 2026-10-21T08:49:20.2164249-03:00
+      created_by: human
+    - id: 6675158f-1b52-1db6-f79c-98f18e9772d7
+      title: 'D-19 2c: db com disp32 RIP-relative congela quando o link move a secao; fix = dd label - \$ - 4 (REL32)'
+      description: 'O 0xC0000005 do win64 -native nao era .tls/.CRT: era o db que preserva bytes de instrucao com operando [rip+disp32]. O disp e constante do layout antigo; se o link move a secao alvo, a ref aponta para outro lugar (ou zeros da .bss). Prova: exc 1400028D0 mov rax,[rip+0xdb69] (IAT orig 0x140010440) -> rebuild .idata em 0xE000 -> 0x10440 cai na .bss -> call 0. Classe medida por tests/rip_audit.py: exc 42 (idata 23 + rdata 19), var64 47, notepad 1252, hello 0. Mecanismo comprovado: no COFF x64 o nasm emite REL32 para ''dd label - \$ - 4'' e o linker recalcula. Escopo correto e geral (nao por mnemonico).'
+      type: lesson
+      severity: medium
+      files:
+        - src/disasm/emit_nasm.asm
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T20:24:10.0036-03:00
+      updated_at: 2026-10-21T20:24:10.0036-03:00
+      confidence: 1
+      last_verified: 2026-10-21T20:24:09.9033875-03:00
+      created_by: human
+    - id: 06b6a938-a320-6fae-6fa7-4146a5ed13b3
+      title: 'win64 -native: LNK4078 .bss progbits (section .bss data) zera resb e diverge atributos'
+      description: 'Secao sem bytes no arquivo sai como ''section .bss data'' porque a classe e escolhida por characteristics (MEM_WRITE -> data). Efeitos: nasm -w+zeroing em cada resb (conteudo vira zeros no arquivo) e link LNK4078 ''multiple .bss sections found with different attributes (C0300040)''; no rebuild a .bss fica CNT_INITDATA rawsize 0xC00 em vez de CNT_UNINIT raw=0. No var64 o LNK4078 atinge tambem a .idata (reaberturas com classes diferentes). Regra: uninit (IMAGE_SCN_CNT_UNINITIALIZED_DATA) ou raw==0 && vsize>0 -> nobits; classe decidida uma vez por nome de secao e reusada.'
+      type: bug
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T20:24:13.1401575-03:00
+      updated_at: 2026-10-21T20:24:13.1401575-03:00
+      confidence: 1
+      last_verified: 2026-10-21T20:24:13.03041-03:00
       created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2

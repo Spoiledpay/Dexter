@@ -18,8 +18,17 @@ IDs estáveis para branches/commits. **Fonte única da fila de execução:**
 - [ ] **D-19 fatia 2 (fecho)** — comportamento do `.exe` reconstruído pelo
   `win64` em PE real: `tests/exc.exe -native -r` hoje **carrega** (imports
   69/14 DLLs válidos) e dá `0xC0000005` (fatia 2a/2b); alvo é rodar o
-  `throw/catch` (**exit 42**), como o `-m bin -native` já faz. Bloqueadores
-  prováveis: fusão de `.bss`/`.tls`/`.CRT` (`LNK4078`), layout do `.tls`.
+  `throw/catch` (**exit 42**), como o `-m bin -native` já faz.
+  **Fatia 2c (diagnóstico) FECHADA em 2026-10-21** (sem mudança em `src/`):
+  causa = `db` com **disp32 RIP-relative congelado** (o link move a seção e
+  o disp continua apontando para o layout antigo — `.bss` zeros → `call 0`);
+  classe: `exc` 42, `var64` 47, `notepad` 1252, `hello` 0. Mecanismo
+  provado: `dd label - $ - 4` gera REL32 no COFF x64 e o linker recalcula.
+  Defeito independente: `.bss` emitida como `data` (progbits) →
+  `LNK4078` + `resb` zerado. TLS Directory já é simbólica/correta.
+  `PE_NOTES §27`, `docs/SESSAO-2026-10-21-D19-2C.md`; oráculos
+  `tests/secdump.py`, `tests/dbg_probe.py`, `tests/rip_audit.py`.
+  Resta o fix (emissão `dd label - $ - 4` + `nobits` + gate `[57]`).
 - [ ] **Base simbólica do índice em x64** — x32 já sai
   `[nosplit label_<VA>+idx*scale]` (1.2.379); em x64 o disp32 não é VA
   (precisa de `+C` no `-f bin`), então segue numérico.
@@ -593,7 +602,13 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   as RVAs mesmo reordenando seções. Bug de parser achado junto (di volátil no
   `.fill`): `exc` 69 imports (antes 1), `var64` 62 (antes 14). `[56]` 9 checks;
   `PE_NOTES §26`, ADR-0003. **Falta o fecho da fatia 2**: comportamento do
-  `.exe` (fusão `.bss`/`.tls`/`.CRT`; `exc` ainda `0xC0000005`).
+  `.exe`. **Fatia 2c (diagnóstico) FECHADA** (2026-10-21, sem `src/`): a
+  causa é `db` com disp32 RIP-relative congelado (`mov rax,[rip+0xdb69]` da
+  IAT → `.bss` nova → `call 0`; `exc` 42 sites, `var64` 47, `notepad` 1252,
+  `hello` 0) + `.bss` progbits (`LNK4078`); `.tls`/`.CRT` descartados (TLS
+  Directory simbólica, LNK4210 é aviso). Fix provado em sonda:
+  `dd label - $ - 4` (REL32). `PE_NOTES §27`,
+  `docs/SESSAO-2026-10-21-D19-2C.md`.
 - [x] D-20 FECHADA (2026-10-16): o codegen nativo agora é byte-fiel em PE MS
   real. Duas classes: (1) ALU/mov **reg-reg na forma "load"** (`02/03..3A/3B`,
   `8A/8B`: reg=dst) cai p/ `db` (o NASM montaria na forma "store" `89/31`);

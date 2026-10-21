@@ -489,3 +489,59 @@ dois casos com um `fake_imp` de 3 entradas.
   `hello -native -r` segue `hi`. Limite honesto: o `.exe` win64 do `exc`
   ainda dá `0xC0000005` (fatia 2 — fusão de seções/`.bss`/`.tls`); o
   `-m bin -native` segue exit 42. ADR: `docs/adr/0003-win64-import-table-simbolica.md`.
+
+## 27. D-19 fatia 2c — `disp32` RIP-relative em `db` congela no link
+
+A causa do `0xC0000005` do `win64 -native` **não** é `.tls` nem `.CRT`: é o
+`db` que preserva bytes de uma instrução com operando RIP-relative. O disp32
+é uma constante do layout antigo; quando o `link.exe` move a seção alvo, a
+referência passa a apontar para outro lugar — ou para zeros da `.bss`.
+
+Prova (`tests/exc.exe -native -r` → `tests/out/d19_2c.exe`):
+
+```
+1400028D0  mov rax, [rip+0xdb69]   ; slot da IAT: orig 0x140010440 (.idata+0x440)
+1400028D7  call rax                ; AV de execução em 0x0
+```
+
+- No `.asm`, `label_1400028D0` sai `db 0x48, 0x8B, 0x05, 0x69, 0xDB, 0x00, 0x00`
+  (`D-2`: "`mov`-from-IAT segue `db`; kinds 3/4 não existem").
+- O rebuild põe a `.idata` em `0xE000` (era `0x10000`), então `0x10440` cai na
+  `.bss` nova (zeros) → `mov rax, 0` → `call rax` → `0xC0000005`.
+- `dbg_probe.py`: `EXC=0xC0000005`, acesso de **execução em 0x0**,
+  return address `0x1400028D8` (`.text+0x18D8`), `rcx=0x140010140` (`.bss+0x140`).
+- `rip_audit.py` (dimensiona a classe): `exc` **42** sites falsos
+  (`.idata` 23, `.rdata` 19; `mov` 23, `movsd` 18, `movq` 1); `var64` **47**
+  (`.idata` 23, `.rdata` 19, `.rodata` 5 — mesmo AV, `call` para 0);
+  `notepad` **1252** (`.data` 1252; `mov` 900, `lea` 132, `cmp` 96, ...);
+  `hello` **0** (por isso `hello -native -r` sempre funcionou).
+
+Mecanismo correto (provado em sonda, `tests/out/rel32.asm`): o nasm emite
+uma **relocação REL32** para `dd label - $ - 4` no COFF x64 e o linker
+recalcula o disp. Ex.: `mov rax,[rip+0x2ff9]` resolveu para `.data+0x0`
+depois de o link mover a seção. Logo, uma instrução que hoje cai em `db`
+pode ser emitida como `db <prefixo>` + `dd label_<alvo> - $ - 4` +
+`db <sufixo>` — sem pós-patch e sem semântica por mnemônico (serve para
+`movsd`, `movdqu`, `lock cmpxchg`, ... ao mesmo tempo).
+
+Segundo defeito (independente do AV): seção sem bytes saía como
+`section .bss data` (progbits). Consequências: `-w+zeroing` do nasm (cada
+`resb` vira zero no arquivo) e `LNK4078: multiple '.bss' sections found with
+different attributes (C0300040)`; a `.bss` reconstruída fica
+`CNT_INITDATA` com `rawsize=0xC00` em vez de `CNT_UNINIT`/`raw=0`. A classe
+também pode divergir entre reaberturas (no `var64`: `.bss` **e** `.idata`).
+Regra: seção com `IMAGE_SCN_CNT_UNINITIALIZED_DATA` (ou `raw==0 && vsize>0`)
+sai `nobits`; a classe (`code`/`data`/`rdata`) é decidida **uma vez** por
+nome de seção e reusada em todas as reaberturas.
+
+O que **não** era o problema (verificado): a TLS Directory do `exc` já é
+reemitida simbolicamente — `Start/End` → `.rdata+0x1968` (o link fundiu a
+`.tls` na `.rdata`), `AddressOfIndex` → `.bss+0xD0`,
+`AddressOfCallBacks` → `.CRT+0x38`. `LNK4210` (`.CRT` existe) é aviso do
+link, não a falha.
+
+Ferramentas novas (oráculos, nunca executam entrada não-confiável):
+`tests/secdump.py` (seções/headers COFF+PE, `--diff` com flags decodificadas),
+`tests/dbg_probe.py` (depurador via `WaitForDebugEvent`: exceção, RIP, AV
+op/acesso, registradores, stack), `tests/rip_audit.py` (sites `db` com
+RIP-relative congelado, por seção-alvo e mnemônico).

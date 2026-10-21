@@ -180,10 +180,24 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   `pe_dirs.py` 5/5; `hello -native -r` = `hi`. **Bug real junto:** parser de
   imports (spill de `di` volátil no `.fill`): `exc` 1→69, `var64` 14→62
   (`[16]` agora exige 62). `PE_NOTES §26`, ADR-0003.
+- [x] **D-19 fatia 2c — diagnóstico fechado** (2026-10-21, sem mudança em
+  `src/`, suíte segue 402/402): a causa do `0xC0000005` **não** é
+  `.tls`/`.CRT`; é `db` com **disp32 RIP-relative congelado** quando o link
+  move a seção alvo. Prova: `exc -native -r` → AV de execução em `0x0`,
+  `mov rax,[rip+0xdb69]` (IAT `0x140010440`) → `.bss` nova → `call rax`.
+  Classe medida por `tests/rip_audit.py`: `exc` **42** (`.idata` 23 +
+  `.rdata` 19), `var64` **47**, `notepad` **1252** (`.data` 1229+),
+  `hello` **0** (por isso nunca falhou). Mecanismo do fix provado em sonda
+  (`dd label - $ - 4` = REL32 no COFF x64, linker recalcula). Defeito
+  independente: `.bss` sai `data` (progbits) → `LNK4078` + `resb` zerado;
+  TLS Directory já está simbólica e correta. `dbg_probe.py`/`secdump.py`/
+  `rip_audit.py` em `tests/`. `PE_NOTES §27`,
+  `docs/SESSAO-2026-10-21-D19-2C.md`.
 - [ ] **Fila após 1.2.407 (ordem fixa):** (1) **D-19 fatia 2 fecho** —
   comportamento do `.exe` reconstruído pelo `win64` em PE real (`exc` roda o
-  `throw/catch`, exit 42; hoje `0xC0000005`; suspeitos: fusão de
-  `.bss`/`.tls`/`.CRT`, `LNK4078`);
+  `throw/catch`, exit 42; hoje `0xC0000005`). Causa provada na 2c: disp32
+  RIP-relative em `db` congelado (42 sites no `exc`) + `.bss` progbits
+  (`LNK4078`); fix = `dd label - $ - 4` no lugar do disp + `nobits`;
   (2) **base simbólica do índice em x64** (x32 fechada em 1.2.379);
   (3) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
   (4) **R-6.6 opção C** — IR otimizável + backend próprio. Espelho em
