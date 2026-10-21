@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-21T20:24:13.1406755-03:00
+updated_at: 2026-10-21T20:27:19.9099386-03:00
 files:
     include\dexter.inc:
         imports:
@@ -5535,6 +5535,24 @@ memories:
       updated_at: 2026-10-21T20:24:13.1401575-03:00
       confidence: 1
       last_verified: 2026-10-21T20:24:13.03041-03:00
+      created_by: human
+    - id: f7bccd29-6c22-46ef-2b92-f9aef5aebd97
+      title: 'Implementado: D-19 fatia 2c (diagnostico do 0xC0000005)'
+      description: 'Diagnostico fechado sem mudanca em src/: causa = db com disp32 RIP-relative congelado (exc 42, var64 47, notepad 1252, hello 0) + .bss progbits (LNK4078). Fix provado em sonda: dd label - \$ - 4 = REL32. Tools: secdump/dbg_probe/rip_audit. Suite 402/402. Docs: PE_NOTES 27, SESSAO-2026-10-21-D19-2C, REVISAO.'
+      type: note
+      severity: medium
+      files:
+        - tests/secdump.py
+        - tests/dbg_probe.py
+        - tests/rip_audit.py
+        - docs/PE_NOTES.md
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T20:27:19.9099386-03:00
+      updated_at: 2026-10-21T20:27:19.9099386-03:00
+      confidence: 1
+      last_verified: 2026-10-21T20:27:19.8059982-03:00
       created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
