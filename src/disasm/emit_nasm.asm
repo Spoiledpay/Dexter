@@ -80,6 +80,7 @@ s_sp         db " ", 0
 s_strict4    db "strict dword ", 0
 s_strict8    db "strict qword ", 0
 s_abs        db "abs ", 0
+s_nosplit    db "nosplit ", 0
 s_rel2       db "rel ", 0
 s_relpre     db "[rel ", 0
 s_crlf       db 13, 10, 0
@@ -96,6 +97,17 @@ s_global     db "global ", 0
 section .bss
 align 8
 g_emit_hex:  resb 8
+; F5 (índice simbólico x32): rebuild preenche com o array R ordenado (RVAs),
+; o count e o image_base; o emissor consulta p/ decidir `label_<VA>` num
+; operando SIB-abs (base ausente). 0 = desligado (numeric). Definidos AQUI
+; (não em rebuild) p/ os drivers que linkam só emit_nasm.obj fecharem.
+global g_abs_vas
+global g_abs_n
+global g_abs_base
+align 8
+g_abs_vas:   resq 1
+g_abs_n:     resq 1
+g_abs_base:  resq 1
 
 section .text
 
@@ -1495,7 +1507,7 @@ dex_emit_native:
     movzx eax, byte [r13+DexOp.index]
     cmp eax, 0xFF
     je .fo_disp
-    ; '+' + index (+*scale)
+    ; '+' + "<index>[*<scale>]"
     mov rcx, rbx
     mov edx, '+'
     sub rsp, 32
@@ -1503,49 +1515,8 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .fo_fail
-    movzx eax, byte [r13+DexOp.index]
-    cmp byte [r12+Insn.legacy67], 0
-    je .fo_i3264
-    cmp byte [r12+Insn.addr_mode], 1
-    je .fo_no                  ; x32+67: sem forma
-    lea rdx, [rel dex_r32_names]
-    jmp .fo_iemit
-.fo_i3264:
-    cmp byte [r12+Insn.addr_mode], 1
-    je .fo_i32
-    lea rdx, [rel dex_r64_names]
-    jmp .fo_iemit
-.fo_i32:
-    lea rdx, [rel dex_r32_names]
-    jmp .fo_iemit
-.fo_iemit:
-    mov ecx, eax
-    mov rax, [rdx+rcx*8]
-    mov rdx, rax
-    mov rcx, rbx
     sub rsp, 32
-    call asmbuf_append_str
-    add rsp, 32
-    test eax, eax
-    jnz .fo_fail
-    movzx eax, byte [r13+DexOp.scale]
-    cmp eax, 1
-    je .fo_disp
-    mov rcx, rbx
-    mov edx, '*'
-    sub rsp, 32
-    call asmbuf_append_char
-    add rsp, 32
-    test eax, eax
-    jnz .fo_fail
-    movzx eax, byte [r13+DexOp.scale]
-    cmp eax, 1
-    je .fo_disp
-    add eax, '0'               ; '2'/'4'/'8'
-    mov edx, eax
-    mov rcx, rbx
-    sub rsp, 32
-    call asmbuf_append_char
+    call .fo_idxemit
     add rsp, 32
     test eax, eax
     jnz .fo_fail
@@ -1627,12 +1598,13 @@ dex_emit_native:
     pop rbp
     ret
 .fo_ripabs:
-    ; base==NOBASE: x64-RIP (sem SIB) → [rel label]; SIB-abs → [abs hex];
-    ; x32 → absoluto numérico [0xVA] (Fase D1; sem rel, sem label).
-    cmp byte [r12+Insn.addr_mode], 1
-    je .fo_abs32
+    ; base==NOBASE: SIB-abs (com ou sem índice) → .fo_sibabs; x64 sem SIB →
+    ; RIP [rel label]; x32 sem SIB → absoluto numérico [0xVA] (Fase D1).
+    ; (A ordem importa: SIB-abs vale nos dois modos de endereço.)
     cmp byte [r12+Insn.has_sib], 0
     jne .fo_sibabs
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_abs32
     ; RIP: "[" + seg? + "rel " + label + "]"
     mov rcx, rbx
     mov edx, '['
@@ -1676,7 +1648,9 @@ dex_emit_native:
     pop rbp
     ret
 .fo_sibabs:
-    ; "[abs 0x<low32>]": "[" + seg? + [index*scale+] + hex + "]"
+    ; SIB-abs (base ausente): "[<seg>?[abs ]<disp32> + <index>[*<scale>]]" —
+    ; `abs` (x64) obrigatório no início quando há disp != 0; com disp==0 sai
+    ; só "[<index>[*<scale>]]" (o encoding já força disp32=0).
     mov rcx, rbx
     mov edx, '['
     sub rsp, 32
@@ -1696,9 +1670,115 @@ dex_emit_native:
     movzx eax, byte [r13+DexOp.index]
     cmp eax, 0xFF
     je .fo_abshex
-    ; index presente: reutilizar lógica? simplificar: "[0x..]" não cobre!
-    ; SIB-abs COM index é raríssimo — db honesto:
-    mov eax, 1
+    ; index presente: `nosplit` (senão o nasm re-encoda [rax*2] como
+    ; [rax+rax], mais curto => BYTES DIFERENTES). Disp primeiro (em x64
+    ; `abs` é obrigatório no INÍCIO da expressão), depois "+<index>[*<scale>]";
+    ; disp32==0 omite o disp (a forma SIB-abs já o força como 0).
+    lea rdx, [rel s_nosplit]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov eax, [r13+DexOp.val]     ; disp32 bruto (low32)
+    test eax, eax
+    jz .fo_sib_idx               ; disp 0: omite (a forma SIB-abs força 0)
+    ; x32: se o disp32 é uma VA rotulável (presente no R ordenado), sai
+    ; `label_<VA>` (índice simbólico). x64 fica numérico: a VA da imagem não
+    ; cabe em 32 bits (e em `-f bin` faltaria a correção `+C`). O R é
+    ; chaveado por RVA (g_abs_vas/g_abs_n/g_abs_base, preenchidos por rebuild).
+    cmp byte [r12+Insn.addr_mode], 1
+    jne .fo_sib_num
+    cmp qword [rel g_abs_n], 0
+    je .fo_sib_num
+    mov eax, [r13+DexOp.val]     ; VA absoluta (low32)
+    mov rdx, [rel g_abs_base]
+    cmp rax, rdx
+    jb .fo_sib_num
+    sub rax, rdx                 ; rva
+    mov r8, [rel g_abs_vas]
+    mov r9, [rel g_abs_n]
+    xor r10d, r10d               ; lo
+    mov r11, r9                  ; hi
+.fo_ab_bs:
+    cmp r10, r11
+    jae .fo_sib_num
+    lea rcx, [r10+r11]
+    shr rcx, 1                   ; mid
+    mov rdx, [r8+rcx*8]          ; key (rva)
+    cmp rax, rdx
+    je .fo_ab_hit
+    jb .fo_ab_bhi
+    lea r10, [rcx+1]             ; lo = mid+1
+    jmp .fo_ab_bs
+.fo_ab_bhi:
+    mov r11, rcx                 ; hi = mid
+    jmp .fo_ab_bs
+.fo_ab_hit:
+    mov rcx, rbx
+    mov edx, [r13+DexOp.val]     ; VA (não o rva)
+    sub rsp, 32
+    call dex_label_emit_va
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov rcx, rbx
+    mov edx, '+'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    jmp .fo_sib_idx
+.fo_sib_num:
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_sib_d0x
+    lea rdx, [rel s_abs]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+.fo_sib_d0x:
+    lea rdx, [rel s_0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov eax, [r13+DexOp.val]
+    mov rcx, rbx
+    mov edx, eax
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov rcx, rbx
+    mov edx, '+'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+.fo_sib_idx:
+    sub rsp, 32
+    call .fo_idxemit
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov rcx, rbx
+    mov edx, ']'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    xor eax, eax
     add rsp, 32
     pop r14
     pop r13
@@ -1765,6 +1845,64 @@ dex_emit_native:
     pop rbx
     pop rbp
     ret
+; .fo_idxemit — emite "<index>[*<scale>]" (DexOp.index != NOINDEX). rax=0/1.
+; Sub-rotina de dex_emit_native (entra com rsp%16==8); usa rbx (buf), r12
+; (Insn) e r13 (DexOp). Não faz teardown de função: rax=1 => caller usa
+; .fo_fail (db). x32+67 (addr16) não tem forma => 1.
+.fo_idxemit:
+    sub rsp, 8                  ; realinha (entra com rsp%16==8)
+    movzx eax, byte [r13+DexOp.index]
+    cmp byte [r12+Insn.legacy67], 0
+    je .fo_ie_3264
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_ie_fail
+    lea rdx, [rel dex_r32_names]
+    jmp .fo_ie_emit
+.fo_ie_3264:
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_ie_32
+    lea rdx, [rel dex_r64_names]
+    jmp .fo_ie_emit
+.fo_ie_32:
+    lea rdx, [rel dex_r32_names]
+.fo_ie_emit:
+    mov ecx, eax
+    mov rax, [rdx+rcx*8]
+    mov rdx, rax
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_ie_fail
+    movzx eax, byte [r13+DexOp.scale]
+    cmp eax, 1
+    je .fo_ie_ok
+    mov rcx, rbx
+    mov edx, '*'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_ie_fail
+    movzx eax, byte [r13+DexOp.scale]
+    add eax, '0'               ; '2'/'4'/'8'
+    mov edx, eax
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_ie_fail
+.fo_ie_ok:
+    xor eax, eax
+    add rsp, 8
+    ret
+.fo_ie_fail:
+    mov eax, 1
+    add rsp, 8
+    ret
+
 ; .fo_segpre — appende "<seg>:" (es/cs/ss/ds/fs/gs) se DexOp.seg != 0. rax=0/1.
 ; Sub-rotina de dex_emit_native; realinha a pilha (entra com rsp%16==8).
 .fo_segpre:

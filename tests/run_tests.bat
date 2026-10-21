@@ -27,10 +27,15 @@ del /q tests\out\* 2>nul
 del /q tests\hello.exe 2>nul
 
 echo === [0] integridade do corpus ===
-findstr /c:"FONTE SAGRADA DO CORPUS" tests\hello.asm >nul 2>&1
-if errorlevel 1 (
-    echo FALHA: tests\hello.asm foi sobrescrito - restaure o arquivo.
-    exit /b 1
+rem Guarda todos os fontes sagrados (nao so hello): qualquer .asm gerado
+rem por engano em cima de um fonte do corpus (ex.: `dexter x.exe -v` usa
+rem o default <input>.asm) e detectado antes de rodar a suite.
+for %%A in (absidx hello jtable loop memsz no_relocs sibabs strings tiny tiny32 vex) do (
+    findstr /c:"FONTE SAGRADA DO CORPUS" "tests\%%A.asm" >nul 2>&1
+    if errorlevel 1 (
+        echo FALHA: tests\%%A.asm foi sobrescrito - restaure o arquivo.
+        exit /b 1
+    )
 )
 echo   OK: corpus integro
 echo === [0b] sistema de versao ===
@@ -1010,6 +1015,143 @@ python tests\pe_impdesc.py tests\notepad.exe tests\out\notepad_nb.asm > tests\ou
 if !errorlevel! NEQ 0 ( echo "  FALHA: hint/name (notepad)" & type tests\out\impname_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: hint/name conferidos (notepad)" & set /a PASS+=1 )
 findstr /c:"hint=620 nomes=50 ruins=0" tests\out\impname_notepad.out >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: golden hint/name notepad" & type tests\out\impname_notepad.out & set /a FAIL+=1 ) else ( echo "  OK: golden hint/name notepad (620/50)" & set /a PASS+=1 )
+
+echo === [49] SIB-abs com indice (loads indexados; R-5.4) ===
+rem Fixture tests\sibabs.asm (x64): `lea [idx*scale]` (SIB base=none). Prova:
+rem a emisao vira TEXTO simbolico (`nosplit`, sem o split [rax+rax] do nasm)
+rem e o round-trip bin-native e byte-identico + comportamento (exit 42).
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\sibabs.obj tests\sibabs.asm
+if errorlevel 1 ( echo "  FALHA: nasm sibabs" & set /a FAIL+=1 ) else ( echo "  OK: nasm sibabs" & set /a PASS+=1 )
+if exist tests\out\sibabs.obj (
+    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\sibabs.exe tests\out\sibabs.obj "%KLIB%"
+    if errorlevel 1 ( echo "  FALHA: link sibabs" & set /a FAIL+=1 ) else ( echo "  OK: link sibabs" & set /a PASS+=1 )
+)
+if not exist tests\out\sibabs.exe ( echo "  FALHA: sem sibabs.exe" & set /a FAIL+=1 )
+"%DX%" tests\out\sibabs.exe -o tests\out\sibabs_nb.asm -m bin -native -r -O tests\out\sibabs_nb.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild bin-native sibabs" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin-native sibabs" & set /a PASS+=1 )
+findstr /c:"[nosplit rcx*4]" tests\out\sibabs_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: SIB-abs caiu em db" & set /a FAIL+=1 ) else ( echo "  OK: SIB-abs simbolico (nosplit)" & set /a PASS+=1 )
+findstr /c:"[nosplit abs 0x8+rdx*4]" tests\out\sibabs_nb.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: SIB-abs com disp nao-simbolico" & set /a FAIL+=1 ) else ( echo "  OK: SIB-abs com disp simbolico (nosplit abs)" & set /a PASS+=1 )
+if exist tests\out\sibabs_nb.exe (
+    fc /b tests\out\sibabs.exe tests\out\sibabs_nb.exe >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: sibabs difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: sibabs byte-identico" & set /a PASS+=1 )
+    tests\out\sibabs_nb.exe > tests\out\sibabs_nb.out 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: sibabs_nb exit 42" & set /a PASS+=1 ) else ( echo "  FALHA: sibabs_nb exit nao e 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem sibabs_nb.exe" & set /a FAIL+=1 )
+
+echo === [50] strings com CR/LF (`.str_run` + escape no qstr) ===
+rem Fixture tests\strings.exe tem s1/s2/s3 com 13,10 e s2 com aspas. Prova:
+rem o run vira UMA linha NASM (`db "...", 13, 10, 0`, aspas fechadas/reabertas
+rem em volta dos escapes, sem `""`) e monta.
+"%DX%" tests\strings.exe -o tests\out\strcrlf.asm -native -strings -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -strings (crlf)" & set /a FAIL+=1 ) else ( echo "  OK: generate -strings (crlf)" & set /a PASS+=1 )
+python tests\qstr_check.py tests\out\strcrlf.asm > tests\out\qstr.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: qstr (crlf)" & type tests\out\qstr.out & set /a FAIL+=1 ) else ( echo "  OK: qstr CR/LF + aspas (linha unica)" & set /a PASS+=1 )
+findstr /c:"QSTR linhas_crlf=" tests\out\qstr.out >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem resumo QSTR" & set /a FAIL+=1 ) else ( echo "  OK: resumo QSTR" & set /a PASS+=1 )
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\strcrlf.obj tests\out\strcrlf.asm > tests\out\strcrlf.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm strcrlf (ver tests\out\strcrlf.err)" & type tests\out\strcrlf.err & set /a FAIL+=1 ) else ( echo "  OK: nasm strcrlf" & set /a PASS+=1 )
+
+echo === [51] indice simbolico x32 (tabela absoluta indexada) ===
+rem Fixture tests\absidx.asm (x32): `jmp dword [jtab+eax*4]` (SIB-abs, base
+rem ausente) + load indexado absoluto. O walker registra a VA da tabela no R
+rem e o emissor sai `[nosplit label_<VA>+eax*4]` (antes: `0x402008` cru).
+"%NASM%" -f win32 -o tests\out\absidx.obj tests\absidx.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm absidx" & set /a FAIL+=1 ) else ( echo "  OK: nasm absidx" & set /a PASS+=1 )
+if exist tests\out\absidx.obj (
+    "C:\Nasm\link.exe" /nologo /nodefaultlib /machine:x86 /subsystem:console /entry:main /out:tests\out\absidx.exe tests\out\absidx.obj "%X86LIB%" >nul 2>&1
+    if errorlevel 1 ( echo "  FALHA: link absidx" & set /a FAIL+=1 ) else ( echo "  OK: link absidx" & set /a PASS+=1 )
+)
+if not exist tests\out\absidx.exe ( echo "  FALHA: sem absidx.exe" & set /a FAIL+=1 )
+"%DX%" tests\out\absidx.exe -o tests\out\absidx_nat.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native absidx" & set /a FAIL+=1 ) else ( echo "  OK: generate -native absidx" & set /a PASS+=1 )
+findstr /c:"[nosplit label_402008+eax*4]" tests\out\absidx_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: indice nao-simbolico (jmp)" & set /a FAIL+=1 ) else ( echo "  OK: jmp [nosplit label_+idx] (simbolico)" & set /a PASS+=1 )
+findstr /c:"[nosplit label_402018+edx*4]" tests\out\absidx_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: indice nao-simbolico (load)" & set /a FAIL+=1 ) else ( echo "  OK: load [nosplit label_+idx] (simbolico)" & set /a PASS+=1 )
+findstr /c:"dd label_401017" tests\out\absidx_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: alvo de codigo (dd label_) ausente" & set /a FAIL+=1 ) else ( echo "  OK: tabela x32 com dd label_ (jump-to-code)" & set /a PASS+=1 )
+"%DX%" tests\out\absidx.exe -o tests\out\absidx_rt.asm -native -r -O tests\out\absidx_rt.exe -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native absidx" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native absidx" & set /a PASS+=1 )
+if exist tests\out\absidx_rt.exe (
+    tests\out\absidx_rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: absidx_rt exit 42 (switch tabela)" & set /a PASS+=1 ) else ( echo "  FALHA: absidx_rt exit nao e 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem absidx_rt.exe" & set /a FAIL+=1 )
+
+echo === [52] -s com SEH simbolico (D-17: nunca simbolo indefinido) ===
+rem Fixture tests\exc.exe (x64, .pdata/.xdata reais, multiplas secoes).
+rem Com `-s <secao>`, as demais secoes viram `db` sem label por-VA; a
+rem reemissao simbolica da .pdata/.xdata NAO pode referenciar VA fora do
+rem conjunto percorrido (senao nasm acusa `symbol not defined`). Sem `-s`
+rem o mesmo binario monta 0 erros (controle implicito em [43]).
+"%DX%" tests\exc.exe -s .rdata -o tests\out\secrip_rdata.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -s .rdata" & set /a FAIL+=1 ) else ( echo "  OK: generate -s .rdata" & set /a PASS+=1 )
+"%NASM%" -f win64 -o tests\out\secrip_rdata.obj tests\out\secrip_rdata.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm -s .rdata (simbolo indefinido)" & set /a FAIL+=1 ) else ( echo "  OK: nasm -s .rdata (0 erros)" & set /a PASS+=1 )
+"%DX%" tests\exc.exe -s .text -o tests\out\secrip_text.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -s .text" & set /a FAIL+=1 ) else ( echo "  OK: generate -s .text" & set /a PASS+=1 )
+"%NASM%" -f win64 -o tests\out\secrip_text.obj tests\out\secrip_text.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm -s .text" & set /a FAIL+=1 ) else ( echo "  OK: nasm -s .text (0 erros)" & set /a PASS+=1 )
+rem caminho byte-fiel: as secoes nao filtradas viram db (fc /b = 0)
+"%DX%" tests\exc.exe -s .rdata -m bin -native -o tests\out\secrip_bin.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -s .rdata -m bin" & set /a FAIL+=1 ) else ( echo "  OK: generate -s .rdata -m bin" & set /a PASS+=1 )
+"%NASM%" -f bin -o tests\out\secrip_bin.exe tests\out\secrip_bin.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm -s .rdata -m bin" & set /a FAIL+=1 ) else ( echo "  OK: nasm -s .rdata -m bin" & set /a PASS+=1 )
+fc /b tests\exc.exe tests\out\secrip_bin.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -s .rdata -m bin difere byte a byte" & set /a FAIL+=1 ) else ( echo "  OK: -s .rdata -m bin byte-identico" & set /a PASS+=1 )
+
+echo === [53] D-19 fatia 1: unwind simbolico em QUALQUER secao (win64) ===
+rem notepad.exe (MS link x64): o link funde o .xdata na .rdata e a .pdata
+rem aponta p/ UNWIND_INFO dentro da .rdata (193 alvos distintos / 386 refs).
+rem Sem "R-5.4 estendido" no caminho win64 o nasm acusa 386
+rem `symbol label_14002Fxxx not defined`. Com o fix: 0 erros.
+"%DX%" tests\notepad.exe -native -o tests\out\np_nat.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native notepad" & set /a FAIL+=1 ) else ( echo "  OK: generate -native notepad" & set /a PASS+=1 )
+"%NASM%" -f win64 -o tests\out\np_nat.obj tests\out\np_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm notepad -native (simbolo indefinido)" & set /a FAIL+=1 ) else ( echo "  OK: nasm notepad -native (0 erros)" & set /a PASS+=1 )
+findstr /c:"wrt ..imagebase" tests\out\np_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem RVA simbolica (wrt ..imagebase)" & set /a FAIL+=1 ) else ( echo "  OK: RVA simbolica presente" & set /a PASS+=1 )
+rem controle: x64 simples (hello) segue montando com -native
+"%DX%" tests\hello.exe -native -o tests\out\np_hello.asm -q >nul 2>&1
+"%NASM%" -f win64 -o tests\out\np_hello.obj tests\out\np_hello.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: regressao hello -native" & set /a FAIL+=1 ) else ( echo "  OK: hello -native segue 0 erros" & set /a PASS+=1 )
+rem controle: caminho byte-fiel (-m bin) do notepad segue identico
+"%DX%" tests\notepad.exe -m bin -native -o tests\out\np_bin.asm -q >nul 2>&1
+"%NASM%" -f bin -o tests\out\np_bin.exe tests\out\np_bin.asm >nul 2>&1
+fc /b tests\notepad.exe tests\out\np_bin.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: notepad -m bin -native difere" & set /a FAIL+=1 ) else ( echo "  OK: notepad -m bin -native byte-identico" & set /a PASS+=1 )
+
+echo === [54] D-19 fatia 2a: DataDirectories remapeados por (secao, offset) ===
+rem O link.exe reordena/funde secoes; dex_patch_dirs tem de remapear a RVA
+rem de cada dir p/ a secao HOMONIMA da rebuildada (a RVA crua apontava p/ a
+rem secao errada e o loader dava 0xC000007B).
+"%DX%" tests\exc.exe -native -r -O tests\out\exc_dirs.exe -o tests\out\exc_dirs.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native exc" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native exc" & set /a PASS+=1 )
+python tests\pe_dirs.py tests\exc.exe tests\out\exc_dirs.exe > tests\out\pe_dirs.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: DataDirectories nao remapeados" & type tests\out\pe_dirs.out & set /a FAIL+=1 ) else ( echo "  OK: dirs exc por (secao,offset)" & set /a PASS+=1 )
+"%DX%" tests\hello.exe -native -r -O tests\out\hello_dirs.exe -o tests\out\hello_dirs.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild hello" & set /a PASS+=1 )
+python tests\pe_dirs.py tests\hello.exe tests\out\hello_dirs.exe >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: dirs hello" & set /a FAIL+=1 ) else ( echo "  OK: dirs hello" & set /a PASS+=1 )
+
+echo === [55] rebuild -s: entry label sempre definido (D-22) ===
+rem Com -s <secao> != secao do entry, a secao do entry sai como dados e o
+rem label_<entry> nunca era definido -> link falhava com LNK2001/exit 5.
+rem O gerador fecha o .asm com `label_<entry> equ label_<secVA> + delta`.
+"%DX%" tests\exc.exe -s .rdata -native -r -O tests\out\sr_nat.exe -o tests\out\sr_nat.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -s .rdata -native (LNK2001)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -s .rdata -native" & set /a PASS+=1 )
+findstr /c:" equ label_" tests\out\sr_nat.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: entry sem equ" & set /a FAIL+=1 ) else ( echo "  OK: entry via equ" & set /a PASS+=1 )
+"%DX%" tests\exc.exe -s .rdata -r -O tests\out\sr_db.exe -o tests\out\sr_db.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -s .rdata (db)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -s .rdata (db)" & set /a PASS+=1 )
+"%DX%" tests\exc.exe -s .text -native -r -O tests\out\sr_txt.exe -o tests\out\sr_txt.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -s .text -native" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -s .text -native" & set /a PASS+=1 )
+findstr /c:" equ label_" tests\out\sr_txt.asm >nul 2>&1
+if errorlevel 1 ( echo "  OK: sem equ redundante (-s .text)" & set /a PASS+=1 ) else ( echo "  FALHA: equ redundante (-s .text)" & set /a FAIL+=1 )
+rem x32: delta 0 nao pode gerar `equ label_X equ label_X` circular
+"%DX%" tests\tiny32.exe -s .rdata -r -O tests\out\sr32.exe -o tests\out\sr32.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild x32 -s .rdata" & set /a FAIL+=1 ) else ( echo "  OK: rebuild x32 -s .rdata" & set /a PASS+=1 )
 
 echo.
 echo =====================================================

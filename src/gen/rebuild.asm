@@ -27,6 +27,7 @@ global dex_patch_dirs
 extern asmbuf_new
 extern asmbuf_append
 extern asmbuf_append_str
+extern asmbuf_append_char
 extern asmbuf_append_u64_hex
 extern asmbuf_free
 extern dex_emit_set_hex
@@ -39,6 +40,10 @@ extern dex_memcpy
 extern dex_memcmp
 extern dex_streq
 extern dex_u64_to_hex
+extern dex_u64_to_dec
+extern g_abs_vas
+extern g_abs_n
+extern g_abs_base
 extern dex_disasm_one
 extern dex_build_operands
 extern dex_emit_insn
@@ -126,11 +131,11 @@ s_dq0   db "    dq 0", 13, 10, 0
 s_dw4   db "    dw ", 0
 s_reloc db ".reloc", 0
 s_lab    db "label_", 0
+s_equ    db " equ ", 0
 s_uscore db "_", 0
 s_dotname db ".", 0
-s_db_pre db '    db "', 0
-s_q34    db '", 34, "', 0
-s_q0     db '", 0', 13, 10, 0
+s_comma  db ", ", 0
+s_c0     db ", 0", 13, 10, 0
 s_dot_o db ".obj", 0
 s_dot_e db ".exe", 0
 s_dot_rb db ".rebuild.exe", 0
@@ -172,6 +177,8 @@ g_pad_ub:   resb 7
 g_bin_img:  resq 1                 ; F3: img p/ .pd_field achar a seção do alvo
 g_spancfg: resq 1                  ; cfg p/ validador de alvo dq (NO_RELOCS)
 g_spanflags: resq 1                ; bit0 nodq: span sai db puro (.reloc: verbatim)
+g_uwbm:    resq 1                  ; R-5.4 estendido (D-19): bitmap de inícios de
+                                   ; UNWIND_INFO da seção em walk_data_sec (0=nada)
 
 section .text
 
@@ -300,16 +307,13 @@ dex_generate_asm:
     test eax, eax
     jnz .oom_free
     ; ---- 3b/D-7: alimenta g_symR (só -native; lookup unificado
-    ; R U runs U ptrs U code p/ dq-pointer, uma busca binária).
+    ; R U runs U ptrs U code p/ dq/dd-pointer, uma busca binária).
     ; Passada A (runs) exige -strings; passada B (ponteiros p/ dados
     ; E código decodificado) vale p/ todo -native (jump-tables).
-    ; x32: spans são 8B (dq) — db fiel (fatia futura: spans 4B).
+    ; x32 usa spans de 4B (dd) — mesma mecanica, stride do arch.
     mov eax, [rbx+DexConfig.flags]
     test eax, DF_NATIVE
     jz .no_cstr
-    mov rax, [rel g_liftctx]
-    cmp dword [rax+PeImage.arch], DEX_ARCH_X64
-    jne .no_cstr
     mov rcx, rbx
     mov rdx, r15
     sub rsp, 32
@@ -331,6 +335,12 @@ dex_generate_asm:
     jz .oom_free
     mov [rel g_rarr], rax
     mov [rel g_rn], rdx
+    ; F5: expõe o R (RVAs ordenados) + base ao emissor p/ o índice simbólico
+    ; x32 (`[nosplit label_<VA>+eax*4]`). Os globais são do emit_nasm.asm.
+    mov [rel g_abs_vas], rax
+    mov [rel g_abs_n], rdx
+    mov rax, [r15+PeImage.image_base]
+    mov [rel g_abs_base], rax
 .no_rarr:
     ; ---- loop de seções ----
     mov edi, [r15+PeImage.num_sections]
@@ -423,6 +433,14 @@ dex_generate_asm:
     jnz .oom_free
     jmp .next_sect
 .walk_data:
+    ; F2/F3 (R-5.4) reemitem .pdata/.xdata simbolicamente, mas isso so e
+    ; valido quando os alvos foram percorridos: a .pdata aponta p/ code VAs
+    ; (RUNTIME_FUNCTION) e a .xdata p/ unwind VAs. Com -s <secao> as demais
+    ; secoes saem db puro (contrato do filtro) e NAO recebem label por-VA ->
+    ; a .pdata referenciava `label_<code VA>` nunca definido (nasm: symbol
+    ; not defined). D-17: nunca emitir simbolo indefinido; na duvida, db.
+    cmp qword [rbx+DexConfig.section_filter], 0
+    jne .wd_plain
     ; F2 (R-5.4): .pdata/.xdata = emissao simbolica (win64; link recalcula RVA)
     lea rcx, [rel s_pdata]
     lea rdx, [r12+PeSection.name]
@@ -438,6 +456,7 @@ dex_generate_asm:
     add rsp, 32
     test eax, eax
     jnz .do_xdata
+.wd_plain:
     mov rcx, rbx
     mov rdx, r15
     mov r8, r14
@@ -476,6 +495,17 @@ dex_generate_asm:
     inc r13d
     jmp .sect
 .free_syms:
+    ; D-22: com -s <secao> diferente da secao do entry + -r, a secao do
+    ; entry sai como dados e o label_<entry> nunca e definido (LNK2001).
+    ; Fecha o .asm com `label_<entry> equ label_<secVA> + delta`.
+    mov rcx, rbx
+    mov rdx, r15
+    mov r8, r14
+    sub rsp, 32
+    call .emit_entry_alias
+    add rsp, 32
+    test eax, eax
+    jnz .oom_free
     ; libera bitmap D + tabela R da passada 1 (existem aqui)
     mov rcx, [rel g_coded]
     sub rsp, 32
@@ -654,6 +684,152 @@ dex_generate_asm:
     add rsp, 32
 .elo_done:
     add rsp, 32
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .emit_entry_alias — rcx=cfg, rdx=img, r8=buf -> eax=0 ok | 1 oom
+; D-22: com -r (win64/win32) e -s <secao> diferente da secao do entry, a
+; secao do entry e emitida como dados (db) e o label_<entry> nunca e
+; definido -> link falha com LNK2001. Fecha o .asm com:
+;   label_<entryVA> equ label_<secVA> + 0x<delta>
+; O label_<secVA> sempre existe (lab0 da secao em db/chunks/bss).
+; Sem -r, modo bin, sem -s ou -s == secao do entry: nada a fazer (o walker
+; de codigo ja define o label).
+;-----------------------------------------------------------------------------
+.emit_entry_alias:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
+
+    mov rbx, rcx                 ; cfg
+    mov r15, rdx                 ; img
+    mov r14, r8                  ; buf
+
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_REBUILD
+    jz .eea_ok
+    mov eax, [rbx+DexConfig.mode]
+    cmp eax, DEX_MODE_BIN
+    je .eea_ok
+    cmp qword [rbx+DexConfig.section_filter], 0
+    je .eea_ok
+
+    mov r12d, [r15+PeImage.entry_point]  ; RVA do entry (32 bits)
+    xor r13d, r13d
+.eea_loop:
+    mov eax, [r15+PeImage.num_sections]
+    cmp r13d, eax
+    jae .eea_ok                  ; nao achou: nao inventa simbolo
+    mov eax, r13d
+    imul eax, SIZEOF_PE_SECTION
+    mov rdx, [r15+PeImage.sections_ptr]
+    add rdx, rax                 ; sec
+    mov eax, [rdx+PeSection.vaddr]
+    cmp r12d, eax
+    jb .eea_next
+    mov ecx, [rdx+PeSection.vsize]
+    mov r8d, [rdx+PeSection.raw_size]
+    cmp ecx, r8d
+    jae .eea_size
+    mov ecx, r8d
+.eea_size:
+    add eax, ecx
+    cmp r12d, eax
+    jae .eea_next
+    ; entry dentro desta secao: -s aponta para ela?
+    mov [rbp-48], rdx            ; sec
+    mov rcx, [rbx+DexConfig.section_filter]
+    lea rdx, [rdx+PeSection.name]
+    sub rsp, 32
+    call .secname_eq
+    add rsp, 32
+    test eax, eax
+    jnz .eea_ok                  ; walker de codigo define o label
+    mov rdx, [rbp-48]            ; sec (call matou volateis)
+    ; entryVA = base + entry_rva
+    mov rax, [r15+PeImage.image_base]
+    mov ecx, r12d
+    add rax, rcx
+    mov [rbp-56], rax
+    ; secVA = base + vaddr
+    mov rax, [r15+PeImage.image_base]
+    mov ecx, [rdx+PeSection.vaddr]
+    add rax, rcx
+    mov [rbp-64], rax
+    ; delta = entry_rva - vaddr
+    mov eax, r12d
+    sub eax, [rdx+PeSection.vaddr]
+    mov [rbp-72], eax
+    test eax, eax
+    jz .eea_ok                  ; delta 0: label_<secVA> ja e o entry
+    ; label_<entry>
+    mov rcx, r14
+    mov rdx, [rbp-56]
+    sub rsp, 32
+    call .emit_label_only
+    add rsp, 32
+    test eax, eax
+    jnz .eea_oom
+    lea rdx, [rel s_equ]
+    mov rcx, r14
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .eea_oom
+    ; label_<sec>
+    mov rcx, r14
+    mov rdx, [rbp-64]
+    sub rsp, 32
+    call .emit_label_only
+    add rsp, 32
+    test eax, eax
+    jnz .eea_oom
+    lea rdx, [rel s_plus0x]
+    mov rcx, r14
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .eea_oom
+    ; delta em hex minimo
+    mov rcx, r14
+    mov edx, [rbp-72]
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .eea_oom
+    lea rdx, [rel s_crlf2]
+    mov rcx, r14
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .eea_oom
+    jmp .eea_ok
+.eea_next:
+    inc r13d
+    jmp .eea_loop
+.eea_ok:
+    xor eax, eax
+    jmp .eea_ret
+.eea_oom:
+    mov eax, 1
+.eea_ret:
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
     pop r12
     pop rbx
     pop rbp
@@ -977,11 +1153,11 @@ dex_generate_asm:
     jne .cs_adv
     cmp byte [rax+Insn.legacy67], 0
     jne .cs_adv                  ; addr16: rm101 = [DI], não absoluto
+    cmp byte [rax+Insn.has_sib], 0
+    jne .cs_abs32sib             ; SIB (rm=100): ramo próprio (D2/F5)
     movzx ecx, byte [rax+Insn.modrm]
     and ecx, 0xC7
     cmp ecx, 0x05
-    jne .cs_adv
-    cmp byte [rax+Insn.has_sib], 0
     jne .cs_adv
     mov eax, [rax+Insn.disp]     ; VA alvo absoluta (low32; zero-estende)
     cmp rax, rdi
@@ -1013,6 +1189,54 @@ dex_generate_asm:
     inc r8d
     jmp .cs_abs_l
 .cs_abs_hit:
+    mov rcx, [rel g_symR]
+    mov rdx, [rbp-120]
+    lea r8, [rel s_dotname]
+    sub rsp, 32
+    call symtab_insert_va
+    add rsp, 32
+    test rax, rax
+    jz .cs_fail
+    jmp .cs_adv
+;-----------------------------------------------------------------------------
+; .cs_abs32sib — x32: MEM absoluto COM SIB (base=101 = sem base), ex.
+; `jmp dword [jtab+eax*4]` / `mov ecx,[jtab2+edx*4]`. O disp32 é uma VA
+; absoluta; se cai numa seção de dados labelável (ou em código decodificado),
+; entra em R para o emissor poder sair `[nosplit label_<VA>+<idx>*<scale>]`.
+; rax=&g_insn; rdi=base, r15=img, [rbp-112]=len intactos.
+;-----------------------------------------------------------------------------
+.cs_abs32sib:
+    cmp byte [rax+Insn.disp_size], 4
+    jne .cs_adv
+    cmp byte [rax+Insn.legacy67], 0
+    jne .cs_adv                  ; addr16: sem forma
+    movzx ecx, byte [rax+Insn.modrm]
+    and ecx, 0xC7
+    cmp ecx, 0x04                ; mod=00 rm=100 (SIB)
+    jne .cs_adv
+    movzx ecx, byte [rax+Insn.sib]
+    and ecx, 7                   ; SIB base = bits 2-0
+    cmp ecx, 5                   ; base=101: sem base (disp32 absoluto)
+    jne .cs_adv
+    mov eax, [rax+Insn.disp]     ; VA absoluta (low32; zero-estende)
+    cmp rax, rdi
+    jb .cs_adv                   ; abaixo da base: fora do image
+    sub rax, rdi                 ; trva
+    mov [rbp-120], rax           ; spill (calls matam voláteis)
+    mov rcx, r15
+    mov rdx, rax
+    sub rsp, 32
+    call .cs_in_code
+    add rsp, 32
+    test eax, eax
+    jnz .cs_adv                  ; em código: D cobre, R não
+    mov rcx, [rbp-120]
+    mov rdx, r15                 ; img
+    sub rsp, 32
+    call .ptr_tgt_ok
+    add rsp, 32
+    test eax, eax
+    jz .cs_adv
     mov rcx, [rel g_symR]
     mov rdx, [rbp-120]
     lea r8, [rel s_dotname]
@@ -1876,17 +2100,32 @@ dex_generate_asm:
     mov ecx, [rbx+DexConfig.flags]
     test ecx, DF_NATIVE
     jz .wds_plain_db            ; sem -native: byte-idêntico ao legado
-    mov rcx, [rel g_liftctx]     ; (ecx morto: flags já testadas)
-    cmp dword [rcx+PeImage.arch], DEX_ARCH_X64
-    je .wds_plain_chunks
-    mov qword [rel g_spanflags], 1   ; D2 x32: chunks p/ labels, corpos db
+    ; R-5.4 estendido (D-19): seção com inícios de UNWIND_INFO (o MS link
+    ; funde o .xdata na .rdata) → caminho unwind-aware: cada UNWIND_INFO sai
+    ; simbólico (`label_` + `dd ... wrt ..imagebase`) e o resto em chunks
+    ; (R-labels/spans preservados). Sem bitmap: chunks normais.
+    ; Com -s ativo fica desligado: os alvos do unwind (handlers) podem estar
+    ; em seção filtrada-fora (sem label) — D-17/D-21 (na dúvida, db).
+    cmp qword [rbx+DexConfig.section_filter], 0
+    jne .wds_plain_chunks
+    mov rcx, r15                ; img
+    mov rdx, r12                ; sec
+    sub rsp, 32
+    call .uw_bitmap
+    add rsp, 32
+    mov [rel g_uwbm], rax
+    test rax, rax
+    jnz .wds_plain_uw
+    ; x64 e x32 usam chunks com spans (o stride vem do arch no .wds_emit_span:
+    ; 8 = dq, 4 = dd). Antes o x32 desligava os spans (g_spanflags=1) porque o
+    ; emissor só sabia 8B; agora `dd label_` vale p/ os dois.
 .wds_plain_chunks:
     ; R-6.4 2b: fatia [0,raw) nos alvos R (labels reais p/ refs RIP).
     mov rcx, r14                ; buf
     mov rdx, [rbp-88]           ; fptr
     mov r8, [rbp-72]            ; va_base
     xor r9d, r9d                ; k0 = 0
-    mov r10d, eax               ; k1 = raw
+    mov r10d, [rbp-80]          ; k1 = raw (eax foi clobberado pelo .uw_bitmap)
     mov r11, [rbp-72]           ; lab0 = va_base (igual ao legado)
     mov rax, [rel g_liftctx]     ; img p/ chunks (via global dedicada)
     mov [rel g_chunkimg], rax
@@ -1896,6 +2135,85 @@ dex_generate_asm:
     test eax, eax
     jnz .wds_fail
     jmp .wds_ok
+    ;--------------------------------------------------------------------
+    ; .wds_plain_uw — trecho de dados com inícios de UNWIND_INFO (R-5.4
+    ; estendido/D-19). Fatia em [cur, next-mark): gap via .wds_chunks
+    ; (R-labels/spans) e cada início marcado via .uw_emit (simbólico).
+    ; r13d=cur; [rbp-96]=next; g_uwbm=bitmap (liberado no fim).
+    ;--------------------------------------------------------------------
+.wds_plain_uw:
+    mov byte [rel g_unwind_bin], 0   ; asm/win64: `wrt ..imagebase`
+    xor r13d, r13d                   ; cur = 0
+    mov rax, [rel g_liftctx]
+    mov [rel g_chunkimg], rax
+.uwpl_l:
+    mov ecx, [rbp-80]                ; limit = raw
+    mov edx, r13d                     ; start = cur
+    sub rsp, 32
+    call .uw_next_bit
+    add rsp, 32
+    mov [rbp-96], eax                 ; next
+    cmp eax, r13d
+    je .uwpl_wind                     ; já é marca: unwind
+    ; gap [cur, next) -> chunks (R-labels/spans preservados)
+    mov rcx, r14                      ; buf
+    mov rdx, [rbp-88]                 ; fptr
+    mov r8, [rbp-72]                  ; va_base
+    mov r9d, r13d                     ; k0 = cur
+    mov r10d, [rbp-96]                ; k1 = next
+    mov r11, [rbp-72]
+    mov eax, r13d
+    add r11, rax                      ; lab0 = va_base + cur
+    sub rsp, 32
+    call .wds_chunks
+    add rsp, 32
+    test eax, eax
+    jnz .uwpl_fail
+    mov r13d, [rbp-96]                ; cur = next (marca)
+.uwpl_wind:
+    cmp r13d, [rbp-80]
+    jae .uwpl_done                    ; fim da seção
+    mov rcx, r14                      ; buf
+    mov rdx, r15                      ; img
+    mov r8, r12                       ; sec
+    mov r9d, r13d                     ; off
+    sub rsp, 32
+    call .uw_emit
+    add rsp, 32
+    cmp rax, -1
+    je .uwpl_fail                     ; OOM
+    test rax, rax
+    jz .uwpl_db1                      ; não decodificável: 1 byte db
+    add r13d, eax                     ; cur += total
+    jmp .uwpl_l
+.uwpl_db1:
+    mov rdx, [rbp-88]
+    mov eax, r13d
+    add rdx, rax
+    mov r8d, 1
+    mov rcx, r14
+    mov r9, -1                        ; sem label (igual ao .gbs_uw_dbb)
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .uwpl_fail
+    inc r13d
+    jmp .uwpl_l
+.uwpl_done:
+    mov rcx, [rel g_uwbm]
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+    mov qword [rel g_uwbm], 0
+    jmp .wds_ok
+.uwpl_fail:
+    mov rcx, [rel g_uwbm]
+    sub rsp, 32
+    call dex_free
+    add rsp, 32
+    mov qword [rel g_uwbm], 0
+    jmp .wds_fail
 .wds_empty:
     ; R-8.1: seção sem bytes no arquivo. Com vsize>0 (bss) reserva com
     ; resb + labels nos alvos R (.wds_bss); com vsize==0, como antes (nada).
@@ -2220,6 +2538,29 @@ dex_generate_asm:
     mov eax, edx
     shr eax, cl
     and eax, 1
+    ret
+
+;-----------------------------------------------------------------------------
+; .uw_next_bit — ecx=limit(raw), edx=start -> eax = menor offset marcado em
+; [start, limit) no bitmap g_uwbm; ou ecx (limit) se não houver. Folha;
+; clobber eax/edx/r8/r9. (R-5.4 estendido/D-19: fatiar em inícios de unwind.)
+;-----------------------------------------------------------------------------
+.uw_next_bit:
+    mov eax, edx
+.unb_l:
+    cmp eax, ecx
+    jae .unb_done
+    mov r8, [rel g_uwbm]
+    mov edx, eax
+    shr edx, 3
+    movzx edx, byte [r8+rdx]
+    mov r9d, eax
+    and r9d, 7
+    bt edx, r9d
+    jc .unb_done
+    inc eax
+    jmp .unb_l
+.unb_done:
     ret
 
 ;-----------------------------------------------------------------------------
@@ -3342,6 +3683,8 @@ dex_generate_asm:
     ret
 
 ; .str_run — rcx=p, edx=restante -> rax=run_len (>=8, seguido de NUL) ou 0
+; Aceita CR(13)/LF(10) DENTRO do run (o 1o byte tem de ser imprimivel);
+; qualquer outro nao-imprimivel (fora CR/LF/NUL) rejeita o run.
 .str_run:
     push rbx
     mov rbx, rcx
@@ -3355,10 +3698,20 @@ dex_generate_asm:
     cmp cl, 126
     jbe .sr_nx
 .sr_ck:
+    test cl, cl
+    jz .sr_end                 ; NUL: fecha o run
+    cmp cl, 13
+    je .sr_nl
+    cmp cl, 10
+    je .sr_nl
+    jmp .sr_no                 ; outro nao-imprimivel: rejeita
+.sr_nl:
+    test eax, eax
+    jz .sr_no                  ; run nao comeca com CR/LF
+    jmp .sr_nx
+.sr_end:
     cmp eax, 8
     jb .sr_no
-    test cl, cl
-    jnz .sr_no
     pop rbx
     ret
 .sr_nx:
@@ -3510,20 +3863,32 @@ dex_generate_asm:
     inc r13d
     jmp .css_ka
 .css_passb:
-    ; ---- passada B: alvos de ponteiros (todo k; qword==VA válida?) ----
+    ; ---- passada B: alvos de ponteiros (todo k; span==VA válida?) ----
+    ; stride = 8 (x64: qword/dq) | 4 (x32: dword/dd): mesmos spans do emitter.
+    mov dword [rbp-104], 8
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X32
+    jne .css_pb_st
+    mov dword [rbp-104], 4
+.css_pb_st:
     mov eax, [rbp-88]
-    cmp eax, 8
+    cmp eax, [rbp-104]
     jb .css_next
     xor r13d, r13d               ; k
 .css_kb:
     mov eax, [rbp-88]
-    sub eax, 8
+    sub eax, [rbp-104]
     cmp r13d, eax
     ja .css_next
     mov rax, [rbp-80]
     mov ecx, r13d
     add rax, rcx
-    mov rax, [rax]               ; v (mov desalinhado: seguro em x64)
+    cmp dword [rbp-104], 4
+    je .css_kb_l32
+    mov rax, [rax]               ; v qword (mov desalinhado: seguro em x64)
+    jmp .css_kb_lv
+.css_kb_l32:
+    mov eax, [rax]               ; v dword (zero-estende; x32)
+.css_kb_lv:
     mov rcx, [rbp-96]            ; base
     cmp rax, rcx
     jb .css_kb1
@@ -3915,21 +4280,35 @@ dex_generate_asm:
     mov rax, [rel g_chunkimg]
     mov rax, [rax+PeImage.image_base]
     mov [rbp-72], rax            ; base
+    ; stride dos spans: 8 (x64: qword/`dq`) | 4 (x32: dword/`dd`).
+    mov rax, [rel g_chunkimg]
+    mov dword [rbp-88], 8
+    cmp dword [rax+PeImage.arch], DEX_ARCH_X32
+    jne .wsp_st_ok
+    mov dword [rbp-88], 4
+.wsp_st_ok:
     cmp qword [rel g_spanflags], 0
     jne .wsp_db
     cmp qword [rel g_rn], 0
     je .wsp_db
-    cmp r13d, 8
+    mov eax, [rbp-88]
+    cmp r13d, eax
     jb .wsp_db
     xor r14d, r14d               ; o (offset)
     xor r15d, r15d               ; seg (início da peça pendente)
     mov rsi, 1                   ; first (1ª peça leva curlab)
 .wsp_l:
     mov eax, r14d
-    add eax, 8
+    add eax, [rbp-88]            ; + stride
     cmp eax, r13d
     ja .wsp_flush
-    mov rax, [r12+r14]           ; v (mov desalinhado: seguro em x64)
+    cmp dword [rbp-88], 4
+    je .wsp_ld32
+    mov rax, [r12+r14]           ; v qword (mov desalinhado: seguro em x64)
+    jmp .wsp_ld_ok
+.wsp_ld32:
+    mov eax, [r12+r14]           ; v dword (zero-estende; x32)
+.wsp_ld_ok:
     cmp rax, [rbp-72]
     jb .wsp_next
     mov rcx, [rbp-72]
@@ -4011,8 +4390,14 @@ dex_generate_asm:
     jnz .wsp_fail
     mov rsi, 0
 .wsp_hit_dq:
-    ; "    dq label_<hexVA>\r\n" (VA alvo em [rbp-80]; mesmo hex do label)
+    ; "    dq|dd label_<hexVA>\r\n" (VA alvo em [rbp-80]; mesmo hex do label)
+    cmp dword [rbp-88], 4
+    je .wsp_hit_dd
     lea rdx, [rel s_dqpre]
+    jmp .wsp_hit_dgo
+.wsp_hit_dd:
+    lea rdx, [rel s_dd4]
+.wsp_hit_dgo:
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str
@@ -4042,9 +4427,9 @@ dex_generate_asm:
     test eax, eax
     jnz .wsp_fail
     mov eax, r14d
-    add eax, 8
-    mov r15d, eax                ; seg = o+8
-    mov r14d, eax                ; o += 8 (guloso: slots não sobrepõem)
+    add eax, [rbp-88]            ; o += stride (guloso: slots não sobrepõem)
+    mov r15d, eax                ; seg = o+stride
+    mov r14d, eax
     jmp .wsp_l
 .wsp_next:
     inc r14d
@@ -4095,9 +4480,13 @@ dex_generate_asm:
     pop rbp
     ret
 
-; dex_emit_qstr — rcx=buf, rdx=ptr, r8d=len -> '    db "...", 0' (escapa ")
-; File-scope (usado pelos geradores win64 `dex_generate_asm` e bin
-; `dex_generate_bin` — R-5.3 F4). Ret: eax = 0/1 (do ultimo append).
+; dex_emit_qstr — rcx=buf, rdx=ptr, r8d=len -> `    db "...", 0`
+; Escapa `"` (-> `, 34`), CR (-> `, 13`) e LF (-> `, 10`): as aspas são
+; fechadas em volta de cada escape e reabertas antes do proximo byte cru,
+; então tudo fica numa unica linha NASM, sem `""` (bytes exatos).
+; File-scope (usado por `dex_generate_asm` e `dex_generate_bin` — R-5.3 F4).
+; Ret: eax = 0/1. Frame: 4 pushes (32) + sub 112 = 144 ≡ 0.
+; Slots: [rbp-48]byte [rbp-56]open [rbp-64]valor [rbp-104]tmp-dec(21B).
 dex_emit_qstr:
     push rbp
     mov rbp, rsp
@@ -4105,14 +4494,22 @@ dex_emit_qstr:
     push r12
     push r13
     push r14
-    sub rsp, 32
+    sub rsp, 112
     mov rbx, rcx
     mov r12, rdx
     mov r13d, r8d
-    lea rdx, [rel s_db_pre]
+    mov qword [rbp-56], 1        ; open = 1 (a aspa inicial já vem no prefixo)
+    lea rdx, [rel s_db4]         ; "    db "
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .eq_fail
+    mov rcx, rbx
+    mov edx, '"'
+    sub rsp, 32
+    call asmbuf_append_char
     add rsp, 32
     test eax, eax
     jnz .eq_fail
@@ -4122,7 +4519,32 @@ dex_emit_qstr:
     jae .eq_end
     movzx eax, byte [r12+r14]
     cmp al, '"'
-    je .eq_esc
+    je .eq_sp34
+    cmp al, 13
+    je .eq_sp13
+    cmp al, 10
+    je .eq_sp10
+    ; byte cru: reabre as aspas se estiverem fechadas (precisa do `, ` que
+    ; separa o valor numerico do escape anterior do novo literal)
+    cmp qword [rbp-56], 0
+    jne .eq_raw
+    lea rdx, [rel s_comma]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .eq_fail
+    mov rcx, rbx
+    mov edx, '"'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .eq_fail
+    mov qword [rbp-56], 1
+.eq_raw:
+    movzx eax, byte [r12+r14]    ; recarrega (os calls acima matam al/eax)
     mov [rbp-48], al
     lea rdx, [rbp-48]
     mov rcx, rbx
@@ -4134,24 +4556,67 @@ dex_emit_qstr:
     jnz .eq_fail
     inc r14d
     jmp .eq_l
-.eq_esc:
-    lea rdx, [rel s_q34]
+.eq_sp34:
+    mov eax, 34
+    jmp .eq_sp
+.eq_sp13:
+    mov eax, 13
+    jmp .eq_sp
+.eq_sp10:
+    mov eax, 10
+.eq_sp:
+    mov [rbp-64], rax            ; valor (spill: calls matam voláteis)
+    cmp qword [rbp-56], 0
+    je .eq_spv
+    mov rcx, rbx
+    mov edx, '"'                 ; fecha as aspas
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .eq_fail
+    mov qword [rbp-56], 0
+.eq_spv:
+    lea rdx, [rel s_comma]
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str
     add rsp, 32
     test eax, eax
     jnz .eq_fail
+    lea rdx, [rbp-104]           ; tmp decimal (21 B)
+    mov rcx, [rbp-64]
+    sub rsp, 32
+    call dex_u64_to_dec          ; rax = len
+    add rsp, 32
+    mov r8, rax
+    lea rdx, [rbp-104]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append
+    add rsp, 32
+    test eax, eax
+    jnz .eq_fail
     inc r14d
     jmp .eq_l
 .eq_end:
-    lea rdx, [rel s_q0]
+    cmp qword [rbp-56], 0
+    je .eq_end0
+    mov rcx, rbx
+    mov edx, '"'                 ; fecha as aspas finais
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .eq_fail
+.eq_end0:
+    lea rdx, [rel s_c0]
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str
     add rsp, 32
 .eq_fail:
-    add rsp, 32
+    add rsp, 112
     pop r14
     pop r13
     pop r12
@@ -4850,8 +5315,26 @@ dex_patch_dirs:
     jne .pd_next
     cmp dword [rdi+rax+4], 0
     jne .pd_next
-    mov [rdi+rax], ecx         ; patch direto na memória (rw)
-    mov [rdi+rax+4], edx
+    ; D-19 f2a: remapeia a RVA pela (seção, offset) homólogas na rebuildada.
+    ; O link.exe reordena/funde seções; copiar a RVA crua apontava p/ a seção
+    ; errada (ex.: IMPORT 0x10000 caía na `.bss` nova) -> 0xC000007B.
+    mov [rbp-64], r10              ; i (volátil: morre no call)
+    mov [rbp-72], r11              ; min
+    mov rdx, r15                   ; orig img
+    mov r8, r12                    ; rebuilt base
+    ; ecx = RVA original (já carregada)
+    sub rsp, 32
+    call .pd_remap
+    add rsp, 32
+    mov r10, [rbp-64]
+    mov r11, [rbp-72]
+    test eax, eax
+    jz .pd_next                    ; não remapeável: deixa 0 (nunca RVA velha)
+    mov ecx, r10d
+    shl ecx, 3                     ; i*8
+    mov [rdi+rcx], eax             ; RVA nova
+    mov edx, [rsi+rcx+4]           ; size original
+    mov [rdi+rcx+4], edx
 .pd_next:
     inc r10d
     jmp .pd_l
@@ -4894,6 +5377,126 @@ dex_patch_dirs:
     pop r12
     pop rsi
     pop rdi
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .pd_remap — rcx=RVA original, rdx=orig img (PeImage*), r8=base rebuildada
+;   -> eax = RVA da MESMA (seção, offset) na rebuildada, ou 0 se não houver.
+; O link.exe reordena/funde seções: a RVA crua não vale, (nome, offset) sim.
+; Compara o nome com a sanitização do gerador (`/NNN` -> `_NNN`).
+; Frame: 7 pushes (56) + sub 56 = 112 ≡ 0.
+; Slots: [rbp-64]osecs [rbp-72]off [rbp-80]bnsec.
+;-----------------------------------------------------------------------------
+.pd_remap:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 56
+    mov r15, rdx                 ; orig img
+    mov r12, r8                  ; rebuilt base
+    mov r13d, ecx                ; RVA original
+    ; ---- seção original que contém a RVA ----
+    mov rax, [r15+PeImage.sections_ptr]
+    mov [rbp-64], rax
+    mov ebx, [r15+PeImage.num_sections]
+    xor r10d, r10d
+.pr_o:
+    cmp r10d, ebx
+    jae .pr_none
+    mov eax, r10d
+    imul eax, SIZEOF_PE_SECTION
+    mov rcx, [rbp-64]
+    lea rsi, [rcx+rax]           ; osec
+    mov eax, [rsi+PeSection.vsize]
+    mov ecx, [rsi+PeSection.raw_size]
+    cmp eax, ecx
+    jae .pr_osp
+    mov eax, ecx
+.pr_osp:
+    test eax, eax
+    jz .pr_on
+    mov ecx, [rsi+PeSection.vaddr]
+    cmp r13d, ecx
+    jb .pr_on
+    mov edx, r13d
+    sub edx, ecx                 ; off dentro da seção original
+    cmp edx, eax
+    jae .pr_on
+    mov [rbp-72], edx
+    jmp .pr_find
+.pr_on:
+    inc r10d
+    jmp .pr_o
+.pr_none:
+    xor eax, eax
+    jmp .pr_ret
+    ; ---- seção rebuildada de nome equivalente ----
+.pr_find:
+    mov r14d, [r12+0x3C]         ; e_lfanew (zero-estendido)
+    movzx ecx, word [r12+r14+6]  ; nº seções rebuildadas
+    mov [rbp-80], ecx
+    movzx ecx, word [r12+r14+20] ; SizeOfOptionalHeader
+    lea rdi, [r12+r14+24]
+    add rdi, rcx                 ; tabela de seções rebuildada
+    xor r10d, r10d
+.pr_b:
+    cmp r10d, [rbp-80]
+    jae .pr_none
+    mov eax, r10d
+    imul eax, 40
+    lea rdx, [rdi+rax]           ; bsec
+    xor r8d, r8d                 ; k
+.pr_cmp:
+    cmp r8d, 8
+    jae .pr_hit
+    movzx ecx, byte [rsi+r8+PeSection.name]  ; nome original
+    movzx eax, byte [rdx+r8]                 ; nome rebuildado
+    test ecx, ecx
+    jz .pr_cmp_end
+    cmp ecx, '/'
+    jne .pr_cmp_go
+    mov ecx, '_'                 ; sanitiza `/NNN` -> `_NNN`
+.pr_cmp_go:
+    cmp eax, ecx
+    jne .pr_bn
+    inc r8d
+    jmp .pr_cmp
+.pr_cmp_end:
+    test eax, eax                ; original terminou: rebuildado também
+    jnz .pr_bn
+.pr_hit:
+    mov ecx, [rdx+8]             ; VirtualSize
+    mov r8d, [rdx+16]            ; SizeOfRawData
+    cmp ecx, r8d
+    jae .pr_hit_sp
+    mov ecx, r8d
+.pr_hit_sp:
+    test ecx, ecx
+    jz .pr_bn
+    cmp [rbp-72], ecx
+    jae .pr_bn                   ; offset fora da seção rebuildada
+    mov eax, [rdx+12]            ; VirtualAddress
+    add eax, [rbp-72]
+    jmp .pr_ret
+.pr_bn:
+    inc r10d
+    jmp .pr_b
+.pr_ret:
+    add rsp, 56
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
     pop rbx
     pop rbp
     ret
