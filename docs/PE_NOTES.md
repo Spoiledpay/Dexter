@@ -540,8 +540,62 @@ reemitida simbolicamente — `Start/End` → `.rdata+0x1968` (o link fundiu a
 `AddressOfCallBacks` → `.CRT+0x38`. `LNK4210` (`.CRT` existe) é aviso do
 link, não a falha.
 
-Ferramentas novas (oráculos, nunca executam entrada não-confiável):
-`tests/secdump.py` (seções/headers COFF+PE, `--diff` com flags decodificadas),
-`tests/dbg_probe.py` (depurador via `WaitForDebugEvent`: exceção, RIP, AV
-op/acesso, registradores, stack), `tests/rip_audit.py` (sites `db` com
-RIP-relative congelado, por seção-alvo e mnemônico).
+Ferramentas da fatia (oráculos, nunca executam entrada não-confiável):
+`tests/secdump.py` (seções/headers COFF+PE, `--diff` com flags),
+`tests/dbg_probe.py` (depurador via `WaitForDebugEvent`: exceção fatal, RIP,
+AV op/acesso, registradores, pilha e resolução `módulo+offset`),
+`tests/rip_audit.py` (disp32 congelado, por seção-alvo/mnemônico),
+`tests/label_drift.py` (comprimento por label via listing do nasm) e
+`tests/ptr_audit.py` (qword VA congelado).
+
+## 28. D-19 fatia 2c — fix: disp32 RIP relocável, REX exato, `bss` nobits
+
+Implementação do que a §27 diagnosticou, em `src/disasm/emit_nasm.asm`
+(`dex_emit_insn` kind 5) e `src/gen/rebuild.asm` (`.wcs_emit_db` decide,
+`section` classe).
+
+**Emissão.** Quando a instrução cai em `db` e tem `disp32` RIP-relative com
+alvo rotulado, o emissor imprime o campo como relocação:
+
+```
+label_1400028D0:
+    db 0x48, 0x8B, 0x05
+    dd label_140010440 - $ - 4  ; mov
+```
+
+Se houver imediato depois do disp, a expressão vira `- $ - 4 - 0x<imm>`
+(o disp é relativo ao **fim** da instrução) e o imediato sai em `db` na
+linha seguinte. O nasm emite `IMAGE_REL_AMD64_REL32` e o `link.exe`
+recalcula. `-m bin` fica fora do kind 5 de propósito: lá o layout é
+preservado, então o disp congelado já está correto (`fc /b` intacto).
+
+Escolha do alvo (direção segura, D-17): só emite `dd` quando o label
+existe — alvo de dados via `.ptr_tgt_ok` (R) ou alvo de código via
+`.code_tgt_ok` (bit D). Sem label, `db` puro (limite medido pelo
+`rip_audit.py`: `notepad` 1238 casos).
+
+**Segundo bug, achado pelo `label_drift.py`:** `call|jmp [mem]` com
+REX.W/B saía 1 byte menor (o nasm descarta o REX redundante) e deslocava
+todos os labels seguintes — o ponteiro do `.CRT` do `exc` caía em
+`label_1400018C0 - 1`. Guard: `has_rex != 0` nesses kinds → `db` (bytes
+preservados) + kind 5 (disp relocalizado).
+
+**Terceiro:** seção sem bytes no arquivo (`.bss`) saía `section .bss data`
+(progbits) → `-w+zeroing` em cada `resb` e `LNK4078`. Agora
+`CNT_UNINIT`/`raw==0 && vsize>0` → classe `bss` (nobits). O `link.exe`
+funde a `.bss` na `.data` com `vsize` além do `raw` — o loader zero-fill,
+que é exatamente a semântica original.
+
+Avisos que **permanecem** e são do link, não do gerador: `LNK4078` de
+`.idata` (o `link.exe` sintetiza a própria seção de imports além da nossa;
+a nossa é a que o DataDirectory aponta e o loader resolve — `var64` roda) e
+`LNK4210` (`.CRT` de MinGW não é init-array do MSVC).
+
+**Resultado medido:** `exc` 42→0 sites congelados, `label_drift` 0,
+`.CRT` byte-idêntico, `var64.exe -native -r` **roda exit 0** (era
+`0xC0000005`); `notepad` 14 corrigíveis → 0 (1238 seguem sem label pelo
+`.data` tail). **Limite novo:** as tabelas de exceção C++ do GCC
+(`.xdata`/LSDA + seções `/NNN`) usam encodings pcrel; movidas pelo link,
+os offsets relativos não têm relocação e o unwinder salta para endereço
+inválido (`exc` agora falha dentro de `libstdc++-6.dll`). O caminho fiel
+para esse PE segue `-m bin -native` (exit 42).

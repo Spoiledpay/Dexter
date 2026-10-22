@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-21T20:27:19.9099386-03:00
+updated_at: 2026-10-21T21:09:42.5815686-03:00
 files:
     include\dexter.inc:
         imports:
@@ -368,11 +368,12 @@ files:
             - IR_CALLIMP
             - IR_JMP
             - IR_JMPIMP
+            - Insn.has_rex
             - ERR_ARGS
         package: ""
-        size: 4978
-        modified_at: 2026-10-07T21:47:28.3816337-03:00
-        hash: 2aeba3e3fc3a6551a2a234e42d08976453b75827ef66a71998ede77c4a529d8d
+        size: 5306
+        modified_at: 2026-10-21T21:03:19.6495632-03:00
+        hash: 2a7798689fa6221a24392c24378f7e3fa458883a02a2c7c8bcbf9327ddb7e8be
     src\back\lift.asm:
         imports:
             - dexter.inc
@@ -1201,6 +1202,10 @@ files:
             - s_relpre
             - s_crlf
             - s_colon_nl
+            - s_dd_rip
+            - s_rel32_4
+            - s_minus0x
+            - s_crlf_db
             - s_call_rel
             - s_jmp_rel
             - s_call_abs
@@ -1266,8 +1271,11 @@ files:
             - s_cmpsq
             - s_nop
             - Insn.address
+            - Insn.has_rex
             - Insn.addr_mode
             - Insn.length
+            - Insn.disp_size
+            - Insn.imm_size
             - Insn.raw
             - Insn.mne
             - Insn.opcode_len
@@ -1281,7 +1289,6 @@ files:
             - Insn.op1
             - Insn.op2
             - Insn.rep
-            - Insn.has_rex
             - Insn.rex
             - Insn.legacy66
             - Insn.legacy67
@@ -1291,19 +1298,17 @@ files:
             - DEX_OP_SEG
             - DexOp.size
             - DexOp.reg
-            - Insn.imm_size
             - DexOp.val
             - DexOp.base
             - DEX_NOBASE
             - DexOp.seg
             - DexOp.index
-            - Insn.disp_size
             - Insn.has_sib
             - DexOp.scale
         package: ""
-        size: 44888
-        modified_at: 2026-10-19T18:37:31.6755138-03:00
-        hash: b4a0ca10b424e401b591a05d46fcebde54a41f39d77f9bbce5d62e1233727149
+        size: 48632
+        modified_at: 2026-10-21T20:50:51.7163435-03:00
+        hash: 36d5a561742b4fa14ead5d87ffc2327b851c737976a60c5060960cd235c374ba
     src\disasm\modrm.asm:
         imports:
             - dexter.inc
@@ -2159,6 +2164,7 @@ files:
             - s_sect
             - s_code
             - s_data
+            - s_bss
             - s_rdata
             - s_crlf2
             - s_dd4
@@ -2315,14 +2321,15 @@ files:
             - PeSection.characterist
             - IMAGE_SCN_CNT_CODE
             - IMAGE_SCN_MEM_EXECUTE
+            - IMAGE_SCN_CNT_UNINITIALIZED_DATA
+            - PeSection.raw_size
+            - PeSection.vsize
             - IMAGE_SCN_MEM_WRITE
             - DexConfig.section_filter
             - DexConfig.output_asm
             - DF_ASTDUMP
             - DF_REBUILD
             - PeSection.vaddr
-            - PeSection.vsize
-            - PeSection.raw_size
             - PeImage.file_buffer
             - DexConfig.has_start
             - DexConfig.start_rva
@@ -2358,6 +2365,7 @@ files:
             - DexIR.tva
             - IRT_CODE
             - ERR_OOM
+            - Insn.address
             - PeImage.opt_header
             - OH64_SECTION_ALIGN
             - DEX_ARCH_X64
@@ -2393,9 +2401,9 @@ files:
             - dex_generate_asm.uw_emit
             - DF_QUIET
         package: ""
-        size: 212515
-        modified_at: 2026-10-21T08:42:11.6663394-03:00
-        hash: 300990c7aeb12e898d5b5049862a7b145a7f6cefe4de714bb1e87a6ee84115e5
+        size: 214927
+        modified_at: 2026-10-21T20:54:55.9255473-03:00
+        hash: c41350df6a6b47a020bbe244c5cd630b1b3fbafcd8cc5ddf8a3972c2001ce92c
     src\gen\strings.asm:
         imports:
             - dexter.inc
@@ -3136,6 +3144,97 @@ files:
         size: 6344
         modified_at: 2026-10-07T22:15:47.7198513-03:00
         hash: ad2e69590f096e078c5425c831bd0d6dacca9e6882c1150a199d76ba0c391250
+    tests\dbg_probe.py:
+        imports:
+            - ctypes
+            - ctypes.wintypes
+            - struct
+            - sys
+            - secdump
+        functions:
+            - rd64
+            - read_ctx
+            - describe_seen
+            - describe_mod
+            - describe
+            - probe
+            - main
+            - STARTUPINFOA
+            - PROCESS_INFORMATION
+            - EXCEPTION_RECORD
+            - EXCEPTION_DEBUG_INFO
+            - CREATE_PROCESS_DEBUG_INFO
+            - LOAD_DLL_DEBUG_INFO
+            - EXIT_PROCESS_DEBUG_INFO
+            - _U
+            - DEBUG_EVENT
+        calls:
+            - STARTUPINFOA
+            - POINTER
+            - PROCESS_INFORMATION
+            - EXCEPTION_RECORD
+            - EXCEPTION_DEBUG_INFO
+            - CREATE_PROCESS_DEBUG_INFO
+            - LOAD_DLL_DEBUG_INFO
+            - EXIT_PROCESS_DEBUG_INFO
+            - _U
+            - DEBUG_EVENT
+            - WinDLL
+            - rd64
+            - unpack_from
+            - read_ctx
+            - create_string_buffer
+            - addressof
+            - memset
+            - memmove
+            - pack
+            - GetThreadContext
+            - c_void_p
+            - OSError
+            - get_last_error
+            - string_at
+            - describe_seen
+            - join
+            - describe_mod
+            - describe
+            - locate
+            - probe
+            - load
+            - CreateFileA
+            - sizeof
+            - encode
+            - CreateProcessA
+            - byref
+            - CloseHandle
+            - print
+            - falhou
+            - WaitForDebugEvent
+            - TerminateProcess
+            - ms
+            - K32GetMappedFileNameA
+            - len
+            - decode
+            - rsplit
+            - append
+            - range
+            - min
+            - OpenThread
+            - c_size_t
+            - ReadProcessMemory
+            - ContinueDebugEvent
+            - DebugActiveProcessStop
+            - DWORD
+            - GetExitCodeProcess
+            - tratada
+            - get
+            - enumerate
+            - main
+            - int
+            - exit
+        package: ""
+        size: 16005
+        modified_at: 2026-10-21T20:53:04.5478247-03:00
+        hash: 6b0531df983b343f8b4dfa728bdb490b56861a1e3ea0422acdb8eeccec5a026f
     tests\exc_cpp.cpp:
         imports:
             - cstdio
@@ -3280,6 +3379,43 @@ files:
         size: 1317
         modified_at: 2026-10-13T18:47:06.2487785-03:00
         hash: fd6da789df988a4e0fa3564eef7d792d418836903440072979fd11d6bac0e7ca
+    tests\label_drift.py:
+        imports:
+            - os
+            - re
+            - subprocess
+            - sys
+            - tempfile
+            - secdump
+        functions:
+            - main
+        calls:
+            - compile
+            - blabel_
+            - main
+            - len
+            - print
+            - exists
+            - load
+            - mkdtemp
+            - join
+            - run
+            - falhou
+            - strip
+            - open
+            - norm
+            - group
+            - int
+            - append
+            - locate
+            - bate
+            - B
+            - instrucao
+            - exit
+        package: ""
+        size: 3529
+        modified_at: 2026-10-21T20:50:58.5185316-03:00
+        hash: d001cad2d04f085a944f1b4409d5a7e0f30c8df338bc0569c58808add2f770dc
     tests\lex_check.asm:
         imports:
             - dexter.inc
@@ -3514,6 +3650,37 @@ files:
         size: 8896
         modified_at: 2026-10-21T08:12:29.67963-03:00
         hash: 0df2a13b3ac4eebf187d71d52c0964a8b40f1a43ef6f5038b16cb6c5b412f886
+    tests\ptr_audit.py:
+        imports:
+            - struct
+            - sys
+            - secdump
+        functions:
+            - main
+        calls:
+            - main
+            - len
+            - print
+            - int
+            - index
+            - load
+            - open
+            - read
+            - norm
+            - get
+            - range
+            - unpack_from
+            - locate
+            - append
+            - candidatos
+            - sorted
+            - ponteiro
+            - congelado
+            - exit
+        package: ""
+        size: 3407
+        modified_at: 2026-10-21T20:52:36.9023145-03:00
+        hash: eb439304c4a2b24beabe5f02f3b93c3b7dee8b285c7f56d0e9b7ac8361390b5b
     tests\qstr_check.py:
         imports:
             - sys
@@ -4753,6 +4920,109 @@ files:
         size: 13009
         modified_at: 2026-10-11T18:14:26.5697581-03:00
         hash: c8da98a8e7767a9f421e83a306ab3b6babe36ec0a855a7a4b5ad6487fcf0958e
+    tests\rip_audit.py:
+        imports:
+            - re
+            - sys
+            - capstone
+            - secdump
+        functions:
+            - load_asm
+            - load_labels
+            - main
+        calls:
+            - compile
+            - label_
+            - x
+            - load_asm
+            - open
+            - int
+            - group
+            - bytes
+            - findall
+            - append
+            - load_labels
+            - set
+            - add
+            - main
+            - len
+            - print
+            - load
+            - norm
+            - Cs
+            - disasm
+            - locate
+            - get
+            - referencia
+            - sorted
+            - join
+            - items
+            - corrigiveis
+            - honesto
+            - exit
+        package: ""
+        size: 4579
+        modified_at: 2026-10-21T20:42:54.8817185-03:00
+        hash: c183c35515339bcdc6d49f86ad80d573dc259c73ee5c0af32fa2246324efe04b
+    tests\secdump.py:
+        imports:
+            - struct
+            - sys
+        functions:
+            - flags_str
+            - read_coff_name
+            - load_coff
+            - load_pe
+            - load
+            - dump
+            - locate
+            - norm
+            - diff
+            - main
+        calls:
+            - flags_str
+            - append
+            - join
+            - read_coff_name
+            - int
+            - split
+            - rstrip
+            - decode
+            - find
+            - load_coff
+            - unpack_from
+            - range
+            - load_pe
+            - len
+            - SystemExit
+            - PE
+            - min
+            - load
+            - open
+            - read
+            - desconhecido
+            - dump
+            - print
+            - startswith
+            - enumerate
+            - locate
+            - max
+            - norm
+            - diff
+            - count
+            - sorted
+            - index
+            - bool
+            - REBUILT
+            - hex
+            - divergencia
+            - estrutural
+            - main
+            - exit
+        package: ""
+        size: 9561
+        modified_at: 2026-10-21T20:18:48.8663846-03:00
+        hash: ad02a363534e1442ceea2c1ddabb32594ad8a540e8752c6b5010a847efa69898
     tests\sibabs.asm:
         imports: []
         functions:
@@ -5554,6 +5824,56 @@ memories:
       confidence: 1
       last_verified: 2026-10-21T20:27:19.8059982-03:00
       created_by: human
+    - id: 865873ef-fe89-5a4c-52b6-da3b9063ece6
+      title: 'D-19 2c fix: kind 5 (db+dd label-$-4-imm) resolve a classe; -m bin fora; REX guard no codegen'
+      description: 'Emissao: disp relativo ao FIM da instrucao (imediato depois do disp => ''- imm'' no dd). O 5o arg da pilha em Win64 e [rbp+48] (apos push rbp), NAO [rbp+16] (shadow). O guard de REX tem de ficar em codegen.asm (retorna 1 -> walker .wcs_emit_db -> kind 5); se ficar no dex_emit_insn (kind 1/2) o db sai por la e o disp nao e relocalizado. -m bin nao usa kind 5: layout preservado, disp congelado ja correto.'
+      type: lesson
+      severity: medium
+      files:
+        - src/disasm/emit_nasm.asm
+        - src/back/codegen.asm
+        - src/gen/rebuild.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T21:09:13.6881606-03:00
+      updated_at: 2026-10-21T21:09:13.6881606-03:00
+      confidence: 1
+      last_verified: 2026-10-21T21:09:13.5193647-03:00
+      created_by: human
+    - id: 19798371-b234-0422-9233-8c8975e91bad
+      title: 'call|jmp [mem] com REX.W/B: nasm descarta o REX e a instrucao encolhe 7->6 B'
+      description: 'O original traz 48 FF 25 (jmp qword [rip+disp]); a forma simbolica ''jmp [rel __imp_X]'' monta FF 25 (6 B). O encolhimento desloca TODOS os labels seguintes; sintoma: o ponteiro do .CRT do exc apontava label_1400018C0 - 1. Detectado por label_drift.py (listing do nasm vs RVA original). Fix: has_rex != 0 -> db + kind 5 (bytes preservados + disp relocalizado).'
+      type: bug
+      severity: high
+      files:
+        - src/back/codegen.asm
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T21:09:13.748002-03:00
+      updated_at: 2026-10-21T21:09:13.748002-03:00
+      confidence: 1
+      last_verified: 2026-10-21T21:09:13.5193647-03:00
+      created_by: human
+    - id: c73d653a-b83e-97b8-250f-87ee8774e397
+      title: 'Implementado: D-19 fatia 2c - fix (disp32 relocavel + REX exato + bss nobits, [57] 11 checks, 1.2.415)'
+      description: 'Provado: exc 42->0 sites congelados, var64 47->0, notepad 14 corrigiveis->0 (1238 limite .data tail), label_drift 0, .CRT byte-identico, var64 -native -r exit 0. Limites novos: 2c-2 EH C++ GCC pcrel (exc AV em libstdc++) e 2c-3 .data vsize>raw.'
+      type: note
+      severity: medium
+      files:
+        - src/disasm/emit_nasm.asm
+        - src/gen/rebuild.asm
+        - src/back/codegen.asm
+        - tests/run_tests.bat
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-21T21:09:42.5815686-03:00
+      updated_at: 2026-10-21T21:09:42.5815686-03:00
+      confidence: 1
+      last_verified: 2026-10-21T21:09:42.4137165-03:00
+      created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
       title: 'D-22: entry label via equ no -s + -r'
@@ -5841,6 +6161,7 @@ dependencies:
     tests\codegen_check.asm:
         - include\dexter.inc
         - src\back\codegen.asm
+    tests\dbg_probe.py: []
     tests\exc_cpp.cpp: []
     tests\fuzz_pe.py: []
     tests\hello.asm: []
@@ -5850,6 +6171,7 @@ dependencies:
         - src\gen\rebuild.asm
         - src\util\memory.asm
     tests\jtable.asm: []
+    tests\label_drift.py: []
     tests\lex_check.asm:
         - include\dexter.inc
         - src\front\lexer.asm
@@ -5862,12 +6184,15 @@ dependencies:
     tests\pe_dirs.py: []
     tests\pe_exc_dir.py: []
     tests\pe_impdesc.py: []
+    tests\ptr_audit.py: []
     tests\qstr_check.py: []
     tests\ref_native\ref_hello.asm: []
     tests\ref_native\ref_loop.asm: []
     tests\ref_native\ref_no_relocs.asm: []
     tests\ref_native\ref_strings.asm: []
     tests\ref_native\ref_tiny.asm: []
+    tests\rip_audit.py: []
+    tests\secdump.py: []
     tests\sibabs.asm: []
     tests\strings.asm: []
     tests\strpool_check.asm:

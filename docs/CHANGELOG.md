@@ -2,7 +2,47 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
-## [Unreleased] — D-19 fatia 2b: import table simbólica no `win64 -native` (2026-10-21)
+## [Unreleased] — D-19 fatia 2c: disp32 RIP relocável + comprimentos exatos (2026-10-21)
+
+### Adicionado
+
+- **Instrução em `db` com disp32 RIP-relative vira REL32**: o emissor ganhou
+  `kind 5` (`db <prefixo>` + `dd label_<alvo> - $ - 4 [- 0x<imm>]` +
+  `db <imm>`); o nasm emite relocação REL32 no COFF x64 e o `link.exe`
+  recalcula o disp quando move a seção alvo. Resolve a classe inteira
+  (não só `mov`-from-IAT): `exc` 42 → **0**, `var64` 47 → **0**,
+  `notepad` 14 corrigíveis → **0** (1238 seguem como limite honesto).
+- Sondas novas em `tests/`: `secdump.py` (PE/COFF + `--diff`),
+  `dbg_probe.py` (exceção fatal, RIP/AV/regs/pilha, resolução por módulo),
+  `rip_audit.py` (disp32 congelado; gate), `label_drift.py` (comprimento
+  por label via listing do nasm), `ptr_audit.py` (qword VA congelado).
+- `[57]` na suíte: `dd label_` presente, `.bss` nobits, sem `-w+zeroing`,
+  `nasm` 0 erros, `rip_audit`=0 (exc/notepad), `label_drift`=0 (exc) e
+  `var64 -native -r` **roda com exit 0** (era `0xC0000005`).
+
+### Corrigido
+
+- **`call|jmp [mem]` com REX.W/B** (7→6 bytes): o nasm descarta o REX
+  redundante e a instrução encolhia, deslocando todos os labels seguintes
+  (o ponteiro do `.CRT` do `exc` caía em `label-1`). Agora cai em `db`
+  (bytes preservados) e o `kind 5` relocaliza o disp.
+- **Seção sem bytes no arquivo saía `data` (progbits)**: cada `resb`
+  virava zero no arquivo (`-w+zeroing`) e o link via atributos divergentes
+  (`LNK4078`). Agora `CNT_UNINIT`/`raw==0 && vsize>0` sai classe `bss`
+  (nobits); o `link.exe` funde na `.data` com zero-fill do loader (RVA
+  correta, sem bytes no arquivo).
+
+### Limites honestos (abertos)
+
+- **Tabelas de exceção C++ do GCC são posicionais** (`.xdata`/LSDA e as
+  seções `/NNN` usam encodings pcrel): quando o `link.exe` move essas
+  seções, os offsets relativos congelam e o unwinder salta para endereço
+  inválido (`exc -native -r` segue `0xC0000005`, agora dentro de
+  `libstdc++-6.dll`). O caminho fiel continua `-m bin -native` (exit 42).
+- **`.data` com `vsize > raw_size`**: o tail zerado pelo loader não é
+  emitido, então `notepad` mantém 1238 refs RIP sem label (rodam congeladas).
+
+## [Unreleased anterior] — D-19 fatia 2b: import table simbólica no `win64 -native` (2026-10-21)
 
 ### Adicionado
 

@@ -1,11 +1,11 @@
 # Dexter — Roadmap (requisitos R-x.y + status real)
 
 Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat`
-**402/402 OK** em 1.2.407; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
+**413/413 OK** em 1.2.415; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
 IDs estáveis para branches/commits. **Fonte única da fila de execução:**
 `marco.md` §8 — este arquivo registra o status por requisito.
 
-## Fila de execução (2026-10-21, após 1.2.407)
+## Fila de execução (2026-10-21, após 1.2.415)
 
 > Ordem de execução em `marco.md` §8. Nada aqui vira `[x]` sem teste verde.
 
@@ -15,20 +15,24 @@ IDs estáveis para branches/commits. **Fonte única da fila de execução:**
   via `.wds_chunks`/`.wds_gap_win`. Fechada 1.2.407, `[56]` 9 checks
   (suíte **402/402**). No caminho, corrigido o parser de imports (spill de
   `di` volátil): `exc` 1→69, `var64` 14→62. `PE_NOTES §26`, ADR-0003.
-- [ ] **D-19 fatia 2 (fecho)** — comportamento do `.exe` reconstruído pelo
-  `win64` em PE real: `tests/exc.exe -native -r` hoje **carrega** (imports
-  69/14 DLLs válidos) e dá `0xC0000005` (fatia 2a/2b); alvo é rodar o
-  `throw/catch` (**exit 42**), como o `-m bin -native` já faz.
-  **Fatia 2c (diagnóstico) FECHADA em 2026-10-21** (sem mudança em `src/`):
-  causa = `db` com **disp32 RIP-relative congelado** (o link move a seção e
-  o disp continua apontando para o layout antigo — `.bss` zeros → `call 0`);
-  classe: `exc` 42, `var64` 47, `notepad` 1252, `hello` 0. Mecanismo
-  provado: `dd label - $ - 4` gera REL32 no COFF x64 e o linker recalcula.
-  Defeito independente: `.bss` emitida como `data` (progbits) →
-  `LNK4078` + `resb` zerado. TLS Directory já é simbólica/correta.
-  `PE_NOTES §27`, `docs/SESSAO-2026-10-21-D19-2C.md`; oráculos
-  `tests/secdump.py`, `tests/dbg_probe.py`, `tests/rip_audit.py`.
-  Resta o fix (emissão `dd label - $ - 4` + `nobits` + gate `[57]`).
+- [x] **D-19 fatia 2c — fix** (1.2.415, `[57]`): `db` com disp32 RIP-relative
+  vira `db <prefixo>` + `dd label_<alvo> - $ - 4 [- 0x<imm>]` + `db <imm>`
+  (REL32 do COFF x64; o link recalcula). `exc` 42→0, `var64` 47→0,
+  `notepad` 14 corrigíveis→0. Junto: `call|jmp [mem]` com REX → `db`
+  (encoding 7→6 B encolhia e deslocava labels; `.CRT` agora byte-idêntico)
+  e seção uninit → classe `bss` (nobits; sem `-w+zeroing`/`LNK4078`).
+  Comportamento provado: `var64 -native -r` → exit 0. `PE_NOTES §28`.
+- [ ] **D-19 fatia 2c-2** — tabelas de exceção C++ do GCC são **posicionais**
+  (encodings pcrel no LSDA e nas seções `/NNN`, que o `link.exe` move): sem
+  relocação para offsets relativos entre seções, o unwinder salta p/
+  endereço inválido (`exc` AV agora em `libstdc++-6.dll+0x192190`;
+  `.text` exato, `.xdata` byte-idêntico). Caminho: detectar personalidade
+  C++ GCC e recusar `-native -r` honestamente (ou pós-patch dos pcrel).
+  Até lá o caminho fiel do `exc` é `-m bin -native` (exit 42).
+- [ ] **D-19 fatia 2c-3** — `.data` com `vsize > raw_size`: o tail zerado
+  pelo loader não é emitido, então 1238 refs RIP do `notepad` ficam sem
+  label (disp congelado). Emitir o tail com `times N db 0` + labels (só
+  win64; `-m bin` é byte-exato e não pode crescer).
 - [ ] **Base simbólica do índice em x64** — x32 já sai
   `[nosplit label_<VA>+idx*scale]` (1.2.379); em x64 o disp32 não é VA
   (precisa de `+C` no `-f bin`), então segue numérico.
@@ -609,6 +613,14 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   Directory simbólica, LNK4210 é aviso). Fix provado em sonda:
   `dd label - $ - 4` (REL32). `PE_NOTES §27`,
   `docs/SESSAO-2026-10-21-D19-2C.md`.
+  **Fatia 2c (fix) FECHADA** (1.2.415, `[57]` 11 checks): kind 5 no emissor
+  (`db` + `dd label - $ - 4` + `db imm`) com gate por label
+  (`.ptr_tgt_ok`/`.code_tgt_ok`); REX em `call|jmp [mem]` → `db` (encoding
+  exato; era o shift de 1 B que quebrava o `.CRT`); seção uninit → `bss`
+  (nobits). Prova: `exc` 42→0, `var64` 47→0, `notepad` 14→0 corrigíveis,
+  `label_drift` 0, **`var64 -native -r` exit 0**. Restam **2c-2** (EH C++
+  do GCC com pcrel — o link não relocaliza) e **2c-3** (`.data` `vsize>raw`).
+  `PE_NOTES §28`.
 - [x] D-20 FECHADA (2026-10-16): o codegen nativo agora é byte-fiel em PE MS
   real. Duas classes: (1) ALU/mov **reg-reg na forma "load"** (`02/03..3A/3B`,
   `8A/8B`: reg=dst) cai p/ `db` (o NASM montaria na forma "store" `89/31`);

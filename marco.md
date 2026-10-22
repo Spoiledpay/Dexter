@@ -39,14 +39,14 @@
   `hello -native -r` = `hi`. **Bug real junto:** parser de imports com `di`
   volátil no `.fill` (`exc` 1→69, `var64` 14→62; `[16]` atualizado).
   `PE_NOTES §26`, ADR-0003. Comportamento do `.exe` segue na fatia 2.
-- Placar honesto: **402 passam, 0 falham** (`tests\run_tests.bat → 402/402 OK` em 1.2.407: base 391 + `[56]` 9 + `[14]` 2). Lenta `run_slow.bat`: **7/7**. Build: `build.bat` OK (+~2 s do CTX).
+- Placar honesto: **413 passam, 0 falham** (`tests\run_tests.bat → 413/413 OK` em 1.2.415: base 402 + `[57]` 11). Lenta `run_slow.bat`: **7/7**. Build: `build.bat` OK (+~2 s do CTX).
 
 ## 1. Build / Testes / Uso (resumo)
 
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] CTX (`ctx.exe`, no PATH): `build.bat` registra proveniência (`ctx build record out\dexter.exe`) + atualiza índice (`ctx scan`) a cada build (best-effort). Uso obrigatório em `skill.md` §10 (descoberta/memórias/decisões/build/auditoria). `.ctx/` ignorado; `.ctx.yaml` versionado. Higiene: `tests/ld.lld.asm` (734 MB gerado) destrackeado (estourava o índice do CTX a ~3 GB).
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[56]`, 402 checks em 1.2.407)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[57]`, 413 checks em 1.2.415)
 - [x] Suite lenta: `tests\run_slow.bat` (`[S1]` round-trip `ld.lld.exe` 68 MB + `[S2]` gcc byte-idêntico+comportamento)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs/jtable/t32` (round-trip bin-native) + `var64/gcc/ld.lld` (bin) + `gcc` (`-native-bin` byte-idêntico + comportamento = R-8.2 FECHADA) + negativos `var32/link` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -193,11 +193,27 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   TLS Directory já está simbólica e correta. `dbg_probe.py`/`secdump.py`/
   `rip_audit.py` em `tests/`. `PE_NOTES §27`,
   `docs/SESSAO-2026-10-21-D19-2C.md`.
+- [x] **D-19 fatia 2c — fix** (1.2.415, `[57]`): instrução que cai em `db`
+  com disp32 RIP-relative sai `db <prefixo>` + `dd label_<alvo> - $ - 4
+  [- 0x<imm>]` + `db <imm>` (REL32; o link recalcula) — `exc` 42→**0**,
+  `var64` 47→**0**, `notepad` 14 corrigíveis→0 (1238 limite). Junto:
+  `call|jmp [mem]` com REX cai em `db` (encoding encolhia 7→6 B e
+  deslocava labels; `.CRT` byte-idêntico agora) e seção uninit sai classe
+  `bss` (nobits; fim do `-w+zeroing` e do `LNK4078 .bss`).
+  **Prova de comportamento: `var64.exe -native -r` roda exit 0.**
+  Limite: tabelas de EH do GCC são pcrel e o link não as relocaliza
+  (`exc` segue AV, agora dentro de `libstdc++`); `.data` com
+  `vsize>raw` (tail) ainda não é emitido (notepad 1238 refs).
+  `PE_NOTES §28`.
 - [ ] **Fila após 1.2.407 (ordem fixa):** (1) **D-19 fatia 2 fecho** —
   comportamento do `.exe` reconstruído pelo `win64` em PE real (`exc` roda o
   `throw/catch`, exit 42; hoje `0xC0000005`). Causa provada na 2c: disp32
   RIP-relative em `db` congelado (42 sites no `exc`) + `.bss` progbits
-  (`LNK4078`); fix = `dd label - $ - 4` no lugar do disp + `nobits`;
+  (`LNK4078`) — **ambos corrigidos**; sobram duas classes medidas:
+  **2c-2** tabelas EH do GCC (pcrel, o link não relocaliza — `exc` AV
+  dentro de `libstdc++`) e **2c-3** `.data` com `vsize>raw` (tail zerado
+  não emitido — notepad 1238 refs). Fix provado do resto: `var64 -native
+  -r` = exit 0;
   (2) **base simbólica do índice em x64** (x32 fechada em 1.2.379);
   (3) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
   (4) **R-6.6 opção C** — IR otimizável + backend próprio. Espelho em
