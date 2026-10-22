@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-21, Dexter 1.2.407)
+## 0. Onde estamos (2026-10-21, Dexter 1.2.415)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -205,7 +205,7 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   (`exc` segue AV, agora dentro de `libstdc++`); `.data` com
   `vsize>raw` (tail) ainda não é emitido (notepad 1238 refs).
   `PE_NOTES §28`.
-- [ ] **Fila após 1.2.407 (ordem fixa):** (1) **D-19 fatia 2 fecho** —
+- [ ] **Fila após a 2c (1.2.415, ordem fixa):** (1) **D-19 fatia 2 fecho** —
   comportamento do `.exe` reconstruído pelo `win64` em PE real (`exc` roda o
   `throw/catch`, exit 42; hoje `0xC0000005`). Causa provada na 2c: disp32
   RIP-relative em `db` congelado (42 sites no `exc`) + `.bss` progbits

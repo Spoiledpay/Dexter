@@ -19,6 +19,9 @@ modo win64:                              modo bin:
       fallback db p/ desconhecido
     dex_emit_insn → label + db (+call/jmp [rel __imp]
                     se rewrite; DESATIVADO: db puro)
+    fallback db com disp32 RIP + label ⇒
+      `db <prefixo>` + `dd label_<alvo> - $ - 4 [- 0x<imm>]`
+      + `db <imm>`  (kind 5: REL32 que o link recalcula; D-19 2c)
   por seção DATA: dex_emit_data (db 16/linha; strings se -strings)
   ▼                                        ▼
 dex_generate_asm → .asm ──────────────► dex_rebuild
@@ -46,8 +49,9 @@ dex_disasm_one + dex_build_operands (semantics.asm)
               ─► R-6.4 lift (DexOp->IR) + codegen (IR->AsmBuf via emit_native)
 ```
 
-Estado em 2026-10-21 (R-6.1–R-6.5 fechados; suíte 402/402 em 1.2.407;
-D-19 2b fechada — import table simbólica no `win64 -native`):
+Estado em 2026-10-21 (R-6.1-R-6.5 fechados; suíte 413/413 em 1.2.415;
+D-19 2b fechada — import table simbólica no `win64 -native` — e 2c fix:
+disp32 RIP relocável + REX exato + `bss` nobits):
 `-native` liga
 `dex_build_operands` + `dex_emit_native` no walker (`.wcs_emit` →
 `.wcs_oploop` valida refs com label via `.cs_in_code` → snapshot/rollback
