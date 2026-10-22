@@ -49,9 +49,10 @@ dex_disasm_one + dex_build_operands (semantics.asm)
               ─► R-6.4 lift (DexOp->IR) + codegen (IR->AsmBuf via emit_native)
 ```
 
-Estado em 2026-10-21 (R-6.1-R-6.5 fechados; suíte 413/413 em 1.2.415;
-D-19 2b fechada — import table simbólica no `win64 -native` — e 2c fix:
-disp32 RIP relocável + REX exato + `bss` nobits):
+Estado em 2026-10-22 (R-6.1-R-6.5 fechados; suíte 426/426 em 1.2.417;
+D-19 2b fechada — import table simbólica no `win64 -native` —, 2c fix:
+disp32 RIP relocável + REX exato + `bss` nobits, 2c-3 tail de `.data` e
+2c-2 recusa honesta do EH C++ do GCC por ADR-0004):
 `-native` liga
 `dex_build_operands` + `dex_emit_native` no walker (`.wcs_emit` →
 `.wcs_oploop` valida refs com label via `.cs_in_code` → snapshot/rollback
@@ -183,8 +184,8 @@ R-6.6 (IR otimizável + backend próprio) segue futura — ver
    campos RVA) é reusado no caminho bin (`.gb_db_slots`), que reemite cada
    `UNWIND_INFO` intercalado com imports/db — byte-exato. `-m bin -native`
    do notepad byte-idêntico (**D-20 fechada**: ALU/mov reg-reg "load" → `db`;
-   prefixo de segmento `gs:`/`fs:` reemitido). O `win64` de PE MS real segue
-   **D-19**.
+   prefixo de segmento `gs:`/`fs:` reemitido). O `win64` de PE MS real
+   avança com a 2c-3 (tail de `.data`) e a 2c-2 recusa PEs GCC C++ (ADR-0004).
 15. **Runs de string com CR/LF (`-strings`).** `.str_run` aceita CR/LF dentro
    do run (1º byte imprimível) e `dex_emit_qstr` **fecha/reabre as aspas** em
    volta de cada escape (estado `open`): `, 13`, `, 10`, `, 34` ficam inline,
@@ -203,6 +204,18 @@ R-6.6 (IR otimizável + backend próprio) segue futura — ver
    qword; 4 = `dd` dword): tabelas de ponteiro x32 (`dd VA`) viram
    `dd label_<VA>` (código via D-7). Antes: gate `arch==X64` no pré-scan +
    `g_spanflags=1` forçando db em x32. Verificação: `tests/absidx.asm` + `[51]`.
+18. **Tail de `.data` (`vsize > raw`) no modo link (D-19 2c-3).** O loader
+   zero-fill o trecho `[SizeOfRawData, VirtualSize)`. O `.asm` win64 agora
+   emite `times N db 0` com `label_<VA>:` nos alvos R (`.wds_tail`, chamado
+   no fim de `.walk_data_sec`); `.ptr_tgt_ok` aceita `off < vsize`. No
+   `notepad`, 1238 refs RIP saem de `db` sem label para `label_` e os
+   qwords de `.rdata` para o tail deixam de congelar. `-m bin` não muda
+   (byte-fiel). Verificação: `[57]`/`[58]` + `tests/taildata_*.py`.
+19. **Recusa do `-native -r` com EH C++ do GCC (D-19 2c-2).** A import table
+   é consultada por `__gxx_personality_*`/`__gcc_personality_*`; no modo
+   link com `-native -r`, sai 4 e recomenda `-m bin` (ADR-0004). As tabelas
+   LSDA/`/NNN` são pcrel e o `link.exe` não as relocaliza; `-m bin -native
+   -r` segue fiel. `-native` sem `-r` continua gerando/auditando.
 
 ## Mapa de arquivos
 

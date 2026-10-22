@@ -599,3 +599,59 @@ a nossa é a que o DataDirectory aponta e o loader resolve — `var64` roda) e
 os offsets relativos não têm relocação e o unwinder salta para endereço
 inválido (`exc` agora falha dentro de `libstdc++-6.dll`). O caminho fiel
 para esse PE segue `-m bin -native` (exit 42).
+
+## 29. D-19 fatia 2c-3 - tail de `.data` com `vsize > raw` (2026-10-22)
+
+O loader de PE mapeia `VirtualSize` bytes de uma seção, mas só lê
+`SizeOfRawData` do arquivo; o resto é zero-fill. O gerador win64 emitia
+apenas os bytes do arquivo (`raw`), então o tail `[raw, vsize)` não existia
+no `.asm`. Consequência no `notepad.exe`: 1238 referências RIP-relative do
+`.text` para `.data+0x12xx..0x26xx` caíam em `db` sem label (`rip_audit`:
+`corrigiveis=0`, `sem_label=1238`) e dois qwords de `.rdata` para o tail
+ficavam congelados (`ptr_audit`). O `.data` reconstruído encolhia para
+`vsize=0x400`.
+
+Correção em `src/gen/rebuild.asm`:
+
+1. `.ptr_tgt_ok` aceita `off < vsize` (não só `raw`) quando o modo é link;
+   em `-m bin` continua `raw` (o layout é preservado e não pode crescer).
+2. Novo `.wds_tail` emite `times 0x<N> db 0` para o tail, com
+   `label_<VA>:` em cada alvo R dentro de `[raw, vsize)`. O label do início
+   já foi emitido pelos chunks/`lab0`; alvo exatamente em `raw` ganha label
+   (boundary do emitido) e gap zero é omitido.
+3. `.wds_ok` chama `.wds_tail` só no modo link, seção não-executável e
+   `vsize > emitido`; seções de código não têm tail decodificável.
+4. `rip_audit.py` passou a considerar apenas blocos `db` em seção de código
+   (o `notepad` tem 702 blocos em dados que parecem instruções; um deles
+   apontava para `.rsrc` e era falso positivo).
+
+Resultado: `notepad` `.data` sai `vsize=0x2740`, `raw>=vsize`, 1238 refs
+com label (`rip_audit` 0 falsos; `ptr_audit` 0 congelados). Fixture novo
+`tests/taildata.asm` + `tests/taildata_patch.py` (reduz `SizeOfRawData` de
+`.data` para `0x400`) + `tests/taildata_check.py`: o original patchado e o
+reconstruído saem 42, e o `.asm` contém os labels `m1`/`m2` do tail.
+`-m bin -native` do fixture continua byte-idêntico.
+
+Limite: seções executáveis com `vsize > raw` não recebem tail (não há
+instruções para decodificar); `.data` com `vsize > raw` em `-m bin` não
+cresce (byte-fiel).
+
+## 30. D-19 fatia 2c-2 - EH C++ do GCC é pcrel; recusa honesta no win64 (2026-10-22)
+
+O `exc.exe` (MinGW-w64 C++) continua sem comportamento funcional no
+`win64 -native -r` depois da 2c/2c-3: o AV agora ocorre dentro de
+`libstdc++-6.dll`, com `.text` exato e `.xdata` byte-idêntico. A causa é a
+personalidade `__gxx_personality_seh0` + LSDA/`/NNN` com deslocamentos
+**posicionais** (`pcrel`) que o `link.exe` não relocaliza ao mover seções.
+
+Decisão (ADR-0004): detectar as personalidades GCC/`__gcc_personality_*` na
+import table e **recusar** `-native -r` no modo link com exit 4
+(`dexter: -native -r refused: GCC C++ exception tables are
+position-sensitive (pcrel); use -m bin`). A geração pura (`-native` sem
+`-r`) continua; `-m bin -native -r` segue fiel (exit 42). A detecção usa os
+imports já parseados — `-no-imports` a desativa (limite declarado).
+
+Consequência para o corpus: `exc` deixa de ser o fixture de rebuild win64;
+os gates de link usam `var64` (5 DataDirectories) e `notepad` (PE MSVC real,
+1238 refs de `.data` cobertas pela 2c-3). O parser de imports de `exc` segue
+travado em 69 via `-overview -json` (geração pura).

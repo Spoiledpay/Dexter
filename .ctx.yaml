@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-21T21:09:42.5815686-03:00
+updated_at: 2026-10-22T08:19:23.3720539-03:00
 files:
     include\dexter.inc:
         imports:
@@ -2401,9 +2401,9 @@ files:
             - dex_generate_asm.uw_emit
             - DF_QUIET
         package: ""
-        size: 214927
-        modified_at: 2026-10-21T20:54:55.9255473-03:00
-        hash: c41350df6a6b47a020bbe244c5cd630b1b3fbafcd8cc5ddf8a3972c2001ce92c
+        size: 220638
+        modified_at: 2026-10-22T08:02:20.9778299-03:00
+        hash: 3bf29bec7b6b183f9b3a4d85eb883f0c7cfd9e4e340e92e45231f8baf2d8d003
     src\gen\strings.asm:
         imports:
             - dexter.inc
@@ -2546,6 +2546,13 @@ files:
             - s_err_pe
             - s_err_rsrc
             - s_err_gen
+            - s_err_gcceh
+            - s_pers_v0
+            - s_pers_seh
+            - s_pers_sj
+            - s_pers_gv0
+            - s_pers_gseh
+            - s_pers_gsj
             - s_ok_gen
             - s_ok_rb
             - s_v_base
@@ -2591,6 +2598,7 @@ files:
             - dex_console_print_u64dec
             - dex_console_newline
             - dex_strlen
+            - dex_streq
             - dex_overview
             - dex_func
             - dex_xrefs
@@ -2618,8 +2626,15 @@ files:
             - DF_TRACE
             - DexConfig.trace_addr
             - DexConfig.verbose
+            - DexConfig.mode
+            - DEX_MODE_BIN
+            - DF_NATIVE
             - DF_REBUILD
             - ExitProcess
+            - PeImage.imports_ptr
+            - PeImage.imports_count
+            - SIZEOF_IMPORT_ENTRY
+            - ImportEntry.func_name
             - PeImage.image_base
             - PeImage.entry_point
             - PeImage.num_sections
@@ -2628,15 +2643,13 @@ files:
             - PeSection.vaddr
             - PeSection.raw_ptr
             - PeSection.raw_size
-            - PeImage.imports_count
-            - PeImage.imports_ptr
             - PeImage.exports_ptr
             - PeImage.relocs_count
             - PeImage.file_buffer
         package: ""
-        size: 15646
-        modified_at: 2026-10-13T22:01:24.2946042-03:00
-        hash: 502be617032b548b184447dd3fb9b34c1feeb2e107079d50cfccf6104fa430d4
+        size: 18680
+        modified_at: 2026-10-22T07:59:56.8850971-03:00
+        hash: b6c62382f2cf0f9efe82b5a054f548067b83e4d8ede94b5670f8391e68c9d99f
     src\pe\pe_exports.asm:
         imports:
             - win64.inc
@@ -4950,9 +4963,10 @@ files:
             - load
             - norm
             - Cs
-            - disasm
+            - bool
             - locate
             - get
+            - disasm
             - referencia
             - sorted
             - join
@@ -4961,9 +4975,9 @@ files:
             - honesto
             - exit
         package: ""
-        size: 4579
-        modified_at: 2026-10-21T20:42:54.8817185-03:00
-        hash: c183c35515339bcdc6d49f86ad80d573dc259c73ee5c0af32fa2246324efe04b
+        size: 4945
+        modified_at: 2026-10-22T08:00:46.2355353-03:00
+        hash: ea7fe9d3dcab9b9f952abda04f5a36ca250bc58e1d59615d4d2ec02b941c12a7
     tests\secdump.py:
         imports:
             - struct
@@ -5098,6 +5112,71 @@ files:
         size: 5165
         modified_at: 2026-10-07T21:38:10.0512011-03:00
         hash: 750177e78f83092f674cfaabd891522f96e0bd070c4db734fb094422a1971527
+    tests\taildata.asm:
+        imports: []
+        functions:
+            - start
+            - m1
+            - m2
+        calls:
+            - ExitProcess
+        package: ""
+        size: 895
+        modified_at: 2026-10-22T07:51:27.1677236-03:00
+        hash: b0521d790cde92d4689afe4c38598c01d90e1c2396a37f37114d2108b4f1bbc1
+    tests\taildata_check.py:
+        imports:
+            - re
+            - sys
+            - secdump
+        functions:
+            - main
+            - get_data
+        calls:
+            - compile
+            - label_
+            - main
+            - len
+            - print
+            - load
+            - get_data
+            - norm
+            - set
+            - open
+            - add
+            - int
+            - group
+            - join
+            - exit
+        package: ""
+        size: 2443
+        modified_at: 2026-10-22T07:52:47.4053184-03:00
+        hash: 0e3e472c0efd8e7609dff6f0a5a5cc87017a3b1ce9629829a8505b5599e0860c
+    tests\taildata_patch.py:
+        imports:
+            - struct
+            - sys
+        functions:
+            - main
+        calls:
+            - main
+            - len
+            - print
+            - int
+            - bytearray
+            - open
+            - read
+            - PE
+            - unpack_from
+            - range
+            - rstrip
+            - pack_into
+            - write
+            - exit
+        package: ""
+        size: 2256
+        modified_at: 2026-10-22T07:50:50.3948156-03:00
+        hash: 3e0145f0e4189af98e74b8c438e466fd756e6d4c64a994a6bfcc5d39d58071e1
     tests\tiny.asm:
         imports: []
         functions:
@@ -5874,6 +5953,26 @@ memories:
       confidence: 1
       last_verified: 2026-10-21T21:09:42.4137165-03:00
       created_by: human
+    - id: f8e68d7f-60ce-61b7-6945-bcd6e47d45fd
+      title: 'Implementado: D-19 2c-3 tail de .data + 2c-2 recusa EH GCC (1.2.416)'
+      description: '2c-3: .ptr_tgt_ok aceita off<vsize no modo link; .wds_tail emite times N db 0 com labels R para .data vsize>raw; notepad 1238 refs rotuladas, ptr_audit 0; fixture taildata exit 42; -m bin intacto. 2c-2: guard de personalidade C++ GCC recusa -native -r com exit 4. Suite 426/426 + lenta 7/7.'
+      type: note
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - src/main.asm
+        - tests/run_tests.bat
+        - tests/taildata.asm
+        - tests/taildata_patch.py
+        - tests/taildata_check.py
+      branch: master
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T08:19:23.3720539-03:00
+      updated_at: 2026-10-22T08:19:23.3720539-03:00
+      confidence: 1
+      last_verified: 2026-10-22T08:19:23.2566353-03:00
+      created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
       title: 'D-22: entry label via equ no -s + -r'
@@ -5909,6 +6008,26 @@ decisions:
       confidence: 1
       last_verified: 2026-10-21T08:49:20.5041779-03:00
       tags: []
+      created_by: human
+    - id: 10058515-17f3-42e1-b2c3-e8be461fcf18
+      title: 'D-19 2c-2: recusa do -native -r com EH C++ do GCC'
+      description: ""
+      decision: Detectar __gxx_personality_* e __gcc_personality_* na import table e recusar -native -r no modo link com exit 4, recomendando -m bin; geracao pura e -m bin -native -r seguem.
+      rationale: LSDA e secoes /NNN do GCC usam offsets pcrel que o link.exe nao relocaliza ao mover secoes; rebuildar entrega exe que carrega e falha em runtime. Pos-patch exige parser DWARF EH (evolucao 2c-2b).
+      alternatives:
+        - pos-patch pcrel; recusar todo -native -r; scan bruto dos bytes
+      files:
+        - src/main.asm
+        - docs/adr/0004-recusa-eh-gcc-win64.md
+      participants: []
+      date: 2026-10-22T00:00:00Z
+      status: accepted
+      confidence: 1
+      last_verified: 2026-10-22T08:19:23.008229-03:00
+      tags:
+        - D-19
+        - gcc
+        - eh
       created_by: human
 dependencies:
     include\dexter.inc:
@@ -6203,6 +6322,9 @@ dependencies:
         - include\dexter.inc
         - src\gen\symbols.asm
         - src\util\memory.asm
+    tests\taildata.asm: []
+    tests\taildata_check.py: []
+    tests\taildata_patch.py: []
     tests\tiny.asm: []
     tests\tiny32.asm: []
     tests\unwind_check.asm:

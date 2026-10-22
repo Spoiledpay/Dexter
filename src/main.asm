@@ -36,6 +36,7 @@ extern dex_console_print_u64hex
 extern dex_console_print_u64dec
 extern dex_console_newline
 extern dex_strlen
+extern dex_streq
 extern dex_overview
 extern dex_func
 extern dex_xrefs
@@ -51,6 +52,13 @@ s_err_io   db "dexter: cannot open/read input file", 13, 10, 0
 s_err_pe   db "dexter: invalid or unsupported PE file", 13, 10, 0
 s_err_rsrc db "dexter: corrupt resource directory", 13, 10, 0
 s_err_gen  db "dexter: failed to generate asm", 13, 10, 0
+s_err_gcceh db "dexter: -native -r refused: GCC C++ exception tables are position-sensitive (pcrel); use -m bin", 13, 10, 0
+s_pers_v0  db "__gxx_personality_v0", 0
+s_pers_seh db "__gxx_personality_seh0", 0
+s_pers_sj  db "__gxx_personality_sj0", 0
+s_pers_gv0 db "__gcc_personality_v0", 0
+s_pers_gseh db "__gcc_personality_seh0", 0
+s_pers_gsj db "__gcc_personality_sj0", 0
 s_ok_gen   db "OK: asm written", 13, 10, 0
 s_ok_rb    db "OK: rebuild done", 13, 10, 0
 s_v_base   db "ImageBase: 0x", 0
@@ -279,6 +287,25 @@ main:
     call .dump_verbose
     add rsp, 32
 .no_verbose:
+    ; D-19 2c-2: EH C++ do GCC/MinGW usa tabelas POSICIONAIS (pcrel no
+    ; LSDA e nas secoes /NNN). O link.exe move as secoes e nao ha relocacao
+    ; para esses offsets -> o .exe reconstruido salta p/ endereco invalido.
+    ; Recusa honesta: -native -r no modo link com personalidade GCC; o
+    ; caminho fiel e `-m bin` (layout preservado). Imports ja parseados.
+    cmp dword [rel g_cfg+DexConfig.mode], DEX_MODE_BIN
+    je .gen_go
+    mov eax, [rel g_cfg+DexConfig.flags]
+    mov ecx, eax
+    and ecx, DF_NATIVE|DF_REBUILD
+    cmp ecx, DF_NATIVE|DF_REBUILD
+    jne .gen_go
+    lea rcx, [rel g_img]
+    sub rsp, 32
+    call .has_gcc_eh
+    add rsp, 32
+    test eax, eax
+    jnz .err_gcceh_um
+.gen_go:
     ; generate
     lea rcx, [rel g_cfg]
     lea rdx, [rel g_img]
@@ -421,6 +448,21 @@ main:
     add rsp, 32
     mov ecx, 2
     call ExitProcess
+.err_gcceh_um:
+    mov rcx, r13
+    sub rsp, 32
+    call dex_unmap
+    add rsp, 32
+    mov rcx, rbx
+    sub rsp, 32
+    call dex_close
+    add rsp, 32
+    lea rcx, [rel s_err_gcceh]
+    sub rsp, 32
+    call dex_console_print_err
+    add rsp, 32
+    mov ecx, 4
+    call ExitProcess
 .exit5_um:
     mov r14, rax
     mov rcx, r13
@@ -433,6 +475,82 @@ main:
     add rsp, 32
     mov ecx, 5
     call ExitProcess
+
+; .has_gcc_eh — rcx=img -> eax=1 se a import table traz personalidade C++
+; do GCC/MinGW (__gxx/__gcc_personality_*). Funcao local de main.
+; Por quê: essas personalidades usam tabelas pcrel (D-19 2c-2) que o link
+; nao relocaliza; o guard recusa `-native -r` no modo link. Nao executa o PE.
+; Frame: 5 pushes (40B) + sub 40 = 80 ≡ 0. Calls com shadow embutido.
+.has_gcc_eh:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
+    mov rbx, rcx                 ; img
+    mov r13, [rbx+PeImage.imports_ptr]
+    mov r12d, [rbx+PeImage.imports_count]
+    test r13, r13
+    jz .ge_no
+    xor r14d, r14d               ; i
+.ge_l:
+    cmp r14d, r12d
+    jae .ge_no
+    mov eax, r14d
+    imul eax, SIZEOF_IMPORT_ENTRY
+    mov r15, [r13+rax+ImportEntry.func_name]
+    test r15, r15
+    jz .ge_next
+    mov rcx, r15
+    lea rdx, [rel s_pers_v0]
+    call dex_streq
+    test eax, eax
+    jnz .ge_yes
+    mov rcx, r15
+    lea rdx, [rel s_pers_seh]
+    call dex_streq
+    test eax, eax
+    jnz .ge_yes
+    mov rcx, r15
+    lea rdx, [rel s_pers_sj]
+    call dex_streq
+    test eax, eax
+    jnz .ge_yes
+    mov rcx, r15
+    lea rdx, [rel s_pers_gv0]
+    call dex_streq
+    test eax, eax
+    jnz .ge_yes
+    mov rcx, r15
+    lea rdx, [rel s_pers_gseh]
+    call dex_streq
+    test eax, eax
+    jnz .ge_yes
+    mov rcx, r15
+    lea rdx, [rel s_pers_gsj]
+    call dex_streq
+    test eax, eax
+    jnz .ge_yes
+.ge_next:
+    inc r14d
+    jmp .ge_l
+.ge_yes:
+    mov eax, 1
+    jmp .ge_out
+.ge_no:
+    xor eax, eax
+.ge_out:
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
 
 ; .dump_verbose — imprime base/entry/seções/imports/exports/relocs
 .dump_verbose:

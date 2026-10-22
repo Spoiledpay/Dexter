@@ -70,9 +70,16 @@ def main():
     base = orig['imagebase']
     blocks = load_asm(asm)
     labels = load_labels(asm)
+    codemap = {secdump.norm(s['name']): bool(s['ch'] & (0x20 | 0x20000000))
+               for s in orig['secs']}
     bad = []
     scanned = 0
+    noncode = 0
     for va, raw in blocks:
+        sname, _ = secdump.locate(orig['secs'], va - base)
+        if sname is None or not codemap.get(secdump.norm(sname), False):
+            noncode += 1
+            continue                 # db de dados: nao e ref de codigo
         scanned += 1
         for ins in md.disasm(raw, va):
             for op in ins.operands:
@@ -93,7 +100,7 @@ def main():
                 if new_va != tgt:
                     bad.append((ins.address, tgt, key, ooff, new_va,
                                 ins.mnemonic, tgt in labels))
-    print(f"db-blocks={len(blocks)} decodificados={scanned} labels={len(labels)}")
+    print(f"db-blocks={len(blocks)} code={scanned} dados={noncode} labels={len(labels)}")
     if not bad:
         print("OK: nenhuma referencia RIP-relative congelada aponta p/ secao movida")
         return 0

@@ -30,7 +30,7 @@ echo === [0] integridade do corpus ===
 rem Guarda todos os fontes sagrados (nao so hello): qualquer .asm gerado
 rem por engano em cima de um fonte do corpus (ex.: `dexter x.exe -v` usa
 rem o default <input>.asm) e detectado antes de rodar a suite.
-for %%A in (absidx hello jtable loop memsz no_relocs sibabs strings tiny tiny32 vex) do (
+for %%A in (absidx hello jtable loop memsz no_relocs sibabs strings taildata tiny tiny32 vex) do (
     findstr /c:"FONTE SAGRADA DO CORPUS" "tests\%%A.asm" >nul 2>&1
     if errorlevel 1 (
         echo FALHA: tests\%%A.asm foi sobrescrito - restaure o arquivo.
@@ -1130,10 +1130,12 @@ echo === [54] D-19 fatia 2a: DataDirectories remapeados por (secao, offset) ===
 rem O link.exe reordena/funde secoes; dex_patch_dirs tem de remapear a RVA
 rem de cada dir p/ a secao HOMONIMA da rebuildada (a RVA crua apontava p/ a
 rem secao errada e o loader dava 0xC000007B).
-"%DX%" tests\exc.exe -native -r -O tests\out\exc_dirs.exe -o tests\out\exc_dirs.asm -q >nul 2>&1
-if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native exc" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native exc" & set /a PASS+=1 )
-python tests\pe_dirs.py tests\exc.exe tests\out\exc_dirs.exe > tests\out\pe_dirs.out 2>&1
-if !errorlevel! NEQ 0 ( echo "  FALHA: DataDirectories nao remapeados" & type tests\out\pe_dirs.out & set /a FAIL+=1 ) else ( echo "  OK: dirs exc por (secao,offset)" & set /a PASS+=1 )
+rem D-19 2c-2: `exc` (EH C++ GCC pcrel) recusa -native -r; o proxy de PE
+rem real com o link win64 e o var64 (5 dirs, inclusive TLS/IAT).
+"%DX%" tests\var64.exe -native -r -O tests\out\var_dirs.exe -o tests\out\var_dirs.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native var64" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native var64" & set /a PASS+=1 )
+python tests\pe_dirs.py tests\var64.exe tests\out\var_dirs.exe > tests\out\pe_dirs.out 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: DataDirectories nao remapeados" & type tests\out\pe_dirs.out & set /a FAIL+=1 ) else ( echo "  OK: dirs var64 por (secao,offset)" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -native -r -O tests\out\hello_dirs.exe -o tests\out\hello_dirs.asm -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild hello" & set /a FAIL+=1 ) else ( echo "  OK: rebuild hello" & set /a PASS+=1 )
 python tests\pe_dirs.py tests\hello.exe tests\out\hello_dirs.exe >nul 2>&1
@@ -1143,13 +1145,13 @@ echo === [55] rebuild -s: entry label sempre definido (D-22) ===
 rem Com -s <secao> != secao do entry, a secao do entry sai como dados e o
 rem label_<entry> nunca era definido -> link falhava com LNK2001/exit 5.
 rem O gerador fecha o .asm com `label_<entry> equ label_<secVA> + delta`.
-"%DX%" tests\exc.exe -s .rdata -native -r -O tests\out\sr_nat.exe -o tests\out\sr_nat.asm -q >nul 2>&1
+"%DX%" tests\var64.exe -s .rdata -native -r -O tests\out\sr_nat.exe -o tests\out\sr_nat.asm -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -s .rdata -native (LNK2001)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -s .rdata -native" & set /a PASS+=1 )
 findstr /c:" equ label_" tests\out\sr_nat.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: entry sem equ" & set /a FAIL+=1 ) else ( echo "  OK: entry via equ" & set /a PASS+=1 )
-"%DX%" tests\exc.exe -s .rdata -r -O tests\out\sr_db.exe -o tests\out\sr_db.asm -q >nul 2>&1
+"%DX%" tests\var64.exe -s .rdata -r -O tests\out\sr_db.exe -o tests\out\sr_db.asm -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -s .rdata (db)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -s .rdata (db)" & set /a PASS+=1 )
-"%DX%" tests\exc.exe -s .text -native -r -O tests\out\sr_txt.exe -o tests\out\sr_txt.asm -q >nul 2>&1
+"%DX%" tests\var64.exe -s .text -native -r -O tests\out\sr_txt.exe -o tests\out\sr_txt.asm -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -s .text -native" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -s .text -native" & set /a PASS+=1 )
 findstr /c:" equ label_" tests\out\sr_txt.asm >nul 2>&1
 if errorlevel 1 ( echo "  OK: sem equ redundante (-s .text)" & set /a PASS+=1 ) else ( echo "  FALHA: equ redundante (-s .text)" & set /a FAIL+=1 )
@@ -1170,12 +1172,17 @@ findstr /c:"ruins=0" tests\out\imp64.out >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: ruins!=0 (impdesc win64)" & set /a FAIL+=1 ) else ( echo "  OK: impdesc win64 ruins=0" & set /a PASS+=1 )
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp64.obj tests\out\imp64.asm > tests\out\imp64.err 2>&1
 if errorlevel 1 ( echo "  FALHA: nasm import win64" & type tests\out\imp64.err & set /a FAIL+=1 ) else ( echo "  OK: nasm import win64 (0 erros)" & set /a PASS+=1 )
-"%DX%" tests\exc.exe -native -r -O tests\out\imp64.exe -o tests\out\imp64r.asm -q >nul 2>&1
-if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native exc (2b)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native exc (2b)" & set /a PASS+=1 )
+"%DX%" tests\exc.exe -overview -json -q > tests\out\exc_ov.txt 2>&1
+findstr /c:"\"imports_count\":69" tests\out\exc_ov.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: imports_count do exc original != 69" & set /a FAIL+=1 ) else ( echo "  OK: parser imports do exc = 69" & set /a PASS+=1 )
+rem 2c-2: `exc` nao pode ser rebuildado no win64; o link da import table
+rem simbolica e provado no var64 (62 imports) e no notepad (315, secao [46]).
+"%DX%" tests\var64.exe -native -r -O tests\out\imp64.exe -o tests\out\imp64r.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native var64 (2b)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native var64 (2b)" & set /a PASS+=1 )
 "%DX%" tests\out\imp64.exe -overview -json -q > tests\out\imp64_ov.txt 2>&1
-findstr /c:"\"imports_count\":69" tests\out\imp64_ov.txt >nul 2>&1
-if errorlevel 1 ( echo "  FALHA: imports_count do rebuildado != 69" & set /a FAIL+=1 ) else ( echo "  OK: imports do rebuildado = 69" & set /a PASS+=1 )
-python tests\pe_dirs.py tests\exc.exe tests\out\imp64.exe > tests\out\imp64_dirs.out 2>&1
+findstr /c:"\"imports_count\":62" tests\out\imp64_ov.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: imports_count do rebuildado != 62" & set /a FAIL+=1 ) else ( echo "  OK: imports do rebuildado = 62" & set /a PASS+=1 )
+python tests\pe_dirs.py tests\var64.exe tests\out\imp64.exe > tests\out\imp64_dirs.out 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: dirs pos-2b" & type tests\out\imp64_dirs.out & set /a FAIL+=1 ) else ( echo "  OK: dirs pos-2b (5/5)" & set /a PASS+=1 )
 "%DX%" tests\hello.exe -native -r -O tests\out\hi64.exe -o tests\out\hi64.asm -q >nul 2>&1
 tests\out\hi64.exe > tests\out\hi64.txt 2>&1
@@ -1185,33 +1192,62 @@ if errorlevel 1 ( echo "  FALHA: hello -native pos-2b" & set /a FAIL+=1 ) else (
 python tests\pe_impdesc.py tests\exc.exe tests\out\imp64b.asm >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin -native regrediu" & set /a FAIL+=1 ) else ( echo "  OK: -m bin -native intacto" & set /a PASS+=1 )
 
-echo === [57] D-19 fatia 2c: disp32 RIP relocavel + secao uninit nobits ===
-rem Instrucao que cai em db com disp32 RIP-relativo agora sai
-rem `dd label_<alvo> - $ - 4` (REL32 que o link recalcula); secao sem bytes
-rem sai classe bss (nobits: sem -w+zeroing e sem LNK4078). Os oraculos
-rem rip_audit/label_drift provam a classe inteira (nao so um caso).
+echo === [57] D-19 fatia 2c: disp32 RIP relocavel + recusa 2c-2 + bss nobits ===
+rem 2c-2: tabelas EH C++ do GCC sao pcrel; o link muda as secoes e nao ha
+rem relocacao entre secoes -> `-native -r` no win64 e RECUSADO (exit 4).
+rem A geracao pura continua (auditoria/nasm) e o caminho fiel e `-m bin`.
 "%DX%" tests\exc.exe -o tests\out\d19c.asm -native -r -O tests\out\d19c.exe -q > tests\out\d19c.err 2>&1
-if !errorlevel! NEQ 0 ( echo "  FALHA: generate+rebuild exc -native (2c)" & set /a FAIL+=1 ) else ( echo "  OK: generate+rebuild exc -native (2c)" & set /a PASS+=1 )
+if !errorlevel! NEQ 4 ( echo "  FALHA: exc -native -r deveria recusar (4)" & type tests\out\d19c.err & set /a FAIL+=1 ) else ( echo "  OK: exc -native -r recusado (4)" & set /a PASS+=1 )
+findstr /c:"pcrel" tests\out\d19c.err >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: recusa 2c-2 sem mensagem pcrel" & set /a FAIL+=1 ) else ( echo "  OK: mensagem de recusa 2c-2" & set /a PASS+=1 )
+"%DX%" tests\exc.exe -o tests\out\d19c.asm -native -q > tests\out\d19c_gen.err 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate exc -native (2c)" & set /a FAIL+=1 ) else ( echo "  OK: generate exc -native (2c)" & set /a PASS+=1 )
 findstr /c:"dd label_" tests\out\d19c.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem dd label_ (kind 5 nao emitiu)" & set /a FAIL+=1 ) else ( echo "  OK: disp32 RIP relocavel (dd label_ - $ - 4)" & set /a PASS+=1 )
 findstr /c:"section .bss bss" tests\out\d19c.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: .bss nao saiu nobits" & set /a FAIL+=1 ) else ( echo "  OK: .bss nobits (CNT_UNINIT)" & set /a PASS+=1 )
-findstr /c:"zeroing" tests\out\d19c.err >nul 2>&1
-if not errorlevel 1 ( echo "  FALHA: nasm -w+zeroing em .bss" & set /a FAIL+=1 ) else ( echo "  OK: sem aviso de zeroing" & set /a PASS+=1 )
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\d19c.obj tests\out\d19c.asm > tests\out\d19c_n.err 2>&1
 if errorlevel 1 ( echo "  FALHA: nasm exc 2c" & type tests\out\d19c_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm exc 2c (0 erros)" & set /a PASS+=1 )
-python tests\rip_audit.py tests\out\d19c.asm tests\exc.exe tests\out\d19c.exe > tests\out\d19c_rip.txt 2>&1
-if !errorlevel! NEQ 0 ( echo "  FALHA: disp32 congelado (exc)" & type tests\out\d19c_rip.txt & set /a FAIL+=1 ) else ( echo "  OK: nenhum disp32 congelado (exc)" & set /a PASS+=1 )
+findstr /c:"zeroing" tests\out\d19c_n.err >nul 2>&1
+if not errorlevel 1 ( echo "  FALHA: nasm -w+zeroing em .bss" & set /a FAIL+=1 ) else ( echo "  OK: sem aviso de zeroing" & set /a PASS+=1 )
 python tests\label_drift.py tests\out\d19c.asm tests\exc.exe > tests\out\d19c_drift.txt 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: deriva de comprimento (exc)" & type tests\out\d19c_drift.txt & set /a FAIL+=1 ) else ( echo "  OK: comprimentos exatos (exc)" & set /a PASS+=1 )
+rem 2c-3: `.data` vsize>raw -> tail zerado com labels; auditorias do notepad.
 "%DX%" tests\notepad.exe -native -r -O tests\out\d19n.exe -o tests\out\d19n.asm -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native notepad (2c)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native notepad (2c)" & set /a PASS+=1 )
 python tests\rip_audit.py tests\out\d19n.asm tests\notepad.exe tests\out\d19n.exe > tests\out\d19n_rip.txt 2>&1
-if !errorlevel! NEQ 0 ( echo "  FALHA: disp32 congelado (notepad)" & type tests\out\d19n_rip.txt & set /a FAIL+=1 ) else ( echo "  OK: nenhum disp32 congelado corrigivel (notepad)" & set /a PASS+=1 )
+if !errorlevel! NEQ 0 ( echo "  FALHA: disp32 congelado (notepad)" & type tests\out\d19n_rip.txt & set /a FAIL+=1 ) else ( echo "  OK: nenhum disp32 congelado (notepad)" & set /a PASS+=1 )
+findstr /c:"OK: nenhuma referencia RIP-relative congelada" tests\out\d19n_rip.txt >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: ainda ha refs sem label no notepad (2c-3)" & type tests\out\d19n_rip.txt & set /a FAIL+=1 ) else ( echo "  OK: notepad sem refs pendentes (sem_label=0)" & set /a PASS+=1 )
+python tests\ptr_audit.py tests\notepad.exe tests\out\d19n.exe > tests\out\d19n_ptr.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: ponteiro de dados congelado (notepad)" & type tests\out\d19n_ptr.txt & set /a FAIL+=1 ) else ( echo "  OK: ponteiros de dados (notepad)" & set /a PASS+=1 )
 "%DX%" tests\var64.exe -native -r -O tests\out\d19v.exe -o tests\out\d19v.asm -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native var64 (2c)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native var64 (2c)" & set /a PASS+=1 )
 tests\out\d19v.exe > nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: comportamento var64 (era 0)" & set /a FAIL+=1 ) else ( echo "  OK: var64 win64 reconstruido roda (exit 0)" & set /a PASS+=1 )
+
+echo === [58] D-19 fatia 2c-3: .data com vsize>raw (tail zerado + labels) ===
+rem Fixture controlado: tests\taildata.asm tem m1/m2 em .data; o patch reduz
+rem SizeOfRawData para 0x400 (loader zera o tail). O original patchado sai 42;
+rem o rebuildado tem de sair 42 tambem e manter vsize/raw e os labels do tail.
+"%NASM%" -f win64 -o tests\out\taildata.obj tests\taildata.asm > tests\out\taildata_n.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm taildata" & type tests\out\taildata_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm taildata" & set /a PASS+=1 )
+"C:\Nasm\link.exe" /nologo /nodefaultlib /subsystem:console /entry:start /out:tests\out\taildata_orig.exe tests\out\taildata.obj "%KLIB%" > tests\out\taildata_l.err 2>&1
+if errorlevel 1 ( echo "  FALHA: link taildata" & type tests\out\taildata_l.err & set /a FAIL+=1 ) else ( echo "  OK: link taildata" & set /a PASS+=1 )
+python tests\taildata_patch.py tests\out\taildata_orig.exe tests\out\taildata.exe > tests\out\taildata_patch.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: patch taildata" & type tests\out\taildata_patch.txt & set /a FAIL+=1 ) else ( echo "  OK: patch .data raw=0x400" & set /a PASS+=1 )
+tests\out\taildata.exe > nul 2>&1
+if !errorlevel! NEQ 42 ( echo "  FALHA: fixture original deveria sair 42 (tail zerado)" & set /a FAIL+=1 ) else ( echo "  OK: original patchado sai 42" & set /a PASS+=1 )
+"%DX%" tests\out\taildata.exe -native -r -O tests\out\taildata_re.exe -o tests\out\taildata_re.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native taildata" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native taildata" & set /a PASS+=1 )
+tests\out\taildata_re.exe > nul 2>&1
+if !errorlevel! NEQ 42 ( echo "  FALHA: rebuildado deveria sair 42" & set /a FAIL+=1 ) else ( echo "  OK: rebuildado sai 42" & set /a PASS+=1 )
+python tests\taildata_check.py tests\out\taildata_re.asm tests\out\taildata.exe tests\out\taildata_re.exe > tests\out\taildata_check.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: tail .data nao emitido/simbolico" & type tests\out\taildata_check.txt & set /a FAIL+=1 ) else ( echo "  OK: tail .data emitido com labels" & set /a PASS+=1 )
+"%DX%" tests\out\taildata.exe -m bin -native -r -O tests\out\taildata_bin.exe -o tests\out\taildata_bin.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin taildata" & set /a FAIL+=1 ) else ( echo "  OK: -m bin taildata" & set /a PASS+=1 )
+fc /b tests\out\taildata.exe tests\out\taildata_bin.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -m bin taildata difere" & set /a FAIL+=1 ) else ( echo "  OK: -m bin taildata byte-identico" & set /a PASS+=1 )
 
 echo.
 echo =====================================================

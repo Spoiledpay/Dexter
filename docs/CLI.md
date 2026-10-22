@@ -70,8 +70,13 @@ exceto com `-q`); `-hex` continua valendo para os comentários de VA.
 | 1 | uso incorreto (inclui opção desconhecida, sem input, `-m` inválido) |
 | 2 | erro de I/O (abrir/ler/escrever/spawn) |
 | 3 | PE inválido ou não-x64 |
-| 4 | (reservado) opcode sem suporte — atual: fallback `db`, não usado |
+| 4 | opcode sem suporte (fallback `db`, não usado) **ou recusa do `-native -r` com EH C++ do GCC** (ADR-0004: pcrel; usar `-m bin`) |
 | 5 | falha no reassembly (nasm/link retornou ≠ 0, patch de diretórios) |
+
+> `-native -r` no modo `win64` **recusa** (saída 4) PEs que importam
+> `__gxx_personality_*`/`__gcc_personality_*`: as tabelas de exceção C++ do
+> GCC são posicionais (pcrel) e o `link.exe` não as relocaliza. O caminho
+> fiel desses PEs é `-m bin` (layout preservado; `exc.exe` → exit 42).
 
 ## Exemplos
 

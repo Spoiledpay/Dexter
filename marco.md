@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-21, Dexter 1.2.415)
+## 0. Onde estamos (2026-10-22, Dexter 1.2.417)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -46,7 +46,7 @@
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] CTX (`ctx.exe`, no PATH): `build.bat` registra proveniência (`ctx build record out\dexter.exe`) + atualiza índice (`ctx scan`) a cada build (best-effort). Uso obrigatório em `skill.md` §10 (descoberta/memórias/decisões/build/auditoria). `.ctx/` ignorado; `.ctx.yaml` versionado. Higiene: `tests/ld.lld.asm` (734 MB gerado) destrackeado (estourava o índice do CTX a ~3 GB).
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[57]`, 413 checks em 1.2.415)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[58]`, 426 checks em 1.2.417)
 - [x] Suite lenta: `tests\run_slow.bat` (`[S1]` round-trip `ld.lld.exe` 68 MB + `[S2]` gcc byte-idêntico+comportamento)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs/jtable/t32` (round-trip bin-native) + `var64/gcc/ld.lld` (bin) + `gcc` (`-native-bin` byte-idêntico + comportamento = R-8.2 FECHADA) + negativos `var32/link` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -205,19 +205,32 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   (`exc` segue AV, agora dentro de `libstdc++`); `.data` com
   `vsize>raw` (tail) ainda não é emitido (notepad 1238 refs).
   `PE_NOTES §28`.
-- [ ] **Fila após a 2c (1.2.415, ordem fixa):** (1) **D-19 fatia 2 fecho** —
-  comportamento do `.exe` reconstruído pelo `win64` em PE real (`exc` roda o
-  `throw/catch`, exit 42; hoje `0xC0000005`). Causa provada na 2c: disp32
-  RIP-relative em `db` congelado (42 sites no `exc`) + `.bss` progbits
-  (`LNK4078`) — **ambos corrigidos**; sobram duas classes medidas:
-  **2c-2** tabelas EH do GCC (pcrel, o link não relocaliza — `exc` AV
-  dentro de `libstdc++`) e **2c-3** `.data` com `vsize>raw` (tail zerado
-  não emitido — notepad 1238 refs). Fix provado do resto: `var64 -native
-  -r` = exit 0;
-  (2) **base simbólica do índice em x64** (x32 fechada em 1.2.379);
-  (3) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
-  (4) **R-6.6 opção C** — IR otimizável + backend próprio. Espelho em
-  `docs/ROADMAP.md` ("Fila de execução").
+- [x] **D-19 fatia 2c-3** (1.2.417, `[57]`/`[58]`): `.data` com
+  `vsize > raw` emite o tail zerado (`times N db 0`) com `label_` nos alvos
+  R; `.ptr_tgt_ok` aceita `off < vsize` no modo link. `notepad`: 1238 refs
+  com label (`rip_audit` 0 falsos) e `ptr_audit` 0; `.data` mantém
+  `vsize=0x2740`. Fixture `tests/taildata.asm` + patch/check (original e
+  rebuild exit 42). `-m bin` byte-idêntico. `PE_NOTES §29`.
+- [x] **D-19 fatia 2c-2** (1.2.417, ADR-0004): recusa honesta do EH C++ do
+  GCC. Com `-native -r` no modo link e
+  `__gxx_personality_*`/`__gcc_personality_*` na import table, sai **4**
+  com mensagem `pcrel` + `-m bin`; geração pura segue e o caminho fiel do
+  `exc` é `-m bin -native -r` (exit 42). Gates de rebuild migraram de `exc`
+  para `var64` (5 dirs/62 imports) e `notepad`. `PE_NOTES §30`.
+- Placar honesto: **426 passam, 0 falham** (`tests\run_tests.bat → 426/426 OK`
+  em 1.2.417). Lenta `run_slow.bat`: **7/7**. Build: `build.bat` OK.
+- [x] **Fila após a 2c (1.2.417, ordem fixa):** (1) **D-19 fatia 2** —
+  comportamento do `.exe` reconstruído pelo `win64` em PE real: `var64`
+  roda exit 0; `notepad` linka com 1238 refs de `.data` agora rotuladas
+  (2c-3). `exc` (EH C++ do GCC, pcrel) fica **recusado por decisão**
+  (2c-2/ADR-0004); o comportamento dele é provado em `-m bin -native -r`
+  (exit 42). Fecha o escopo medido da D-19;
+- [ ] **Próxima fila (1.2.417, ordem fixa):** (1) **base simbólica do índice
+  em x64** (x32 fechada em 1.2.379);
+  (2) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
+  (3) **R-6.6 opção C** — IR otimizável + backend próprio; (4) evolução
+  2c-2(b): pós-patch dos campos pcrel do LSDA (parser DWARF EH) + reverter
+  a recusa para esses PEs. Espelho em `docs/ROADMAP.md` ("Fila de execução").
 
 ## 9. Como marcar
 

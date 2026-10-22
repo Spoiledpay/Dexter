@@ -1,11 +1,11 @@
 # Dexter — Roadmap (requisitos R-x.y + status real)
 
 Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat`
-**413/413 OK** em 1.2.415; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
+**426/426 OK** em 1.2.417; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
 IDs estáveis para branches/commits. **Fonte única da fila de execução:**
 `marco.md` §8 — este arquivo registra o status por requisito.
 
-## Fila de execução (2026-10-21, após 1.2.415)
+## Fila de execução (2026-10-22, após 1.2.417)
 
 > Ordem de execução em `marco.md` §8. Nada aqui vira `[x]` sem teste verde.
 
@@ -22,17 +22,17 @@ IDs estáveis para branches/commits. **Fonte única da fila de execução:**
   (encoding 7→6 B encolhia e deslocava labels; `.CRT` agora byte-idêntico)
   e seção uninit → classe `bss` (nobits; sem `-w+zeroing`/`LNK4078`).
   Comportamento provado: `var64 -native -r` → exit 0. `PE_NOTES §28`.
-- [ ] **D-19 fatia 2c-2** — tabelas de exceção C++ do GCC são **posicionais**
-  (encodings pcrel no LSDA e nas seções `/NNN`, que o `link.exe` move): sem
-  relocação para offsets relativos entre seções, o unwinder salta p/
-  endereço inválido (`exc` AV agora em `libstdc++-6.dll+0x192190`;
-  `.text` exato, `.xdata` byte-idêntico). Caminho: detectar personalidade
-  C++ GCC e recusar `-native -r` honestamente (ou pós-patch dos pcrel).
-  Até lá o caminho fiel do `exc` é `-m bin -native` (exit 42).
-- [ ] **D-19 fatia 2c-3** — `.data` com `vsize > raw_size`: o tail zerado
-  pelo loader não é emitido, então 1238 refs RIP do `notepad` ficam sem
-  label (disp congelado). Emitir o tail com `times N db 0` + labels (só
-  win64; `-m bin` é byte-exato e não pode crescer).
+- [x] **D-19 fatia 2c-2 — recusa honesta** (1.2.417, ADR-0004): o `win64
+  -native -r` detecta `__gxx_personality_*`/`__gcc_personality_*` na import
+  table e recusa com exit 4 (mensagem `pcrel` + `-m bin`). As tabelas C++ do
+  GCC são posicionais e o `link.exe` não as relocaliza; `-m bin -native -r`
+  segue fiel (`exc` exit 42). `-native` sem `-r` continua gerando/auditando.
+  Pós-patch do LSDA (parser DWARF EH) fica como evolução futura.
+- [x] **D-19 fatia 2c-3** (1.2.417): `.data` com `vsize > raw` emite o tail
+  zerado (`times N db 0`) com `label_` nos alvos R; `.ptr_tgt_ok` aceita
+  `off < vsize` no modo link. `notepad`: 1238 refs com label (`rip_audit` 0
+  falsos; `ptr_audit` 0). Fixture `tests/taildata.asm` + patch/check;
+  `-m bin` segue byte-idêntico. `PE_NOTES §29`.
 - [ ] **Base simbólica do índice em x64** — x32 já sai
   `[nosplit label_<VA>+idx*scale]` (1.2.379); em x64 o disp32 não é VA
   (precisa de `+C` no `-f bin`), então segue numérico.
@@ -388,7 +388,7 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   `-q` não suprime, existência via open (`ok`/`missing` honesto),
   aceita `-doctor` e `--doctor`; `[20]` na suíte)
 
-## Fase 8 — Layout robusto (R-8.x) — R-8.1/R-8.2 fechadas; D-19 2b fechada
+## Fase 8 — Layout robusto (R-8.x) — R-8.1/R-8.2 fechadas; D-19 2b/2c fechadas
 
 > PEs reais têm `.bss`/`.tls`/seções que o path win64 (link.exe) não
 > preserva. N.1 (R-8.1) fecha o nível asm; R-8.2 fechou o **caminho fiel**
@@ -438,12 +438,22 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   volátil em `.fill`): `exc` 1→69, `var64` 14→62. Falta o **fecho da
   fatia 2** (comportamento do `.exe`: fusão de `.bss`/`.tls`/`.CRT`).
   `PE_NOTES §26`, ADR-0003. Detalhe na fila do topo e em `marco.md` §8.
+- [x] **D-19 fatia 2c-3** (2026-10-22, 1.2.417): tail de `.data` com
+  `vsize > raw` emitido (`times N db 0` + `label_` nos alvos R);
+  `.ptr_tgt_ok` aceita `off < vsize` no modo link. `notepad`: 1238 refs com
+  label, `ptr_audit` 0; fixture `tests/taildata.asm` (original e rebuild
+  exit 42). `-m bin` intacto. `PE_NOTES §29`.
+- [x] **D-19 fatia 2c-2** (2026-10-22, 1.2.417): recusa honesta do EH C++
+  do GCC (`__gxx/__gcc_personality_*` + `-native -r` no modo link → exit 4,
+  recomenda `-m bin`). `-m bin -native -r` do `exc` segue exit 42.
+  `PE_NOTES §30`, ADR-0004. Pós-patch do LSDA fica como evolução futura.
 
 ## Dívida técnica conhecida e regras (honestas, com ID)
 
 > `[x]` = fechada/provada por teste. **D-8..D-18** são regras/lições
-> consolidadas (não pendências); **D-19** segue aberta apenas no **fecho da
-> fatia 2** (comportamento do `.exe` win64 em PE real).
+> consolidadas (não pendências); **D-19** está fechada para o escopo medido:
+> 2a/2b/2c/2c-3 corrigidas e 2c-2 resolvida por decisão (ADR-0004: recusa
+> honesta; pós-patch do LSDA é evolução, não regressão).
 
 - [x] D-1 convenção ADR estabelecida (2026-10-12): `docs/adr/0001-ast-lexer-codegen.md`
   existe e numerado; dívida original ("sem ADRs numerados") superada;
@@ -618,9 +628,13 @@ no corpus simples; PEs complexos continuam em `-m bin`.
   (`.ptr_tgt_ok`/`.code_tgt_ok`); REX em `call|jmp [mem]` → `db` (encoding
   exato; era o shift de 1 B que quebrava o `.CRT`); seção uninit → `bss`
   (nobits). Prova: `exc` 42→0, `var64` 47→0, `notepad` 14→0 corrigíveis,
-  `label_drift` 0, **`var64 -native -r` exit 0**. Restam **2c-2** (EH C++
-  do GCC com pcrel — o link não relocaliza) e **2c-3** (`.data` `vsize>raw`).
-  `PE_NOTES §28`.
+  `label_drift` 0, **`var64 -native -r` exit 0**. **Fatia 2c-3 FECHADA**
+  (1.2.417): `.data` `vsize>raw` emite tail `times N db 0` + labels R;
+  `notepad` 1238 refs com label e `ptr_audit` 0; fixture `taildata` exit 42.
+  **Fatia 2c-2 FECHADA por decisão** (1.2.417, ADR-0004): EH C++ do GCC é
+  pcrel; `-native -r` no modo link recusa com exit 4 e recomenda `-m bin`
+  (caminho fiel, `exc` exit 42). Pós-patch do LSDA é evolução futura.
+  `PE_NOTES §28/§29/§30`.
 - [x] D-20 FECHADA (2026-10-16): o codegen nativo agora é byte-fiel em PE MS
   real. Duas classes: (1) ALU/mov **reg-reg na forma "load"** (`02/03..3A/3B`,
   `8A/8B`: reg=dst) cai p/ `db` (o NASM montaria na forma "store" `89/31`);

@@ -2378,6 +2378,33 @@ dex_generate_asm:
     test eax, eax
     jnz .wds_fail
 .wds_ok:
+    ; D-19 2c-3: tail zerado de .data (vsize > raw) no modo link. O loader
+    ; zera [raw,vsize); sem bytes+labels o emissor congela refs RIP/ponteiros.
+    ; -m bin nao entra (layout byte-exato; o disp congelado ja e correto).
+    mov eax, [rbx+DexConfig.mode]
+    cmp eax, DEX_MODE_BIN
+    je .wds_ok_done
+    mov eax, [r12+PeSection.raw_size]
+    test eax, eax
+    jz .wds_ok_done              ; bss ja tratado por .wds_bss
+    mov ecx, [r12+PeSection.vsize]
+    cmp ecx, [rbp-80]
+    jbe .wds_ok_done             ; vsize <= emitido: nao ha tail
+    mov eax, [r12+PeSection.characterist]
+    test eax, IMAGE_SCN_CNT_CODE
+    jnz .wds_ok_done
+    test eax, IMAGE_SCN_MEM_EXECUTE
+    jnz .wds_ok_done             ; tail de codigo nao e decodificavel
+    mov rcx, r14                 ; buf
+    mov rdx, r15                 ; img
+    mov r8, r12                  ; sec
+    mov r9d, [rbp-80]            ; from = bytes ja emitidos
+    sub rsp, 32
+    call .wds_tail
+    add rsp, 32
+    test eax, eax
+    jnz .wds_fail
+.wds_ok_done:
     xor eax, eax
     add rsp, 88
     pop r15
@@ -3858,6 +3885,154 @@ dex_generate_asm:
     ret
 
 ;-----------------------------------------------------------------------------
+; .wds_tail — rcx=buf, rdx=img, r8=sec, r9d=from_off -> eax=0 ok | 1 oom.
+; O quê: emite o tail zerado de `.data` com `vsize > raw` (D-19 2c-3) como
+;   `times N db 0`, com label em cada alvo R dentro de [from_off, vsize).
+; Por quê: o loader zera o tail nao presente no arquivo; sem os bytes e os
+;   labels o emissor congela disp32/ponteiros para uma regiao inexistente.
+; Contrato: modo link (nao bin), secao de dados com raw>0 e vsize>from_off;
+;   R ordenado, so VAs validadas por .ptr_tgt_ok. Label do início ja foi
+;   emitida pelo caller (lab0/chunks): alvo == início e pulado.
+; Como testar: tests\run_tests.bat [57]/[58] (notepad + taildata).
+; Frame: 7 pushes (56B) + sub 40 = 104 ≡ 0 (calls com shadow de 32).
+; Slot: [rbp-64]=key (qword, alinhado).
+;-----------------------------------------------------------------------------
+.wds_tail:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    push rdi
+    push rsi                     ; 7 pushes + rbp = 64B
+    sub rsp, 40
+    mov rbx, rcx                 ; buf
+    mov r13, r8                  ; sec
+    mov rax, [rdx+PeImage.image_base]
+    mov r12, rax                 ; base
+    mov r15d, [r13+PeSection.vaddr]
+    mov r14d, [r13+PeSection.vsize]
+    mov r13, rdx                 ; img (sec ja lida)
+    mov edi, r9d                 ; cur = from_off
+    xor esi, esi                 ; idx
+.wt_l:
+    mov rax, [rel g_rn]
+    cmp rsi, rax
+    jae .wt_tail
+    mov rcx, [rel g_rarr]
+    mov rax, [rcx+rsi*8]         ; key (trva, ordenado)
+    cmp rax, r15
+    jb .wt_next                  ; antes do range
+    mov rcx, r15
+    add rcx, r14                 ; end = vaddr+vsize
+    cmp rax, rcx
+    jae .wt_tail                 ; resto fora
+    cmp rax, r15
+    je .wt_next                  ; == início: label ja emitida
+    mov rcx, rax
+    sub rcx, r15                 ; off
+    cmp ecx, edi
+    jb .wt_next                  ; antes de cur: ja coberto
+    mov [rbp-64], rax            ; spill key (calls matam volateis)
+    mov rax, [rbp-64]
+    sub rax, r15
+    sub rax, rdi                 ; gap = key-vaddr-cur (>=0)
+    jz .wt_lab
+    mov rcx, rbx
+    lea rdx, [rel s_times]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wt_fail
+    mov rax, [rbp-64]
+    sub rax, r15
+    sub rax, rdi                 ; gap (r15/rdi intactos: nao-volateis)
+    mov rcx, rbx
+    mov rdx, rax
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .wt_fail
+    mov rcx, rbx
+    lea rdx, [rel s_db0]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wt_fail
+.wt_lab:
+    mov rcx, rbx
+    mov rdx, [rbp-64]
+    add rdx, r12                 ; VA do alvo
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .wt_fail
+    mov rax, [rbp-64]
+    sub rax, r15
+    mov rdi, rax                 ; cur = key-vaddr
+.wt_next:
+    inc rsi
+    jmp .wt_l
+.wt_tail:
+    mov rdx, r14
+    sub rdx, rdi                 ; tail = vsize-cur
+    jz .wt_done
+    mov rcx, rbx
+    lea rdx, [rel s_times]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wt_fail
+    mov rcx, rbx
+    mov rdx, r14
+    sub rdx, rdi
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .wt_fail
+    mov rcx, rbx
+    lea rdx, [rel s_db0]
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .wt_fail
+.wt_done:
+    xor eax, eax
+    add rsp, 40
+    pop rsi
+    pop rdi
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+.wt_fail:
+    mov eax, 1
+    add rsp, 40
+    pop rsi
+    pop rdi
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
 ; .wds_chunks — rcx=buf, rdx=fptr, r8=va_base, r9=k0, r10=k1, r11=lab0
 ; (img via g_chunkimg, setado pelo caller) -> eax=0 ok | 1 oom.
 ; Emite [k0,k1) fatiado nos alvos R estritamente dentro (cada fatia com
@@ -4459,8 +4634,18 @@ dex_generate_asm:
     test ecx, ecx
     jz .pt_bss                    ; sem bytes: ramo bss (R-8.1)
     cmp rdx, rcx                 ; (raw zero-estendido)
-    jae .pt_next
-    jmp .pt_codechk
+    jb .pt_codechk                ; dentro do raw
+    ; 2c-3: off >= raw. O tail so existe no modo link (win64/win32); no
+    ; -m bin o layout e byte-exato e nao ha bytes/labels novos.
+    mov rax, [rel g_spancfg]
+    test rax, rax
+    jz .pt_next
+    cmp dword [rax+DexConfig.mode], DEX_MODE_BIN
+    je .pt_next
+    mov ecx, [r13+PeSection.vsize]
+    cmp rdx, rcx
+    jae .pt_next                  ; fora da secao efetiva
+    jmp .pt_codechk               ; code/exec e rejeitado abaixo
 .pt_bss:
     ; R-8.1: vale off < vsize (emissor .wds_bss garante label+resb).
     mov ecx, [r13+PeSection.vsize]
@@ -4496,6 +4681,17 @@ dex_generate_asm:
     jmp .pt_cmp
 .pt_eff_raw:
     mov [rbp-80], rax            ; eff = raw
+    ; 2c-3: o tail zerado e emitido no modo link -> eff = vsize.
+    mov rcx, [rel g_spancfg]
+    test rcx, rcx
+    jz .pt_trim_start
+    cmp dword [rcx+DexConfig.mode], DEX_MODE_BIN
+    je .pt_trim_start
+    mov ecx, [r13+PeSection.vsize]
+    cmp ecx, [rbp-80]
+    jbe .pt_trim_start
+    mov [rbp-80], rcx
+.pt_trim_start:
     lea rcx, [rel s_pdata]
     lea rdx, [r13+PeSection.name]
     sub rsp, 32

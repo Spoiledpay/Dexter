@@ -2,6 +2,41 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — D-19 2c-3 (tail de `.data`) + 2c-2 (recusa EH C++ GCC) (2026-10-22)
+
+### Adicionado
+
+- **2c-3 — tail de `.data` com `vsize > raw`**: `.ptr_tgt_ok` aceita
+  `off < vsize` no modo link; novo `.wds_tail` emite `times N db 0` com
+  `label_<VA>:` nos alvos R do tail. `notepad.exe`: 1238 refs RIP que caíam
+  em `db` sem label passam a ter label (`rip_audit` 0 falsos), 2 qwords
+  congelados em `.rdata` zeram (`ptr_audit` 0) e `.data` reconstruída mantém
+  `vsize=0x2740`/`raw>=vsize`. `-m bin` não muda (byte-fiel).
+- Fixture controlado `tests/taildata.asm` + `tests/taildata_patch.py`
+  (reduz `SizeOfRawData` de `.data`) + `tests/taildata_check.py` + seção
+  `[58]`: original patchado e rebuildado saem 42; labels do tail presentes;
+  `-m bin -native` byte-idêntico.
+- `rip_audit.py` agora audita só blocos `db` em seção de código (dados que
+  parecem instruções, como no `notepad`, não são refs de código).
+
+### Corrigido
+
+- **2c-2 — recusa honesta do EH C++ do GCC** (`docs/adr/0004`): se
+  `-native -r` no modo link e a import table traz
+  `__gxx_personality_*`/`__gcc_personality_*`, o Dexter sai **4** com
+  mensagem citando os encodings pcrel e recomenda `-m bin` (caminho fiel,
+  exit 42). `-native` sem `-r` continua gerando/auditando `exc`; o parser de
+  imports do `exc` segue travado em 69.
+- Gates que usavam rebuild win64 do `exc` migraram para `var64` (5
+  DataDirectories, imports 62) e `notepad` (PE MSVC real); a suíte cobre
+  recusa, geração, auditorias e comportamento do fixture de tail.
+
+### Verificado
+
+- `build.bat` limpo (1.2.417); `tests\run_tests.bat` **426/426 OK**;
+  `tests\run_slow.bat` **7/7 OK**.
+
+
 ## [Unreleased] — D-19 fatia 2c: disp32 RIP relocável + comprimentos exatos (2026-10-21)
 
 ### Adicionado
