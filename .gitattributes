@@ -1,0 +1,18 @@
+# Normaliza os fontes para o lexer golden (LF) e mantém binários intactos.
+* text=auto
+
+*.asm   text eol=lf
+*.inc   text eol=lf
+*.md    text eol=lf
+*.py    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+*.exe   binary
+*.obj   binary
+*.bin   binary
+*.png   binary
+*.lib   binary

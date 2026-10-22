@@ -21,8 +21,8 @@ Versão atual sempre via `-ver` (lida de `version.bin` no build;
 | `-O <arquivo.exe>` | .exe reassemblado (implica `-r`) |
 | `-m <modo>` | `win64` (padrão, via `link.exe`) ou `bin` (via `nasm -f bin`, byte-fiel) |
 | `-r` | Reassembla após gerar o .asm |
-| `-L <linker>` | Caminho do linker (padrão: `C:\Nasm\link.exe`) |
-| `-N <nasm>` | Caminho do nasm (padrão: `C:\Nasm\nasm.exe`) |
+| `-L <linker>` | Caminho do linker (padrão: `C:\Nasm\link.exe` ou `link.exe` no PATH) |
+| `-N <nasm>` | Caminho do nasm (padrão: `C:\Nasm\nasm.exe` ou `nasm.exe` no PATH) |
 
 ## Controle de desassemblagem (modo `win64`)
 

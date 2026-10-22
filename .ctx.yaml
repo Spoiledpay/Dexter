@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-22T08:19:23.3720539-03:00
+updated_at: 2026-10-22T09:23:56.2992472-03:00
 files:
     include\dexter.inc:
         imports:
@@ -451,9 +451,9 @@ files:
             - DEX_VER_MINOR
             - DEX_VER_PATCH
         package: ""
-        size: 5415
-        modified_at: 2026-10-12T11:18:19.6478165-03:00
-        hash: 36d4ae932a395e922c602f06c25e31d9ca4a8b3580b5ba2cdbab7764b7484b6e
+        size: 5431
+        modified_at: 2026-10-22T09:13:47.8990844-03:00
+        hash: a6a0e551488281f322af48f5217c835c2a565f0f47d8509923777e48c20b8243
     src\cli\parse_args.asm:
         imports:
             - win64.inc
@@ -500,6 +500,8 @@ files:
             - s_dotasm
             - s_def_nasm
             - s_def_link
+            - s_bare_nasm
+            - s_bare_link
             - e_no_input
             - e_opt_val
             - e_bad_opt
@@ -519,6 +521,7 @@ files:
             - dex_free
             - dex_parse_hex_u64
             - dex_console_print_err
+            - GetFileAttributesA
             - DexConfig.nasm_path
             - DexConfig.linker_path
             - DexConfig.mode
@@ -565,9 +568,9 @@ files:
             - DexConfig.compare_path
             - DF_CMP
         package: ""
-        size: 28290
-        modified_at: 2026-10-12T11:18:08.1296958-03:00
-        hash: a75856effecccfc410aae0f1dd3e6c0893e87c4a4dbb7c126b356ce8603dc019
+        size: 28930
+        modified_at: 2026-10-22T09:23:47.8223285-03:00
+        hash: 068f3d665d76ae3e3ea12b627ce6439ccdd89c007aae0dc5ea73897a6d98adda
     src\diag\compare.asm:
         imports:
             - win64.inc

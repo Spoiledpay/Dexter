@@ -28,6 +28,10 @@ tests/ld.lld.asm
 !tests/exc.exe
 !tests/notepad.exe
 !tests/t32.exe
+!tests/loop.exe
+!tests/tiny.exe
+!tests/strings.exe
+!tests/no_relocs.exe
 !tests/Calculator.exe
 !tests/Case.exe
 !tests/Char.exe

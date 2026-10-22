@@ -30,8 +30,8 @@ s_help_txt:
     db "  -O <arquivo.exe>       Caminho do .exe reassemblado (implica -r)", 13, 10
     db "  -m <modo>              win64 | bin              (padrao: win64)", 13, 10
     db "  -r                     Reassemblar apos gerar o .asm", 13, 10
-    db "  -L <linker>            Caminho do linker        (padrao: C:\Nasm\link.exe)", 13, 10
-    db "  -N <nasm>              Caminho do nasm.exe      (padrao: C:\Nasm\nasm.exe)", 13, 10
+    db "  -L <linker>            Caminho do linker        (padrao: C:\Nasm\link.exe ou PATH)", 13, 10
+    db "  -N <nasm>              Caminho do nasm.exe      (padrao: C:\Nasm\nasm.exe ou PATH)", 13, 10
     db 13, 10
     db "Controle de desassemblagem:", 13, 10
     db "  -s <nome_secao>        So desassemblar uma secao (.text, ...)", 13, 10

@@ -39,6 +39,9 @@ jobs:
           where link.exe
           echo SDK_LIB=%LIB%
 
+      - name: Python test dependency
+        run: python -m pip install --disable-pip-version-check capstone
+
       - name: Build
         shell: cmd
         run: build.bat

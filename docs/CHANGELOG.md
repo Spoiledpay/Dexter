@@ -6,7 +6,7 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
 ### Adicionado
 
-- `README.md` reescrito para o estado atual (1.2.417): o que a ferramenta
+- `README.md` reescrito para o estado atual (1.2.419): o que a ferramenta
   faz hoje, modos `win64`/`bin`, `-native`, análise inspect-only, uso,
   flags, testes, limites conhecidos e versão.
 - Logo oficial `Dexter_logo_US.png` no topo do README e seção de apoio via
@@ -21,8 +21,21 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
   índice com `git rm --cached`, mantidos no disco).
 - `tests/run_tests.bat`: toolchain portável (`LINKER`/`KLIB`/`X86LIB` via
   PATH/SDK) e skip determinístico dos fixtures grandes na CI.
-- Fixtures x32 (`Calculator/Case/Char/color/Color2/Contador`) e `t32.exe`
-  passam a ser versionados para a suíte rodar em clone limpo/CI.
+- Fixtures x32 (`Calculator/Case/Char/color/Color2/Contador`), `t32.exe` e
+  os pequenos (`loop/tiny/strings/no_relocs`) passam a ser versionados para
+  a suíte rodar em clone limpo/CI.
+- `.gitattributes`: `*.asm`/`*.inc` em LF (golden do lexer) e binários
+  marcados como `binary`.
+
+### Corrigido
+
+- `build.bat`: `exit /b 0` explícito no fim. Sem `ctx` no PATH, o `where ctx`
+  deixava `errorlevel=1` e o step Build falhava apesar de gerar
+  `out\dexter.exe` (visto na CI).
+- `src/cli/parse_args.asm`: defaults de `nasm`/`link` caem para
+  `nasm.exe`/`link.exe` no PATH quando `C:\Nasm\...` não existe. Antes, o
+  `-r` na CI falhava em todos os rebuilds (`dexter: nasm failed`).
+- CI instala `capstone` (usado por `tests/rip_audit.py`).
 
 ### Verificado
 
@@ -62,7 +75,7 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
 ### Verificado
 
-- `build.bat` limpo (1.2.417); `tests\run_tests.bat` **426/426 OK**;
+- `build.bat` limpo (1.2.419); `tests\run_tests.bat` **426/426 OK**;
   `tests\run_slow.bat` **7/7 OK**.
 
 

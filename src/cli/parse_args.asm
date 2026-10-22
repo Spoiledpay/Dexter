@@ -21,6 +21,7 @@ extern dex_malloc
 extern dex_free
 extern dex_parse_hex_u64
 extern dex_console_print_err
+extern GetFileAttributesA
 
 section .rodata
 s_o           db "-o", 0
@@ -64,6 +65,8 @@ s_bin         db "bin", 0
 s_dotasm      db ".asm", 0
 s_def_nasm    db "C:\Nasm\nasm.exe", 0
 s_def_link    db "C:\Nasm\link.exe", 0
+s_bare_nasm   db "nasm.exe", 0
+s_bare_link   db "link.exe", 0
 e_no_input    db "dexter: no input file (use -h for help)", 13, 10, 0
 e_opt_val     db "dexter: option requires a value", 13, 10, 0
 e_bad_opt     db "dexter: unknown option", 13, 10, 0
@@ -95,10 +98,31 @@ dex_parse_args:
     push r15
     sub rsp, 88               ; 7 pushes -> rsp%16==0; 96%16==0 => ok
     mov r15, rcx              ; cfg
-    ; defaults
+    ; defaults: C:\Nasm\... se existir; senao nasm.exe/link.exe via PATH
+    ; (CI e instalacoes sem C:\Nasm). -N/-L continuam sobrescrevendo.
+    lea rcx, [rel s_def_nasm]
+    sub rsp, 32
+    call GetFileAttributesA
+    add rsp, 32
+    cmp eax, -1
+    je .def_nasm_bare
     lea rax, [rel s_def_nasm]
+    jmp .def_nasm_set
+.def_nasm_bare:
+    lea rax, [rel s_bare_nasm]
+.def_nasm_set:
     mov [r15+DexConfig.nasm_path], rax
+    lea rcx, [rel s_def_link]
+    sub rsp, 32
+    call GetFileAttributesA
+    add rsp, 32
+    cmp eax, -1
+    je .def_link_bare
     lea rax, [rel s_def_link]
+    jmp .def_link_set
+.def_link_bare:
+    lea rax, [rel s_bare_link]
+.def_link_set:
     mov [r15+DexConfig.linker_path], rax
     mov dword [r15+DexConfig.mode], DEX_MODE_WIN64
     ; obter linha de comando (2 pushes? não — dentro do frame)

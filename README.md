@@ -120,7 +120,7 @@ Códigos de retorno: `0` sucesso, `1` uso incorreto, `2` I/O, `3` PE inválido,
 
 ## Testes
 
-- **Suíte rápida** (`tests\run_tests.bat`): **426/426 OK** em 1.2.417.
+- **Suíte rápida** (`tests\run_tests.bat`): **426/426 OK** em 1.2.419.
 - **Suíte lenta** (`tests\run_slow.bat`): **7/7 OK** — ld.lld 68 MB
   byte-idêntico + gcc 2 MB byte-idêntico e compilando `hello.c`.
 - **Fuzz** (`tests/fuzz_pe.py`): PE corrompido nunca deve crashar/hang;
@@ -132,7 +132,7 @@ Códigos de retorno: `0` sucesso, `1` uso incorreto, `2` I/O, `3` PE inválido,
 
 ## Versão atual
 
-**Dexter 1.2.417** (`-ver`). O patch é incrementado a cada `build.bat` via
+**Dexter 1.2.419** (`-ver`). O patch é incrementado a cada `build.bat` via
 `version.bin` + `tools\bump_version.ps1`.
 
 ## Limites conhecidos (honestos)
