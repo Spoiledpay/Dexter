@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """dbg_probe.py TARGET [--ref ORIG] [--timeout MS]
 
 Sonda forense da D-19 fatia 2c: roda TARGET sob depurador (CreateProcessA com
@@ -39,7 +39,7 @@ REGS = [("rax", 120), ("rcx", 128), ("rdx", 136), ("rbx", 144),
         ("r8", 184), ("r9", 192), ("r10", 200), ("r11", 208),
         ("r12", 216), ("r13", 224), ("r14", 232), ("r15", 240),
         ("rip", 248), ("eflags", 68)]
-STACK_QWORDS = 8
+STACK_QWORDS = 32
 STATUS = {
     0xC0000005: "ACCESS_VIOLATION", 0xC000001D: "ILLEGAL_INSTRUCTION",
     0xC0000094: "INT_DIVIDE_BY_ZERO", 0xC00000FD: "STACK_OVERFLOW",
@@ -145,6 +145,9 @@ k32.ReadProcessMemory.restype = wt.BOOL
 k32.ReadProcessMemory.argtypes = [wt.HANDLE, ctypes.c_void_p, ctypes.c_void_p,
                                  ctypes.c_size_t,
                                  ctypes.POINTER(ctypes.c_size_t)]
+k32.K32GetMappedFileNameA.restype = wt.DWORD
+k32.K32GetMappedFileNameA.argtypes = [wt.HANDLE, ctypes.c_void_p, wt.LPSTR,
+                                     wt.DWORD]
 
 
 def rd64(buf, off):
@@ -166,6 +169,16 @@ def read_ctx(thread):
 def describe_seen(seen):
     return " ".join(f"[t{t[0]}]0x{t[1]:08X}@0x{t[2]:X}"
                     f"{' 1st' if t[6] else ' 2nd'}" for t in seen)
+
+
+def describe_mod(mods, va):
+    best = None
+    for (base, name) in mods:
+        if base <= va and (best is None or base > best[0]):
+            best = (base, name)
+    if best is None:
+        return None
+    return f"{best[1]}+0x{va - best[0]:X}"
 
 
 def describe(img, va, label):
@@ -200,6 +213,7 @@ def probe(target, ref, timeout):
     print(f"ALVO {target}")
     ev = DEBUG_EVENT()
     seen = []
+    mods = []
     module_base = img['imagebase']
     exit_code = None
     while True:
@@ -221,6 +235,15 @@ def probe(target, ref, timeout):
             hfile = ev.u.LoadDll.hFile
             if hfile:
                 k32.CloseHandle(hfile)
+            dbase = ev.u.LoadDll.lpBaseOfDll or 0
+            if dbase:
+                buf = ctypes.create_string_buffer(512)
+                n = k32.K32GetMappedFileNameA(pi.hProcess,
+                                           ctypes.c_void_p(dbase), buf,
+                                           len(buf))
+                dname = (buf.raw[:n].decode('latin1') if n else "?")
+                dname = dname.rsplit('\\', 1)[-1]
+                mods.append((dbase, dname))
         elif code == EXCEPTION_DEBUG_EVENT:
             rec = ev.u.Exception.ExceptionRecord
             exc_code = rec.ExceptionCode & 0xFFFFFFFF
@@ -291,7 +314,9 @@ def probe(target, ref, timeout):
           f"em 0x{exc_addr:X} [t{tid}]")
     base = module_base or img['imagebase']
     img['imagebase'] = base
-    print("RIP  " + describe(img, exc_addr, "rip"))
+    print("RIP  " + describe(img, exc_addr, "rip") +
+          (f" [{describe_mod(mods, exc_addr)}]"
+           if describe_mod(mods, exc_addr) else ""))
     if exc_code == 0xC0000005 and info:
         op = {0: "leitura", 1: "escrita", 8: "execucao"}.get(info[0],
                                                              f"op={info[0]}")
@@ -312,7 +337,9 @@ def probe(target, ref, timeout):
         print("REGS " + " ".join(f"{n}=0x{vals[n]:X}" for n, _ in REGS))
         print("RSP  " + describe(img, vals['rsp'], "rsp"))
         for i, q in enumerate(stack):
-            print(f"STACK+{i * 8:02X} " + describe(img, q, "q"))
+            extra = describe_mod(mods, q)
+            print(f"STACK+{i * 8:02X} " + describe(img, q, "q") +
+                  (f" [{extra}]" if extra else ""))
         if timg and exc_addr >= timg['imagebase']:
             rva = exc_addr - timg['imagebase']
             on, oo = secdump.locate(timg['secs'], rva)

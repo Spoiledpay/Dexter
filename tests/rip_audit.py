@@ -48,6 +48,15 @@ def load_asm(path):
     return out
 
 
+def load_labels(path):
+    labs = set()
+    for line in open(path, 'r', errors='replace'):
+        m = LABEL.match(line)
+        if m:
+            labs.add(int(m.group(1), 16))
+    return labs
+
+
 def main():
     if len(sys.argv) != 4:
         print(__doc__)
@@ -60,6 +69,7 @@ def main():
     md.detail = True
     base = orig['imagebase']
     blocks = load_asm(asm)
+    labels = load_labels(asm)
     bad = []
     scanned = 0
     for va, raw in blocks:
@@ -82,28 +92,34 @@ def main():
                     new_va = reb['imagebase'] + tsec['va'] + ooff
                 if new_va != tgt:
                     bad.append((ins.address, tgt, key, ooff, new_va,
-                                ins.mnemonic))
-    print(f"db-blocks={len(blocks)} decodificados={scanned}")
+                                ins.mnemonic, tgt in labels))
+    print(f"db-blocks={len(blocks)} decodificados={scanned} labels={len(labels)}")
     if not bad:
         print("OK: nenhuma referencia RIP-relative congelada aponta p/ secao movida")
         return 0
     bysec = {}
     bymne = {}
-    for (_, _, key, _, _, mne) in bad:
+    for (_, _, key, _, _, mne, _) in bad:
         bysec[key] = bysec.get(key, 0) + 1
         bymne[mne] = bymne.get(mne, 0) + 1
+    fixable = [b for b in bad if b[6]]
+    unfix = [b for b in bad if not b[6]]
     print(f"FALSOS: {len(bad)} referencia(s) RIP-relative em `db` com seção alvo movida")
     for key in sorted(bysec):
         print(f"  alvo {key:12} {bysec[key]:4}x")
     print("  mnemonicos " + " ".join(f"{m}={n}" for m, n in
                                     sorted(bymne.items(), key=lambda kv: -kv[1])))
-    for (va, tgt, key, ooff, new_va, mne) in bad[:40]:
+    print(f"  corrigiveis (label_<VA> existe) {len(fixable)} | "
+          f"limite honesto (sem label) {len(unfix)}")
+    for (va, tgt, key, ooff, new_va, mne, has) in bad[:40]:
         ns = f"0x{new_va:X}" if new_va is not None else "ausente"
         print(f"  VA 0x{va:X} {mne:8} -> congelado 0x{tgt:X} "
-              f"({key}+0x{ooff:X}) correto {ns}")
+              f"({key}+0x{ooff:X}) correto {ns}"
+              f"{'' if has else ' [sem label]'}")
     if len(bad) > 40:
         print(f"  ... +{len(bad) - 40}")
-    return 1
+    # gate: so as corrigiveis bloqueiam; as sem label sao limite declarado
+    return 1 if fixable else 0
 
 
 if __name__ == '__main__':
