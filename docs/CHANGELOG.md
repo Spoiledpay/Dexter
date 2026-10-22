@@ -6,6 +6,18 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
 ### Adicionado
 
+- **x87 nativo (2a)** (1.2.427): as 2048 codificações `D8-DF` (8 opcodes ×
+  256 ModRM) deixam de sair em `db` e passam a instrução real, com forma de
+  operando em tabela (`x87_shape`/`x87_memsz` + `dex_x87_form`), novo kind
+  `DEX_OP_ST` (`st<i>`), keyword `tword` e tamanho sem keyword
+  (`fldenv`/`fnstenv`/`frstor`/`fnsave`). Grafia NASM no texto e no
+  comentário (`fneni`/`fndisi`/`fucomip`/`fcomip`). Prova exaustiva:
+  `tests/x87nat.asm` + `tests/x87nat32.asm` (gerados por
+  `tests/x87_forms_gen.py`), TSV de classificação e
+  `tests/x87_native_check.py` — 1796 nativas em x64, 1736 em x32; `fstpnce`
+  (8) permanece `db` por não existir no NASM. Seção `[60]` (15 checks);
+  round-trip `-m bin -native -r` byte-idêntico e exit 42 nos dois modos.
+  Suíte **453/453** e lenta 7/7.
 - **Índice simbólico em x64** (1.2.422): `[disp32 + idx*scale]` (SIB-abs,
   base ausente) passa a sair `[nosplit abs label_<VA>+<idx>*<scale>]` também
   em x64, fechando a limitação declarada na 1.2.379 (x32). Em x64 o disp32 é

@@ -2,10 +2,11 @@
 ; Dexter/src/disasm/x87.asm
 ; Mnemônicos x87 (opcodes D8-DF) resolvidos por (opcode, ModRM).
 ;
-; R-2.7: x87 continua saindo como `db` byte-exato no emissor (nunca nativo);
-; este módulo só resolve o NOME do mnemônico do comentário (`; fadd`, ...).
+; R-2.7 resolve o NOME (comentário); 2a acrescenta a FORMA de operando
+; (mem por tamanho, st(i), st0/st(i), ax) para emissão NATIVA byte-exata.
 ; A forma memória depende apenas do campo reg; a forma registro (mod=11)
-; depende do ModRM inteiro (C0-FF).
+; depende do grupo do ModRM. `fstpnce` (D9 D8-DF) não tem mnemônico no
+; NASM → db byte-exato (8 codificações; ver PE_NOTES §32).
 ;
 ; Fonte da verdade: capstone 5.0.7 (sweep exaustivo 8x256 em
 ; tests/x87_check.asm, golden tests/expected/x87.txt). Encoding inválido
@@ -21,6 +22,7 @@ default rel
 %include "dexter.inc"
 
 global dex_x87_mne
+global dex_x87_form
 
 section .rodata
 
@@ -43,16 +45,16 @@ s_x87_fcmovu: db "fcmovu", 0
 s_x87_fcom: db "fcom", 0
 s_x87_fcomi: db "fcomi", 0
 s_x87_fcomp: db "fcomp", 0
-s_x87_fcompi: db "fcompi", 0
+s_x87_fcomip: db "fcomip", 0
 s_x87_fcompp: db "fcompp", 0
 s_x87_fcos: db "fcos", 0
 s_x87_fdecstp: db "fdecstp", 0
-s_x87_fdisi8087_nop: db "fdisi8087_nop", 0
+s_x87_fndisi: db "fndisi", 0
 s_x87_fdiv: db "fdiv", 0
 s_x87_fdivp: db "fdivp", 0
 s_x87_fdivr: db "fdivr", 0
 s_x87_fdivrp: db "fdivrp", 0
-s_x87_feni8087_nop: db "feni8087_nop", 0
+s_x87_fneni: db "fneni", 0
 s_x87_ffree: db "ffree", 0
 s_x87_ffreep: db "ffreep", 0
 s_x87_fiadd: db "fiadd", 0
@@ -109,7 +111,7 @@ s_x87_ftst: db "ftst", 0
 s_x87_fucom: db "fucom", 0
 s_x87_fucomi: db "fucomi", 0
 s_x87_fucomp: db "fucomp", 0
-s_x87_fucompi: db "fucompi", 0
+s_x87_fucomip: db "fucomip", 0
 s_x87_fucompp: db "fucompp", 0
 s_x87_fxam: db "fxam", 0
 s_x87_fxch: db "fxch", 0
@@ -158,7 +160,7 @@ x87_reg:
     dq s_x87_fcmovne, s_x87_fcmovne, s_x87_fcmovne, s_x87_fcmovne, s_x87_fcmovne, s_x87_fcmovne, s_x87_fcmovne, s_x87_fcmovne
     dq s_x87_fcmovnbe, s_x87_fcmovnbe, s_x87_fcmovnbe, s_x87_fcmovnbe, s_x87_fcmovnbe, s_x87_fcmovnbe, s_x87_fcmovnbe, s_x87_fcmovnbe
     dq s_x87_fcmovnu, s_x87_fcmovnu, s_x87_fcmovnu, s_x87_fcmovnu, s_x87_fcmovnu, s_x87_fcmovnu, s_x87_fcmovnu, s_x87_fcmovnu
-    dq s_x87_feni8087_nop, s_x87_fdisi8087_nop, s_x87_fnclex, s_x87_fninit, s_x87_fsetpm, 0, 0, 0
+    dq s_x87_fneni, s_x87_fndisi, s_x87_fnclex, s_x87_fninit, s_x87_fsetpm, 0, 0, 0
     dq s_x87_fucomi, s_x87_fucomi, s_x87_fucomi, s_x87_fucomi, s_x87_fucomi, s_x87_fucomi, s_x87_fucomi, s_x87_fucomi
     dq s_x87_fcomi, s_x87_fcomi, s_x87_fcomi, s_x87_fcomi, s_x87_fcomi, s_x87_fcomi, s_x87_fcomi, s_x87_fcomi
     dq 0, 0, 0, 0, 0, 0, 0, 0
@@ -191,9 +193,36 @@ x87_reg:
     dq 0, 0, 0, 0, 0, 0, 0, 0
     dq 0, 0, 0, 0, 0, 0, 0, 0
     dq s_x87_fnstsw, 0, 0, 0, 0, 0, 0, 0
-    dq s_x87_fucompi, s_x87_fucompi, s_x87_fucompi, s_x87_fucompi, s_x87_fucompi, s_x87_fucompi, s_x87_fucompi, s_x87_fucompi
-    dq s_x87_fcompi, s_x87_fcompi, s_x87_fcompi, s_x87_fcompi, s_x87_fcompi, s_x87_fcompi, s_x87_fcompi, s_x87_fcompi
+    dq s_x87_fucomip, s_x87_fucomip, s_x87_fucomip, s_x87_fucomip, s_x87_fucomip, s_x87_fucomip, s_x87_fucomip, s_x87_fucomip
+    dq s_x87_fcomip, s_x87_fcomip, s_x87_fcomip, s_x87_fcomip, s_x87_fcomip, s_x87_fcomip, s_x87_fcomip, s_x87_fcomip
     dq 0, 0, 0, 0, 0, 0, 0, 0
+
+; ---- forma de operando (2a: emissão nativa) ----
+; x87_shape[64] (mod == 11): índice = (opcode-0xD8)*8 + grupo(modrm>>3).
+;   conjunto de operandos por grupo; o índice st(i) vem de modrm&7.
+align 8
+x87_shape:
+    db X87_SH_ST, X87_SH_ST, X87_SH_ST, X87_SH_ST, X87_SH_ST, X87_SH_ST, X87_SH_ST, X87_SH_ST
+    db X87_SH_ST, X87_SH_ST, X87_SH_NONE, X87_SH_DB, X87_SH_NONE, X87_SH_NONE, X87_SH_NONE, X87_SH_NONE
+    db X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_DB, X87_SH_NONE, X87_SH_DB, X87_SH_DB
+    db X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_NONE, X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_DB
+    db X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0
+    db X87_SH_ST, X87_SH_DB, X87_SH_ST, X87_SH_ST, X87_SH_ST, X87_SH_ST, X87_SH_DB, X87_SH_DB
+    db X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_DB, X87_SH_NONE, X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0, X87_SH_ST_ST0
+    db X87_SH_ST, X87_SH_DB, X87_SH_DB, X87_SH_DB, X87_SH_AX, X87_SH_ST0_ST, X87_SH_ST0_ST, X87_SH_DB
+
+; x87_memsz[64] (mod != 11): índice = (opcode-0xD8)*8 + reg. 0 = inválido.
+; Tamanho do operando conforme Intel SDM (o NASM exige o keyword correto;
+; 80 bits é `tword`, não `tbyte`). DEX_MEM_NOSZ: fldenv/fnstenv/frstor/fnsave.
+x87_memsz:
+    db 4, 4, 4, 4, 4, 4, 4, 4
+    db 4, 0, 4, 4, DEX_MEM_NOSZ, 2, DEX_MEM_NOSZ, 2
+    db 4, 4, 4, 4, 4, 4, 4, 4
+    db 4, 4, 4, 4, 0, DEX_MEM_TWORD, 0, DEX_MEM_TWORD
+    db 8, 8, 8, 8, 8, 8, 8, 8
+    db 8, 8, 8, 8, DEX_MEM_NOSZ, 0, DEX_MEM_NOSZ, 2
+    db 2, 2, 2, 2, 2, 2, 2, 2
+    db 2, 2, 2, 2, DEX_MEM_TWORD, 8, DEX_MEM_TWORD, 8
 
 section .text
 
@@ -236,4 +265,57 @@ dex_x87_mne:
     ret
 .zero:
     xor eax, eax
+    ret
+
+;-----------------------------------------------------------------------------
+; dex_x87_form
+; Resolve a FORMA de operando de uma instrução x87 (2a: emissão nativa).
+; O chamador resolve o mnemônico antes (dex_x87_mne != 0); encodings com
+; mnemônico mas sem forma no NASM (D9 D8-DF, `fstpnce`) retornam X87_SH_DB.
+;
+; Args:   rcx = Insn* (Insn.opcode 0xD8-0xDF; Insn.modrm já decodificado)
+; Ret:    eax = X87_SH_* ; edx = tamanho do operando de memória
+;         (1/2/4/8, DEX_MEM_TWORD, DEX_MEM_NOSZ) quando eax == X87_SH_MEM;
+;         0 nos demais casos.
+; Clobber: rax, rcx, rdx, r8
+; Preserva: rbx, rbp, rdi, rsi, r9-r15
+;-----------------------------------------------------------------------------
+dex_x87_form:
+    test rcx, rcx
+    jz .db_f
+    movzx eax, byte [rcx+Insn.opcode]
+    sub eax, 0xD8
+    cmp eax, 7
+    ja .db_f                    ; fora de x87 (wrap incluso)
+    movzx edx, byte [rcx+Insn.modrm]
+    mov r8d, edx
+    shr r8d, 6
+    cmp r8d, 3
+    je .reg_f
+    ; memória: tamanho depende só do campo reg
+    mov r8d, edx
+    shr r8d, 3
+    and r8d, 7
+    shl eax, 3                  ; (op-0xD8)*8
+    add eax, r8d
+    lea r8, [rel x87_memsz]
+    movzx edx, byte [r8+rax]
+    mov eax, X87_SH_MEM
+    ret
+.reg_f:
+    ; registro: conjunto de operandos por (op-0xD8, grupo)
+    mov r8d, edx
+    shr r8d, 3
+    and r8d, 7
+    shl eax, 3
+    add eax, r8d
+    lea r8, [rel x87_shape]
+    movzx eax, byte [r8+rax]
+    cmp eax, X87_SH_DB
+    je .db_f
+    xor edx, edx
+    ret
+.db_f:
+    mov eax, X87_SH_DB
+    xor edx, edx
     ret

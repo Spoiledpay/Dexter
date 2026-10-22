@@ -79,6 +79,8 @@ s_0x         db "0x", 0
 s_sp         db " ", 0
 s_strict4    db "strict dword ", 0
 s_strict8    db "strict qword ", 0
+s_tword      db "tword ", 0
+s_st         db "st", 0
 s_abs        db "abs ", 0
 s_nosplit    db "nosplit ", 0
 s_rel2       db "rel ", 0
@@ -1198,7 +1200,28 @@ dex_emit_native:
     je .fo_rel
     cmp eax, DEX_OP_SEG
     je .fo_seg
+    cmp eax, DEX_OP_ST
+    je .fo_st
     jmp .fo_no                  ; kind 0/inválido → db
+.fo_st:
+    ; x87: "st<reg>" (reg 0-7; a tabela x87 só produz índices válidos).
+    lea rdx, [rel s_st]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    movzx eax, byte [r13+DexOp.reg]
+    add eax, '0'
+    mov rcx, rbx
+    mov edx, eax
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    jmp .fo_ret
 .fo_reg:
     ; tabela por size; hi-rule p/ r8 sem REX (exceto B0-B7: sempre low)
     movzx eax, byte [r13+DexOp.size]
@@ -1557,6 +1580,10 @@ dex_emit_native:
     je .fo_psz4
     cmp eax, 8
     je .fo_psz8
+    cmp eax, DEX_MEM_TWORD
+    je .fo_psztw
+    cmp eax, DEX_MEM_NOSZ
+    je .fo_memshape              ; fldenv/fnstenv/frstor/fnsave: sem keyword
     jmp .fo_no                  ; size inválido → db
 .fo_psz1:
     lea rdx, [rel s_byte]
@@ -1569,6 +1596,9 @@ dex_emit_native:
     jmp .fo_pszgo
 .fo_psz8:
     lea rdx, [rel s_qword]
+    jmp .fo_pszgo
+.fo_psztw:
+    lea rdx, [rel s_tword]
 .fo_pszgo:
     mov rcx, rbx
     sub rsp, 32
@@ -1725,6 +1755,7 @@ dex_emit_native:
     add rsp, 32
     test eax, eax
     jnz .fo_fail
+.fo_ret:
     xor eax, eax
     add rsp, 32
     pop r14

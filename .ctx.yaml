@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-22T18:55:35.1762409-03:00
+updated_at: 2026-10-22T20:04:17.1522817-03:00
 files:
     include\dexter.inc:
         imports:
@@ -47,6 +47,16 @@ files:
             - DEX_OP_IMM
             - DEX_OP_REL
             - DEX_OP_SEG
+            - DEX_OP_ST
+            - DEX_MEM_TWORD
+            - DEX_MEM_NOSZ
+            - X87_SH_DB
+            - X87_SH_NONE
+            - X87_SH_MEM
+            - X87_SH_ST
+            - X87_SH_ST0_ST
+            - X87_SH_ST_ST0
+            - X87_SH_AX
             - DEX_SEG_NONE
             - DEX_SEG_ES
             - DEX_SEG_CS
@@ -134,9 +144,9 @@ files:
             - SymbolTable
         calls: []
         package: ""
-        size: 12972
-        modified_at: 2026-10-15T20:46:10.540596-03:00
-        hash: 3d1e154d6966358565d9609dd9fb4e4e59766c7e886bf1ee965dd2ee10f143e6
+        size: 13622
+        modified_at: 2026-10-22T19:34:10.7472643-03:00
+        hash: 67d5a274ffb597591376afd869efb67452677106115c80bcc8a9e6fefc235980
     include\errors.inc:
         imports: []
         functions:
@@ -1199,6 +1209,8 @@ files:
             - s_sp
             - s_strict4
             - s_strict8
+            - s_tword
+            - s_st
             - s_abs
             - s_nosplit
             - s_rel2
@@ -1301,9 +1313,12 @@ files:
             - DEX_OP_IMM
             - DEX_OP_REL
             - DEX_OP_SEG
-            - DexOp.size
+            - DEX_OP_ST
             - DexOp.reg
+            - DexOp.size
             - DexOp.val
+            - DEX_MEM_TWORD
+            - DEX_MEM_NOSZ
             - DexOp.base
             - DEX_NOBASE
             - DexOp.seg
@@ -1311,9 +1326,9 @@ files:
             - Insn.has_sib
             - DexOp.scale
         package: ""
-        size: 50357
-        modified_at: 2026-10-22T18:37:44.287239-03:00
-        hash: b932df4216437a072cbc7a310c45e1b0176217f800d17f5ee5b958cc3d17286c
+        size: 51074
+        modified_at: 2026-10-22T19:37:34.146293-03:00
+        hash: e3716fc7f61e674583c490ed57d00aab1e3d6abf2b08f6e39798bcaa1e3750f9
     src\disasm\modrm.asm:
         imports:
             - dexter.inc
@@ -1644,6 +1659,7 @@ files:
             - s_sysc
             - s_sse
             - dex_x87_mne
+            - dex_x87_form
             - s_retf
             - s_int3
             - s_int
@@ -1735,6 +1751,13 @@ files:
             - Insn.has_modrm
             - Insn.modrm
             - DEX_OP_SEG
+            - X87_SH_DB
+            - X87_SH_NONE
+            - X87_SH_MEM
+            - X87_SH_AX
+            - X87_SH_ST
+            - X87_SH_ST0_ST
+            - DEX_OP_ST
             - DEX_OP_MEM
             - Insn.segprefix
             - DexOp.seg
@@ -1749,9 +1772,9 @@ files:
             - Insn.sib
             - Insn.disp_size
         package: ""
-        size: 64796
-        modified_at: 2026-10-15T19:26:24.5021694-03:00
-        hash: e7e0b7ed3a87e6b329368d44381bcc69c41678df935a87ffb1c8e8a94521bf8a
+        size: 66606
+        modified_at: 2026-10-22T19:47:32.9139077-03:00
+        hash: d4daacb202d0416c308274579df21b512686286aa23eb4a3a6b660a621ad4bff
     src\disasm\x87.asm:
         imports:
             - dexter.inc
@@ -1774,16 +1797,16 @@ files:
             - s_x87_fcom
             - s_x87_fcomi
             - s_x87_fcomp
-            - s_x87_fcompi
+            - s_x87_fcomip
             - s_x87_fcompp
             - s_x87_fcos
             - s_x87_fdecstp
-            - s_x87_fdisi8087_nop
+            - s_x87_fndisi
             - s_x87_fdiv
             - s_x87_fdivp
             - s_x87_fdivr
             - s_x87_fdivrp
-            - s_x87_feni8087_nop
+            - s_x87_fneni
             - s_x87_ffree
             - s_x87_ffreep
             - s_x87_fiadd
@@ -1840,7 +1863,7 @@ files:
             - s_x87_fucom
             - s_x87_fucomi
             - s_x87_fucomp
-            - s_x87_fucompi
+            - s_x87_fucomip
             - s_x87_fucompp
             - s_x87_fxam
             - s_x87_fxch
@@ -1849,16 +1872,28 @@ files:
             - s_x87_fyl2xp1
             - x87_mem
             - x87_reg
+            - x87_shape
+            - x87_memsz
             - dex_x87_mne
             - jz
             - ja
+            - dex_x87_form
         calls:
+            - X87_SH_ST
+            - X87_SH_NONE
+            - X87_SH_DB
+            - X87_SH_ST0_ST
+            - X87_SH_ST_ST0
+            - X87_SH_AX
+            - DEX_MEM_NOSZ
+            - DEX_MEM_TWORD
             - Insn.opcode
             - Insn.modrm
+            - X87_SH_MEM
         package: ""
-        size: 11304
-        modified_at: 2026-10-15T19:25:51.411296-03:00
-        hash: 87af84b61c3eecdc96f4cc9dda1ffcbf09c84f661ab1f352a1ffa07b21702965
+        size: 14594
+        modified_at: 2026-10-22T19:34:10.7472643-03:00
+        hash: 40590fe11bad5d5b50202ead64b7cd1f73f3d3bfcc5f752912844b34ed620de6
     src\front\ast.asm:
         imports:
             - dexter.inc
@@ -5303,6 +5338,28 @@ files:
         size: 1214
         modified_at: 2026-10-15T19:27:55.9243284-03:00
         hash: 69101c3be301cba737d8783712a15ee53264b11b7350f0f9f188ff1b48e7b0ac
+    tests\x87nat.asm:
+        imports: []
+        functions:
+            - main
+            - x87data
+        calls:
+            - ExitProcess
+        package: ""
+        size: 87096
+        modified_at: 2026-10-22T19:46:40.8259927-03:00
+        hash: 5a5fef2f5d65bf4746b8c9bb15b69773ea0b78b69d91eb74e91eab20f32e2f50
+    tests\x87nat32.asm:
+        imports: []
+        functions:
+            - main
+            - x87data
+        calls:
+            - _ExitProcess@4
+        package: ""
+        size: 87135
+        modified_at: 2026-10-22T19:46:40.8259927-03:00
+        hash: ed65222ad23cc057e965418e467571b9d0a0a2e2bb4c4bb7c693055c0a6be067
     tests\x87_check.asm:
         imports:
             - dexter.inc
@@ -5325,6 +5382,96 @@ files:
         size: 3617
         modified_at: 2026-10-15T19:30:13.3416857-03:00
         hash: 964f1c32b5b5eb3d0ee2e10f35181e731c5c1777ddff07379f942cd648b1b9e9
+    tests\x87_forms_gen.py:
+        imports:
+            - pathlib
+            - pathlib.Path
+            - re
+        functions:
+            - parse_tables
+            - table
+            - bytes_for
+            - main
+        calls:
+            - Path
+            - resolve
+            - parse_tables
+            - read_text
+            - dict
+            - findall
+            - table
+            - search
+            - "n"
+            - SystemExit
+            - group
+            - splitlines
+            - strip
+            - startswith
+            - split
+            - append
+            - len
+            - entradas
+            - bytes_for
+            - main
+            - range
+            - join
+            - write_text
+            - mkdir
+            - print
+            - s
+        package: ""
+        size: 5271
+        modified_at: 2026-10-22T19:46:38.0335834-03:00
+        hash: d3544002a46919171c833d660021612cfcb46c65f4e3dfe4abda70c5980e1606
+    tests\x87_native_check.py:
+        imports:
+            - pathlib
+            - pathlib.Path
+            - re
+            - subprocess
+            - sys
+            - tempfile
+        functions:
+            - die
+            - load_tsv
+            - text_insns
+            - main
+        calls:
+            - die
+            - print
+            - load_tsv
+            - Path
+            - read_text
+            - splitlines
+            - startswith
+            - split
+            - append
+            - int
+            - len
+            - SystemExit
+            - linhas
+            - text_insns
+            - search
+            - end
+            - start
+            - strip
+            - main
+            - TemporaryDirectory
+            - run
+            - str
+            - read_bytes
+            - enumerate
+            - zip
+            - instrucao
+            - d
+            - NASM
+            - join
+            - sorted
+            - exit
+        package: ""
+        size: 4298
+        modified_at: 2026-10-22T19:42:09.7585748-03:00
+        hash: 224ded7b9fe94dc7d71c76a0836eef8aab3f62e6df6a1d9a23571d5b986950cb
 memories:
     - id: 2ecde199-d6a3-ca7f-1b8e-29a27bf49033
       title: 'D-20: codegen nativo byte-fiel em PE MS (encoding load/store + segmento)'
@@ -6084,6 +6231,43 @@ memories:
       confidence: 1
       last_verified: 2026-10-22T18:53:40.4264593-03:00
       created_by: human
+    - id: eb3a3275-b8b1-ceff-02e0-0905170ab36b
+      title: 'NASM x87: tword (nao tbyte), fneni/fndisi, fstpnce inexistente e st0,st0 ambiguo'
+      description: 'Sondas nasm -f bin -l: (1) 80 bits e ''tword'', nao ''tbyte''; (2) feni/fdisi emitem 9B (FWAIT)+opcode (3 bytes) - as formas de 2 bytes sao fneni/fndisi; (3) capstone chama fcompi/fucompi, NASM so conhece fcomip/fucomip; (4) fstpnce (D9 D8-DF) nao existe no NASM -> db obrigatorio; (5) ''fadd st0, st0'' e ambiguo (NASM escolhe DC C0): usar forma de 1 operando ''fadd st0'' para fixar D8 C0; (6) em x32 [disp32] absoluto fora da imagem ja cai em db (limite do modo x32, nao do x87).'
+      type: lesson
+      severity: medium
+      files:
+        - src/disasm/x87.asm
+        - tests/x87_forms_gen.py
+      branch: main
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T20:04:16.7801582-03:00
+      updated_at: 2026-10-22T20:04:16.7801582-03:00
+      confidence: 1
+      last_verified: 2026-10-22T20:04:16.6590948-03:00
+      created_by: human
+    - id: 29be3f78-8712-fc8c-b2ca-21c2e3904359
+      title: 'Implementado: x87 nativo (2a) - 2048 codificacoes provadas'
+      description: 1.2.427. Suite 453/453 (430/430 CI), lenta 7/7. x64 1796 nativas / 244 invalidas / 8 fstpnce; x32 1736 / 244 / 8 / 60 limite de modo. -m bin -native -r byte-identico e exit 42 nos dois modos.
+      type: milestone
+      severity: medium
+      files:
+        - src/disasm/x87.asm
+        - src/disasm/semantics.asm
+        - src/disasm/emit_nasm.asm
+        - tests/x87nat.asm
+        - tests/x87nat32.asm
+        - tests/x87_native_check.py
+        - tests/x87_forms_gen.py
+      branch: main
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T20:04:17.1517514-03:00
+      updated_at: 2026-10-22T20:04:17.1517514-03:00
+      confidence: 1
+      last_verified: 2026-10-22T20:04:16.9888625-03:00
+      created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
       title: 'D-22: entry label via equ no -s + -r'
@@ -6158,6 +6342,26 @@ decisions:
         - D-19
         - sib
         - x64
+      created_by: human
+    - id: 1dd74b1d-5a50-47d6-b2a3-1fefdd6ba67b
+      title: 'x87 nativo: forma de operando em tabela + grafia NASM'
+      description: ""
+      decision: x87_shape[64] por opcode/grupo e x87_memsz[64] por opcode/reg em x87.asm; dex_x87_form devolve shape+size; semantics monta DexOp (novo DEX_OP_ST, ax REG/size2, memoria via .build_rm); emissor ganha st<i>, tword e DEX_MEM_NOSZ; nomes NASM na tabela (fneni/fndisi/fucomip/fcomip); fstpnce fica db.
+      rationale: 'Semantica de operandos x87 nao cabe no modelo generico (st(i), tword, formas implicitas). Grafia NASM evita comentario divergente da instrucao. fstpnce nao existe no NASM: simbolo inventado seria mentira. Ver docs/adr/0006 e PE_NOTES 32.'
+      files:
+        - src/disasm/x87.asm
+        - src/disasm/semantics.asm
+        - src/disasm/emit_nasm.asm
+        - docs/adr/0006-x87-nativo-forma-operando.md
+      participants: []
+      date: 2026-10-22T00:00:00Z
+      status: accepted
+      confidence: 1
+      last_verified: 2026-10-22T20:04:16.8654974-03:00
+      tags:
+        - x87
+        - 2a
+        - nasm
       created_by: human
 dependencies:
     include\dexter.inc:
@@ -6463,7 +6667,11 @@ dependencies:
         - include\dexter.inc
         - src\pe\pe_unwind.asm
     tests\vex.asm: []
+    tests\x87nat.asm: []
+    tests\x87nat32.asm: []
     tests\x87_check.asm:
         - include\dexter.inc
         - src\disasm\x87.asm
+    tests\x87_forms_gen.py: []
+    tests\x87_native_check.py: []
 tags: {}

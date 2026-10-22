@@ -699,3 +699,50 @@ simbólico nos dois modos (`tests/absidx64_check.py`), o `nasm -f win64` do
 Limite declarado: figura como `abs 0x..` (sem símbolo) quando a base não
 cabe em 31 bits — ali a forma não referencia o módulo.
 
+## 32. x87 nativo — forma de operando em tabela, grafia NASM e o que o NASM não expressa (2026-10-22)
+
+R-2.7 já dava o **nome** do x87 (tabela verificada contra capstone 5.0.7),
+mas toda instrução `D8-DF` saía em `db`: faltava a forma de operando.
+A 2a fecha as 2048 codificações (8 opcodes × 256 ModRM) com prova de bytes.
+
+**Fatos do NASM 3.01** (sondas `-f bin -l`, cada um custou uma hipótese):
+
+1. `tbyte` não é keyword; 80 bits é **`tword`** (`fstp tword [rax]` = DB 38).
+2. `feni`/`fdisi` emitem `9B` (FWAIT) + opcode = 3 bytes. As formas de 2
+   bytes são `fneni`/`fndisi` (DB E0/E1).
+3. Capstone diz `fcompi`/`fucompi`; o NASM só conhece `fcomip`/`fucomip`.
+4. `fstpnce` (D9 D8-DF, 8 codificações) **não existe no NASM**.
+5. `fadd st0, st0` é ambíguo (o NASM escolhe DC C0). A forma de **um**
+   operando (`fadd st0`) fixa D8 C0; logo as formas D8 saem `fadd st<i>`.
+6. Em x32, absoluto fora da imagem já caía em `db` (`mov ecx,[0x100]`
+   também) — é limite do modo x32, não do x87.
+
+**Desenho**: `x87.asm` passa a ser dono da forma (`x87_shape[64]` por
+opcode × grupo; `x87_memsz[64]` por opcode × reg; `dex_x87_form`). A
+semântica monta `DexOp` de verdade: novo kind `DEX_OP_ST` (`st<i>`),
+`ax` como REG/size 2 e o operando de memória pelo `.build_rm` (ModRM/SIB/
+disp/seg + regras de forma do emissor). O emissor ganha `st<i>`, `tword`
+e o tamanho "sem keyword" (`DEX_MEM_NOSZ`: `fldenv`/`fnstenv`/`frstor`/
+`fnsave`). Os nomes no comentário passam a ser os do NASM (`fneni`,
+`fndisi`, `fucomip`, `fcomip`) — mesma palavra válida no texto e no rótulo.
+
+**Prova**:
+- `tests/x87nat.asm` (x64) e `tests/x87nat32.asm` (x32), gerados por
+  `tests/x87_forms_gen.py`: 2048 instruções, uma `db` por linha, payload
+  inalcançável (exit 42), endereçamentos cobrindo `[reg]`, `[reg+disp8]`,
+  `[reg+idx*4+disp32]` e (x64) RIP+disp32 = próxima instrução.
+- `tests/expected/x87nat.tsv`: classificação por codificação
+  (`native`, `native32`, mnemônico).
+- `tests/x87_native_check.py`: no x64 monta o `.asm` inteiro com
+  `nasm -f bin` e compara **byte a byte** com o `.exe`; no x32 monta o
+  payload isolado e compara com os bytes do fixture. Em ambos confere a
+  ordem/classificação das 2048.
+- Resultado: x64 **1796 nativas**, x32 **1736 nativas**, 244 encodings
+  inválidos (db sem mnemônico) e 8 `fstpnce` (db com mnemônico). x32 tem
+  ainda 60 `db` por absoluto fora da imagem (limite do modo). `[60]` (15
+  checks) trava tudo; round-trip `-m bin -native -r` byte-idêntico e
+  comportamento 42 nos dois modos.
+- Regressão: suíte 453/453, lenta 7/7; `[39]` teve 2 hashes de golden
+  regenerados por causa da grafia NASM (DB/DF) — sem mudança de forma.
+
+

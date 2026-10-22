@@ -217,8 +217,8 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   com mensagem `pcrel` + `-m bin`; geração pura segue e o caminho fiel do
   `exc` é `-m bin -native -r` (exit 42). Gates de rebuild migraram de `exc`
   para `var64` (5 dirs/62 imports) e `notepad`. `PE_NOTES §30`.
-- Placar honesto: **438 passam, 0 falham** (`tests\run_tests.bat → 438/438 OK`
-  em 1.2.422; 415/415 em `DEXTER_SKIP_LARGE=1`). Lenta `run_slow.bat`:
+- Placar honesto: **453 passam, 0 falham** (`tests\run_tests.bat → 453/453 OK`
+  em 1.2.427; 430/430 em `DEXTER_SKIP_LARGE=1`). Lenta `run_slow.bat`:
   **7/7**. Build: `build.bat` OK. CI GitHub Actions: run #5 verde.
 - [x] **Publicação 1.2.419** (2026-10-22): README PT/EN/CN, GitHub Sponsors,
   CI em `windows-latest`, tag `v1.2.419` e release com `dexter.exe` + zip
@@ -238,8 +238,12 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   `.gb_rchunks` semeia `label_<VA>:` nos dados. Fixture `tests/absidx64.asm`
   + `absidx64_check.py`: win64 e bin simbólicos, `.asm` monta, rebuild win64
   exit 42, bin `fc /b` 0 + exit 42. `PE_NOTES §31`.
-- [ ] **Próxima fila (1.2.422, ordem fixa):** (1) **semântica de operandos
-  VEX/EVEX/x87** (nativo hoje emite `db`);
+- [x] **2a — x87 nativo** (1.2.427, `[60]` 15 checks): tabela de forma
+  (`x87_shape`/`x87_memsz`, `dex_x87_form`), `DEX_OP_ST`, `tword`,
+  `DEX_MEM_NOSZ` e grafia NASM. Exaustivo: 1796 nativas x64 / 1736 x32 /
+  244 inválidas / 8 `fstpnce` db. `PE_NOTES §32`, ADR-0006.
+- [ ] **Próxima fila (1.2.427, ordem fixa):** (1) **2b/2c/2d — VEX/EVEX**
+  (tabela por mapa/pp/W/L; EVEX com máscara/broadcast/`disp8*N`);
   (2) **R-6.6 opção C** — IR otimizável + backend próprio; (3) evolução
   2c-2(b): pós-patch dos campos pcrel do LSDA (parser DWARF EH) + reverter
   a recusa para esses PEs. Espelho em `docs/ROADMAP.md` ("Fila de execução").

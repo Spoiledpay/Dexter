@@ -43,9 +43,17 @@ IDs estáveis para branches/commits. **Fonte única da fila de execução:**
   gaps e resto de `.gb_db_slots`). Fixture `tests/absidx64.asm` (base
   `0x400000`), `tests/absidx64_check.py`; bin byte-idêntico + exit 42.
   `PE_NOTES §31`.
-- [ ] **Semântica de operandos VEX/EVEX/x87** — decodificação/limites são
-  byte-exatos (R-2.7), mas o nativo emite `db`; falta a semântica de
-  label/operando.
+- [x] **2a — x87 nativo** (1.2.427, `[60]` 15 checks): forma de operando em
+  tabela (`x87_shape`/`x87_memsz` + `dex_x87_form`), `DEX_OP_ST`, `tword` e
+  tamanho "sem keyword"; grafia NASM (`fneni`/`fndisi`/`fucomip`/`fcomip`).
+  Prova exaustiva das 2048 codificações (`tests/x87nat*.asm` +
+  `x87_native_check.py`): 1796 nativas em x64, 1736 em x32, `fstpnce`
+  (8) em `db` por não existir no NASM. `PE_NOTES §32`, ADR-0006.
+- [ ] **2b/2c/2d — semântica de operandos VEX/EVEX**: decodificação/limites
+  são byte-exatos (R-2.7), mas o nativo emite `db`. Exige tabela de
+  mnemônico/forma por (mapa, pp, W, L, opcode) — AVX/AVX2 — e, no EVEX,
+  máscaras/broadcast/`disp8*N`. Ordem: VEX2 (C5/0F), VEX3 (C4/0F/38/3A),
+  EVEX (62).
 - [ ] **R-6.6 (opção C)** — IR otimizável + backend próprio (`-f bin` sem
   nasm). Depende de R-6.1–R-6.5 (fechados) e do corpus estável.
 - [ ] **Cobertura de imports por ordinal** no `-overview`/`-json` (R-7.1):

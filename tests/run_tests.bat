@@ -30,7 +30,7 @@ echo === [0] integridade do corpus ===
 rem Guarda todos os fontes sagrados (nao so hello): qualquer .asm gerado
 rem por engano em cima de um fonte do corpus (ex.: `dexter x.exe -v` usa
 rem o default <input>.asm) e detectado antes de rodar a suite.
-for %%A in (absidx absidx64 hello jtable loop memsz no_relocs sibabs strings taildata tiny tiny32 vex) do (
+for %%A in (absidx absidx64 hello jtable loop memsz no_relocs sibabs strings taildata tiny tiny32 vex x87nat x87nat32) do (
     findstr /c:"FONTE SAGRADA DO CORPUS" "tests\%%A.asm" >nul 2>&1
     if errorlevel 1 (
         echo FALHA: tests\%%A.asm foi sobrescrito - restaure o arquivo.
@@ -843,7 +843,7 @@ if exist tests\out\x87_check.exe (
     if errorlevel 1 ( echo "  FALHA: x87 D9 golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 D9 golden" & set /a PASS+=1 )
     findstr /c:"op=218 n=225 h=4014298225" tests\out\x87.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: x87 DA golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DA golden" & set /a PASS+=1 )
-    findstr /c:"op=219 n=197 h=975159937" tests\out\x87.out >nul 2>&1
+    findstr /c:"op=219 n=197 h=775703159" tests\out\x87.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: x87 DB golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DB golden" & set /a PASS+=1 )
     findstr /c:"op=220 n=240 h=1122928381" tests\out\x87.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: x87 DC golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DC golden" & set /a PASS+=1 )
@@ -851,7 +851,7 @@ if exist tests\out\x87_check.exe (
     if errorlevel 1 ( echo "  FALHA: x87 DD golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DD golden" & set /a PASS+=1 )
     findstr /c:"op=222 n=241 h=1839814490" tests\out\x87.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: x87 DE golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DE golden" & set /a PASS+=1 )
-    findstr /c:"op=223 n=217 h=1567726076" tests\out\x87.out >nul 2>&1
+    findstr /c:"op=223 n=217 h=2520008204" tests\out\x87.out >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: x87 DF golden" & set /a FAIL+=1 ) else ( echo "  OK: x87 DF golden" & set /a PASS+=1 )
 ) else ( echo "  FALHA: sem x87_check.exe" & set /a FAIL+=1 )
 "%NASM%" -f win64 -o tests\out\vex.obj tests\vex.asm
@@ -870,11 +870,11 @@ findstr /c:"; evex" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem rotulo evex" & set /a FAIL+=1 ) else ( echo "  OK: rotulo evex" & set /a PASS+=1 )
 findstr /c:"; 3dnow" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem rotulo 3dnow" & set /a FAIL+=1 ) else ( echo "  OK: rotulo 3dnow" & set /a PASS+=1 )
-findstr /c:"; fld" tests\out\vex_nb.asm >nul 2>&1
+findstr /c:"fld dword [rax]" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem x87 real (fld)" & set /a FAIL+=1 ) else ( echo "  OK: x87 real (fld)" & set /a PASS+=1 )
-findstr /c:"; fstp" tests\out\vex_nb.asm >nul 2>&1
+findstr /c:"fstp st0" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem x87 real (fstp)" & set /a FAIL+=1 ) else ( echo "  OK: x87 real (fstp)" & set /a PASS+=1 )
-findstr /c:"; fninit" tests\out\vex_nb.asm >nul 2>&1
+findstr /c:"fninit" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem x87 real (fninit)" & set /a FAIL+=1 ) else ( echo "  OK: x87 real (fninit)" & set /a PASS+=1 )
 rem limites byte-a-byte: cada instrucao VEX/EVEX/3DNow numa unica linha db
 findstr /c:"db 0xC5, 0xE8, 0x58, 0xCB" tests\out\vex_nb.asm >nul 2>&1
@@ -1310,6 +1310,47 @@ if exist tests\out\absidx64_bin_rt.exe (
     tests\out\absidx64_bin_rt.exe >nul 2>&1
     if !errorlevel! EQU 42 ( echo "  OK: rebuild bin sai 42" & set /a PASS+=1 ) else ( echo "  FALHA: rebuild bin nao sai 42" & set /a FAIL+=1 )
 ) else ( echo "  FALHA: sem absidx64_bin_rt.exe" & set /a FAIL+=1 )
+
+echo === [60] x87 nativo (2a): 2048 codificacoes, x64 e x32 ===
+rem Fixture gerado por tests\x87_forms_gen.py: 8 opcodes x 256 ModRM, uma
+rem instrucao por linha `db`. Oraculo tests\x87_native_check.py: o texto
+rem gerado remonta byte-a-byte (nasm) e cada codificacao respeita o TSV
+rem (1796 nativas x64; 1736 x32; 244 invalidas; 8 fstpnce sem forma no NASM).
+"%NASM%" -f win64 -o tests\out\x87nat.obj tests\x87nat.asm > tests\out\x87nat_n.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm x87nat" & type tests\out\x87nat_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm x87nat" & set /a PASS+=1 )
+"%LINKER%" /nologo /nodefaultlib /machine:x64 /subsystem:console /entry:main /out:tests\out\x87nat.exe tests\out\x87nat.obj "%KLIB%" > tests\out\x87nat_l.err 2>&1
+if errorlevel 1 ( echo "  FALHA: link x87nat" & set /a FAIL+=1 ) else ( echo "  OK: link x87nat" & set /a PASS+=1 )
+tests\out\x87nat.exe >nul 2>&1
+if !errorlevel! NEQ 42 ( echo "  FALHA: fixture x87nat deveria sair 42" & set /a FAIL+=1 ) else ( echo "  OK: fixture x87nat sai 42" & set /a PASS+=1 )
+"%DX%" tests\out\x87nat.exe -o tests\out\x87nat_nat.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native x87nat" & set /a FAIL+=1 ) else ( echo "  OK: generate -native x87nat" & set /a PASS+=1 )
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\x87nat_nat.obj tests\out\x87nat_nat.asm > tests\out\x87nat_na.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm do .asm x87 nativo (win64)" & type tests\out\x87nat_na.err & set /a FAIL+=1 ) else ( echo "  OK: .asm x87 nativo monta (win64)" & set /a PASS+=1 )
+"%DX%" tests\out\x87nat.exe -m bin -native -r -O tests\out\x87nat_rt.exe -o tests\out\x87nat_bin.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin -native -r x87nat" & set /a FAIL+=1 ) else ( echo "  OK: -m bin -native -r x87nat" & set /a PASS+=1 )
+fc /b tests\out\x87nat.exe tests\out\x87nat_rt.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: x87nat bin difere (bytes)" & set /a FAIL+=1 ) else ( echo "  OK: x87nat bin byte-identico" & set /a PASS+=1 )
+if exist tests\out\x87nat_rt.exe (
+    tests\out\x87nat_rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rebuild x87nat sai 42" & set /a PASS+=1 ) else ( echo "  FALHA: rebuild x87nat nao sai 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem x87nat_rt.exe" & set /a FAIL+=1 )
+python tests\x87_native_check.py x64 tests\out\x87nat_bin.asm tests\out\x87nat.exe tests\expected\x87nat.tsv "%NASM%" > tests\out\x87nat_chk.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: oraculo x87 x64" & type tests\out\x87nat_chk.txt & set /a FAIL+=1 ) else ( echo "  OK: oraculo x87 x64 (2048 codificacoes)" & set /a PASS+=1 )
+rem ---- x32 (link win32; -native nao existe no -m bin x32) ----
+"%NASM%" -f win32 -o tests\out\x87nat32.obj tests\x87nat32.asm > tests\out\x87nat32_n.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm x87nat32" & type tests\out\x87nat32_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm x87nat32" & set /a PASS+=1 )
+"%LINKER%" /nologo /nodefaultlib /machine:x86 /subsystem:console /entry:main /out:tests\out\x87nat32.exe tests\out\x87nat32.obj "%X86LIB%" > tests\out\x87nat32_l.err 2>&1
+if errorlevel 1 ( echo "  FALHA: link x87nat32" & set /a FAIL+=1 ) else ( echo "  OK: link x87nat32" & set /a PASS+=1 )
+tests\out\x87nat32.exe >nul 2>&1
+if !errorlevel! NEQ 42 ( echo "  FALHA: fixture x87nat32 deveria sair 42" & set /a FAIL+=1 ) else ( echo "  OK: fixture x87nat32 sai 42" & set /a PASS+=1 )
+"%DX%" tests\out\x87nat32.exe -native -r -O tests\out\x87nat32_rt.exe -o tests\out\x87nat32_nat.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native x87nat32" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native x87nat32" & set /a PASS+=1 )
+if exist tests\out\x87nat32_rt.exe (
+    tests\out\x87nat32_rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rebuild x87nat32 sai 42" & set /a PASS+=1 ) else ( echo "  FALHA: rebuild x87nat32 nao sai 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem x87nat32_rt.exe" & set /a FAIL+=1 )
+python tests\x87_native_check.py x32 tests\out\x87nat32_nat.asm tests\x87nat32.asm tests\expected\x87nat.tsv "%NASM%" > tests\out\x87nat32_chk.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: oraculo x87 x32" & type tests\out\x87nat32_chk.txt & set /a FAIL+=1 ) else ( echo "  OK: oraculo x87 x32 (2048 codificacoes)" & set /a PASS+=1 )
 
 echo.
 echo =====================================================

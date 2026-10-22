@@ -32,6 +32,7 @@ extern s_test
 extern s_sysc
 extern s_sse
 extern dex_x87_mne
+extern dex_x87_form
 extern s_retf
 extern s_int3
 extern s_int
@@ -150,8 +151,10 @@ dex_build_operands:
     je .bm32go                 ; ret imm16
     cmp eax, 0xC3
     je .bm32go                 ; ret
-    cmp eax, 0xE0
+    cmp eax, 0xD8
     jb .no
+    cmp eax, 0xE0
+    jb .bm32go                 ; D8-DF: x87 (2a; memória absoluta em x32)
     cmp eax, 0xE4
     jb .bm32go                 ; loop/jcxz
     cmp eax, 0xE8
@@ -1192,8 +1195,9 @@ dex_build_operands:
     jb .l1_flags2               ; F8-FB (mne já setado? não! setar aqui)
     jmp .l1_ffgrp               ; FC-FF
 .l1_x87:
-    ; R-2.7: resolve o mnemônico real (fld/fadd/fstp/...) e mantém db.
-    ; Ponto único de resolução x87; opcode em 0xD8-0xDF.
+    ; R-2.7 + 2a: resolve o mnemônico real (fld/fadd/fstp/...) E a forma de
+    ; operando (tabela x87), permitindo emissão nativa byte-exata. Ponto
+    ; único de resolução x87; opcode em 0xD8-0xDF.
     mov rcx, rbx
     sub rsp, 40
     call dex_x87_mne
@@ -1201,7 +1205,59 @@ dex_build_operands:
     test rax, rax
     jz .no
     mov [rbx+Insn.mne], rax
-    jmp .no
+    mov rcx, rbx
+    sub rsp, 40
+    call dex_x87_form
+    add rsp, 40
+    mov ecx, eax               ; shape (edx = mem size, só MEM)
+    cmp ecx, X87_SH_DB
+    je .no                     ; fstpnce: sem forma no NASM → db
+    cmp ecx, X87_SH_NONE
+    je .ok
+    cmp ecx, X87_SH_MEM
+    je .l1_x87_mem
+    cmp ecx, X87_SH_AX
+    je .l1_x87_ax
+    ; formas com st(i): índice no ModRM
+    movzx eax, byte [rbx+Insn.modrm]
+    and eax, 7
+    cmp ecx, X87_SH_ST
+    je .l1_x87_st
+    cmp ecx, X87_SH_ST0_ST
+    je .l1_x87_st0st
+    ; X87_SH_ST_ST0: st(i), st0
+    mov byte [rbx+Insn.op0+DexOp.kind], DEX_OP_ST
+    mov [rbx+Insn.op0+DexOp.reg], al
+    mov byte [rbx+Insn.op1+DexOp.kind], DEX_OP_ST
+    mov byte [rbx+Insn.op1+DexOp.reg], 0
+    jmp .ok
+.l1_x87_st:
+    mov byte [rbx+Insn.op0+DexOp.kind], DEX_OP_ST
+    mov [rbx+Insn.op0+DexOp.reg], al
+    jmp .ok
+.l1_x87_st0st:
+    mov byte [rbx+Insn.op0+DexOp.kind], DEX_OP_ST
+    mov byte [rbx+Insn.op0+DexOp.reg], 0
+    mov byte [rbx+Insn.op1+DexOp.kind], DEX_OP_ST
+    mov [rbx+Insn.op1+DexOp.reg], al
+    jmp .ok
+.l1_x87_ax:
+    ; fnstsw ax
+    mov byte [rbx+Insn.op0+DexOp.kind], DEX_OP_REG
+    mov byte [rbx+Insn.op0+DexOp.reg], 0
+    mov byte [rbx+Insn.op0+DexOp.size], 2
+    jmp .ok
+.l1_x87_mem:
+    ; operando de memória: reaproveita .build_rm (ModRM/SIB/disp/seg e as
+    ; regras de forma do emissor). r9d = tamanho vindo da tabela x87.
+    mov r8d, 0                 ; opidx 0
+    mov r9d, edx               ; size code
+    sub rsp, 32
+    call .build_rm
+    add rsp, 32
+    test eax, eax
+    jnz .no                    ; forma sem db honesto (disp32 curto etc.)
+    jmp .ok
 .l1_movri:
     ; B0-B7: r8,imm8 | B8-BF: r,imm(v/64)
     mov ecx, eax

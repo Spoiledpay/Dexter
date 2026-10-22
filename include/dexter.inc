@@ -115,11 +115,12 @@ endstruc
 
 ; Operando decodificado (AST flat p/ emissor nativo R-4.5). 16 bytes exatos.
 ; kind: 0=ausente 1=reg 2=mem 3=imm 4=rel(label) 5=seg
-; reg/base/index: 0-15 (GPR); size: 1/2/4/8; scale: 1/2/4/8 (mem);
-; seg: 0=nenhum 1=es 2=cs 3=ss 4=ds 5=fs 6=gs; val: disp(sign-ext)/imm64/alvo.
+; reg/base/index: 0-15 (GPR); size: 1/2/4/8/10(tword)/0xFF(sem keyword);
+; scale: 1/2/4/8 (mem); seg: 0=nenhum 1=es 2=cs 3=ss 4=ds 5=fs 6=gs;
+; val: disp(sign-ext)/imm64/alvo.
 struc DexOp
     .kind           resb 1
-    .reg            resb 1   ; reg ou seg(se kind=5)
+    .reg            resb 1   ; reg, seg(kind=5) ou indice st(i) (kind=6)
     .base           resb 1   ; 0xFF = ausente (RIP)
     .index          resb 1   ; 0xFF = ausente
     .scale          resb 1
@@ -134,6 +135,18 @@ endstruc
 %define DEX_OP_IMM  3
 %define DEX_OP_REL  4
 %define DEX_OP_SEG  5
+%define DEX_OP_ST   6   ; registrador x87: emite `st<reg>`
+%define DEX_MEM_TWORD 10 ; 80 bits (keyword do NASM e `tword`, nao `tbyte`)
+%define DEX_MEM_NOSZ  0xFF ; sem keyword de tamanho (fldenv/fnstenv/frstor/fnsave)
+
+; ---- formas de operando x87 (src/disasm/x87.asm; 2a) ----
+%define X87_SH_DB     0   ; sem forma no NASM => db (fstpnce)
+%define X87_SH_NONE   1   ; sem operandos
+%define X87_SH_MEM    2   ; um operando de memoria (tamanho em x87_memsz)
+%define X87_SH_ST     3   ; st(i)
+%define X87_SH_ST0_ST 4   ; st0, st(i)
+%define X87_SH_ST_ST0 5   ; st(i), st0
+%define X87_SH_AX     6   ; ax
 %define DEX_SEG_NONE 0
 %define DEX_SEG_ES 1
 %define DEX_SEG_CS 2
