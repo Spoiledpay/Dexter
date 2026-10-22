@@ -30,7 +30,7 @@ echo === [0] integridade do corpus ===
 rem Guarda todos os fontes sagrados (nao so hello): qualquer .asm gerado
 rem por engano em cima de um fonte do corpus (ex.: `dexter x.exe -v` usa
 rem o default <input>.asm) e detectado antes de rodar a suite.
-for %%A in (absidx hello jtable loop memsz no_relocs sibabs strings taildata tiny tiny32 vex) do (
+for %%A in (absidx absidx64 hello jtable loop memsz no_relocs sibabs strings taildata tiny tiny32 vex) do (
     findstr /c:"FONTE SAGRADA DO CORPUS" "tests\%%A.asm" >nul 2>&1
     if errorlevel 1 (
         echo FALHA: tests\%%A.asm foi sobrescrito - restaure o arquivo.
@@ -1273,6 +1273,43 @@ if !errorlevel! NEQ 0 ( echo "  FALHA: tail .data nao emitido/simbolico" & type 
 if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin taildata" & set /a FAIL+=1 ) else ( echo "  OK: -m bin taildata" & set /a PASS+=1 )
 fc /b tests\out\taildata.exe tests\out\taildata_bin.exe >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: -m bin taildata difere" & set /a FAIL+=1 ) else ( echo "  OK: -m bin taildata byte-identico" & set /a PASS+=1 )
+
+echo === [59] indice simbolico x64 (SIB-abs com indice) ===
+rem Fixture tests\absidx64.asm: `jmp qword [jtab+rcx*8]` + `mov eax,[jtab2+rdx*4]`.
+rem Requer ImageBase < 2 GiB (/BASE:0x400000) para o disp32 do SIB-abs (base
+rem ausente) apontar para dados da imagem. x32 ja saia simbolico (1.2.379);
+rem aqui o mesmo vale em x64, inclusive no -m bin (correcao VA->file offset).
+"%NASM%" -f win64 -o tests\out\absidx64.obj tests\absidx64.asm > tests\out\absidx64_n.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm absidx64" & type tests\out\absidx64_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm absidx64" & set /a PASS+=1 )
+if exist tests\out\absidx64.obj (
+    "%LINKER%" /nologo /nodefaultlib /machine:x64 /subsystem:console /entry:main /dynamicbase:no /fixed /base:0x400000 /out:tests\out\absidx64.exe tests\out\absidx64.obj "%KLIB%" > tests\out\absidx64_l.err 2>&1
+    if errorlevel 1 ( echo "  FALHA: link absidx64" & type tests\out\absidx64_l.err & set /a FAIL+=1 ) else ( echo "  OK: link absidx64 (/BASE:0x400000)" & set /a PASS+=1 )
+)
+if not exist tests\out\absidx64.exe ( echo "  FALHA: sem absidx64.exe" & set /a FAIL+=1 )
+tests\out\absidx64.exe >nul 2>&1
+if !errorlevel! NEQ 42 ( echo "  FALHA: fixture original deveria sair 42" & set /a FAIL+=1 ) else ( echo "  OK: fixture original sai 42" & set /a PASS+=1 )
+"%DX%" tests\out\absidx64.exe -o tests\out\absidx64_nat.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native absidx64" & set /a FAIL+=1 ) else ( echo "  OK: generate -native absidx64" & set /a PASS+=1 )
+"%DX%" tests\out\absidx64.exe -o tests\out\absidx64_bin.asm -m bin -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -m bin absidx64" & set /a FAIL+=1 ) else ( echo "  OK: generate -m bin absidx64" & set /a PASS+=1 )
+python tests\absidx64_check.py tests\out\absidx64_nat.asm tests\out\absidx64_bin.asm > tests\out\absidx64_chk.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: indice x64 nao-simbolico" & type tests\out\absidx64_chk.txt & set /a FAIL+=1 ) else ( echo "  OK: indice x64 simbolico (win64 e bin)" & set /a PASS+=1 )
+"%NASM%" -f win64 -o tests\out\absidx64_nat.obj tests\out\absidx64_nat.asm > tests\out\absidx64_na.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm do .asm simbolico (label indefinido?)" & type tests\out\absidx64_na.err & set /a FAIL+=1 ) else ( echo "  OK: .asm simbolico monta (win64)" & set /a PASS+=1 )
+"%DX%" tests\out\absidx64.exe -native -r -O tests\out\absidx64_win_rt.exe -o tests\out\absidx64_win_rt.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild win64 absidx64" & set /a FAIL+=1 ) else ( echo "  OK: rebuild win64 absidx64" & set /a PASS+=1 )
+if exist tests\out\absidx64_win_rt.exe (
+    tests\out\absidx64_win_rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rebuild win64 sai 42" & set /a PASS+=1 ) else ( echo "  FALHA: rebuild win64 nao sai 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem absidx64_win_rt.exe" & set /a FAIL+=1 )
+"%DX%" tests\out\absidx64.exe -m bin -native -r -O tests\out\absidx64_bin_rt.exe -o tests\out\absidx64_bin_rt.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin -native -r absidx64" & set /a FAIL+=1 ) else ( echo "  OK: -m bin -native -r absidx64" & set /a PASS+=1 )
+fc /b tests\out\absidx64.exe tests\out\absidx64_bin_rt.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: -m bin absidx64 difere do original" & set /a FAIL+=1 ) else ( echo "  OK: -m bin absidx64 byte-identico" & set /a PASS+=1 )
+if exist tests\out\absidx64_bin_rt.exe (
+    tests\out\absidx64_bin_rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rebuild bin sai 42" & set /a PASS+=1 ) else ( echo "  FALHA: rebuild bin nao sai 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem absidx64_bin_rt.exe" & set /a FAIL+=1 )
 
 echo.
 echo =====================================================

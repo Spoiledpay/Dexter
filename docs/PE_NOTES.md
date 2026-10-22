@@ -655,3 +655,47 @@ Consequência para o corpus: `exc` deixa de ser o fixture de rebuild win64;
 os gates de link usam `var64` (5 DataDirectories) e `notepad` (PE MSVC real,
 1238 refs de `.data` cobertas pela 2c-3). O parser de imports de `exc` segue
 travado em 69 via `-overview -json` (geração pura).
+
+## 31. SIB-abs com índice em x64 — disp32 sinal-estendido e correção `+C` no bin (2026-10-22)
+
+`[disp32 + idx*scale]` (ModRM mod=00, r/m=100, SIB base=101) é o **absoluto
+com índice**. Em x32 o disp32 é uma VA de 32 bits e já saía simbólico
+(`[nosplit label_<VA>+eax*4]`, 1.2.379). Em x64 a regra de encoding muda:
+
+1. **O disp32 é sinal-estendido pela CPU**, não zero-estendido. Logo, um
+   disp32 só endereça a imagem quando o valor é positivo e a `ImageBase`
+   cabe em 31 bits (`/BASE:0x400000`). Com base `0x140000000` o mesmo disp32
+   aponta para `0x00000000_xxxxxxxx` — fora do módulo. Nesse caso o operando
+   continua numérico (`[nosplit abs 0x..]`), byte-exato e honesto: não é uma
+   referência à imagem.
+2. O coletor (`.cs_abs64sib` em `src/gen/rebuild.asm`) usa `movsxd` e só
+   entra no R quando `sign_ext(disp32) >= ImageBase`. O gate de entrada é
+   `mod00 + rm100 + has_sib`, avaliado **antes** do teste `modrm&C7 == 05`
+   (rm=101/RIP) — a ordem invertida descartava todo SIB-abs.
+3. O emissor (`.fo_sibabs` em `src/disasm/emit_nasm.asm`) aceita ambos os
+   modos: `movsxd` p/ x64, `mov eax` p/ x32, e emite
+   `[nosplit abs label_<VA>+<idx>[*<scale>]]`. Sonda `nasm -l`: a forma
+   simbólica e a numérica geram **os mesmos bytes** (com índice o NASM não
+   pode escolher RIP), em `-f win64` e `-f bin`.
+4. **No `-m bin` o label vale FILE OFFSET** (não há `org`; o layout é o do
+   arquivo). O disp32 precisa de `C = VA - off`, com `off = rva_to_offset(rva)`:
+   sai `label_<VA> + 0x<C>+<idx>*<scale>`. O canal é o array `g_abs_corr`
+   (paralelo a `g_abs_vas`/`g_abs_n`/`g_abs_base`), preenchido por
+   `dex_generate_bin`; no win64 fica 0 (o linker resolve labels como VAs).
+5. Efeito colateral obrigatório: o bin emitia dados como um `db` único, sem
+   semear labels. Novo `.gb_rchunks` fatia `[k0,k1)` nos alvos R e emite
+   `label_<VA>:` antes dos bytes (verbatim), aplicado à seção de dados sem
+   imports, aos **gaps** e ao **resto** de `.gb_db_slots`. Sem isso o `.asm`
+   referenciaria um símbolo inexistente.
+
+Prova: fixture `tests/absidx64.asm` (`jmp qword [jtab+rcx*8]`,
+`mov eax,[jtab2+rdx*4]`, `lea r8,[jtab3+rdx*2]`) ligado com
+`/BASE:0x400000 /DYNAMICBASE:NO`; seção `[59]` (12 checks) valida o texto
+simbólico nos dois modos (`tests/absidx64_check.py`), o `nasm -f win64` do
+`.asm` gerado, o rebuild win64 (exit 42) e o `-m bin -native -r`
+**byte-idêntico** (exit 42). Regressão: notepad/exc/var64/hello seguem
+`fc /b` 0 no bin; suíte 438/438 e lenta 7/7.
+
+Limite declarado: figura como `abs 0x..` (sem símbolo) quando a base não
+cabe em 31 bits — ali a forma não referencia o módulo.
+

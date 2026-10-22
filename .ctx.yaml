@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-22T09:23:56.2992472-03:00
+updated_at: 2026-10-22T18:55:35.1762409-03:00
 files:
     include\dexter.inc:
         imports:
@@ -1208,6 +1208,7 @@ files:
             - s_dd_rip
             - s_rel32_4
             - s_minus0x
+            - s_plus0x
             - s_crlf_db
             - s_call_rel
             - s_jmp_rel
@@ -1221,6 +1222,7 @@ files:
             - g_abs_vas
             - g_abs_n
             - g_abs_base
+            - g_abs_corr
             - dex_emit_set_hex
             - dex_emit_label
             - dex_emit_data
@@ -1309,9 +1311,9 @@ files:
             - Insn.has_sib
             - DexOp.scale
         package: ""
-        size: 48632
-        modified_at: 2026-10-21T20:50:51.7163435-03:00
-        hash: 36d5a561742b4fa14ead5d87ffc2327b851c737976a60c5060960cd235c374ba
+        size: 50357
+        modified_at: 2026-10-22T18:37:44.287239-03:00
+        hash: b932df4216437a072cbc7a310c45e1b0176217f800d17f5ee5b958cc3d17286c
     src\disasm\modrm.asm:
         imports:
             - dexter.inc
@@ -2277,6 +2279,7 @@ files:
             - g_abs_vas
             - g_abs_n
             - g_abs_base
+            - g_abs_corr
             - dex_disasm_one
             - dex_build_operands
             - dex_emit_insn
@@ -2399,14 +2402,15 @@ files:
             - dex_generate_asm.emit_pdata_sec
             - dex_generate_asm.emit_xdata_sec
             - dex_generate_asm.uw_bitmap
+            - dex_generate_bin.gb_rchunks
             - dex_generate_asm.wds_chunks
             - dex_generate_asm.wds_gap_win
             - dex_generate_asm.uw_emit
             - DF_QUIET
         package: ""
-        size: 220638
-        modified_at: 2026-10-22T08:02:20.9778299-03:00
-        hash: 3bf29bec7b6b183f9b3a4d85eb883f0c7cfd9e4e340e92e45231f8baf2d8d003
+        size: 228898
+        modified_at: 2026-10-22T18:54:19.094265-03:00
+        hash: 98777da03f19784a39a063ec9e7bc4b38f50d5b02504220b905f6ba7124fa1bd
     src\gen\strings.asm:
         imports:
             - dexter.inc
@@ -3019,6 +3023,56 @@ files:
         size: 907
         modified_at: 2026-10-17T12:38:37.4545005-03:00
         hash: 7a8535b9df8945b71fb2579ce1235ec2eea654ab24b4f1f3c3274ebe01b21db5
+    tests\absidx64.asm:
+        imports: []
+        functions:
+            - main
+            - c0
+            - c1
+            - c2
+            - c3
+            - dflt
+            - out
+            - jtab
+            - jtab2
+            - jtab3
+        calls:
+            - ExitProcess
+        package: ""
+        size: 1270
+        modified_at: 2026-10-22T18:26:11.2996031-03:00
+        hash: ad0eb41dcfa60b5f8447eab5dd57105f0aa744d82a69ecc6a056c980170e43ab
+    tests\absidx64_check.py:
+        imports:
+            - re
+            - sys
+        functions:
+            - die
+            - labels_defined
+            - check_operand
+            - main
+        calls:
+            - die
+            - print
+            - labels_defined
+            - set
+            - group
+            - upper
+            - finditer
+            - label_
+            - check_operand
+            - open
+            - read
+            - s
+            - search
+            - ausente
+            - main
+            - len
+            - exit
+        package: ""
+        size: 2658
+        modified_at: 2026-10-22T18:42:31.1793922-03:00
+        hash: eef9fe616481f45e7dfce774a4ca20eb2745a231e4b8549f5f61f72dc0362d17
     tests\ast_check.asm:
         imports:
             - dexter.inc
@@ -3337,7 +3391,7 @@ files:
             - WriteFile
         package: ""
         size: 898
-        modified_at: 2026-10-06T20:18:09.0802578-03:00
+        modified_at: 2026-10-22T18:51:32.5501589-03:00
         hash: c74ae7f43f47d5473f2e98cb526a1102d36fe96fc1d0c24b0ab402eed6e19fa6
     tests\hello_f3.c:
         imports:
@@ -3399,6 +3453,7 @@ files:
         imports:
             - os
             - re
+            - shutil
             - subprocess
             - sys
             - tempfile
@@ -3412,6 +3467,7 @@ files:
             - len
             - print
             - exists
+            - which
             - load
             - mkdtemp
             - join
@@ -3429,9 +3485,9 @@ files:
             - instrucao
             - exit
         package: ""
-        size: 3529
-        modified_at: 2026-10-21T20:50:58.5185316-03:00
-        hash: d001cad2d04f085a944f1b4409d5a7e0f30c8df338bc0569c58808add2f770dc
+        size: 3622
+        modified_at: 2026-10-22T09:32:20.4951926-03:00
+        hash: 28dbc8ab45c7079f51c34e79f89f12ec2ea65044c62c6a0f89491c1b95f1c1e3
     tests\lex_check.asm:
         imports:
             - dexter.inc
@@ -5976,6 +6032,58 @@ memories:
       confidence: 1
       last_verified: 2026-10-22T08:19:23.2566353-03:00
       created_by: human
+    - id: b98b8d54-114f-326a-5ed4-5dac71f7b288
+      title: 'CLI: -O sem valor consome o proximo flag e grava <input>.asm por default'
+      description: 'Com ''-O'' seguido de outro flag (ex.: -O '''' -o out.asm), o parse aceita o flag como caminho do .exe e o -o e perdido; o default <input>.asm sobrescreve o fonte do corpus (aconteceu com tests/hello.asm na sessao 2026-10-22; restaurado via git). [0] da suite (FONTE SAGRADA) detectou. Fix proposto: valor obrigatorio ausente/iniciado por ''-'' => erro de uso (exit 1).'
+      type: bug
+      severity: high
+      files:
+        - src/cli/parse_args.asm
+      branch: main
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T18:53:23.2936305-03:00
+      updated_at: 2026-10-22T18:53:23.2936305-03:00
+      confidence: 1
+      last_verified: 2026-10-22T18:53:23.1709486-03:00
+      created_by: human
+    - id: 90313fe0-f7d4-69ff-7a81-5672c49ae93a
+      title: 'x64 SIB-abs: disp32 e sinal-estendido (so endereca a imagem com base < 2 GiB)'
+      description: 'Em x64 o disp32 de [disp32+idx*scale] (SIB base=101) e sinal-estendido pela CPU; com base 0x140000000 ele aponta para fora do modulo. Coletor usa movsxd e so entra no R se sign_ext(disp) >= ImageBase. Gate de dispatch precisa testar mod00/rm100/has_sib ANTES de modrm&C7==05 (RIP), senao todo SIB-abs cai em db. Em -f bin o label vale file offset: disp32 simbolico exige +C (C = VA - off) e semear label_<VA> nos dados (.gb_rchunks).'
+      type: lesson
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - src/disasm/emit_nasm.asm
+        - tests/absidx64.asm
+      branch: main
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T18:53:23.3448598-03:00
+      updated_at: 2026-10-22T18:53:23.3448598-03:00
+      confidence: 1
+      last_verified: 2026-10-22T18:53:23.1709486-03:00
+      created_by: human
+    - id: 6d0404ad-eed9-ed9d-4165-2413a45674b1
+      title: 'Implementado: base simbolica do indice em x64 (SIB-abs) + bin +C'
+      description: 'Fila pos-2c item 1 fechada em 1.2.421. Suite 438/438 (415/415 com DEXTER_SKIP_LARGE=1), lenta 7/7. Fixture absidx64 (base 0x400000): win64/bin simbolicos, rebuild win64 exit 42, -m bin byte-identico + exit 42. notepad/exc/var64/hello bin fc 0.'
+      type: milestone
+      severity: medium
+      files:
+        - src/gen/rebuild.asm
+        - src/disasm/emit_nasm.asm
+        - tests/absidx64.asm
+        - tests/absidx64_check.py
+        - tests/run_tests.bat
+        - docs/adr/0005-indice-simbolico-x64.md
+      branch: main
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T18:53:40.5315146-03:00
+      updated_at: 2026-10-22T18:53:40.5315146-03:00
+      confidence: 1
+      last_verified: 2026-10-22T18:53:40.4264593-03:00
+      created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
       title: 'D-22: entry label via equ no -s + -r'
@@ -6031,6 +6139,25 @@ decisions:
         - D-19
         - gcc
         - eh
+      created_by: human
+    - id: 9b1e8143-eedf-4ce8-a705-960d178aa002
+      title: 'Indice simbolico x64: sinal-estensao + correcao +C no bin'
+      description: ""
+      decision: Simbolico em x64 somente quando sign_ext(disp32) cai na imagem (base < 2 GiB); coletor com movsxd e gate SIB antes do teste RIP; no -m bin correcao C=VA-off via array g_abs_corr e semeadura de label_ nos dados com .gb_rchunks; win64 sem correcao.
+      rationale: 'Disp32 em x64 e sinal-estendido: com base >= 4 GiB a forma nao endereca o modulo (simbolo seria enganoso). Em -f bin o label vale file offset, logo o disp32 simbolico exige +C e labels semeados nos dados. Ver docs/adr/0005.'
+      files:
+        - src/gen/rebuild.asm
+        - src/disasm/emit_nasm.asm
+        - docs/adr/0005-indice-simbolico-x64.md
+      participants: []
+      date: 2026-10-22T00:00:00Z
+      status: accepted
+      confidence: 1
+      last_verified: 2026-10-22T18:53:47.7412985-03:00
+      tags:
+        - D-19
+        - sib
+        - x64
       created_by: human
 dependencies:
     include\dexter.inc:
@@ -6276,6 +6403,8 @@ dependencies:
         - include\errors.inc
     src\util\string.asm: []
     tests\absidx.asm: []
+    tests\absidx64.asm: []
+    tests\absidx64_check.py: []
     tests\ast_check.asm:
         - include\dexter.inc
         - src\front\parser.asm

@@ -1,7 +1,7 @@
 # Dexter — Roadmap (requisitos R-x.y + status real)
 
 Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat`
-**426/426 OK** em 1.2.417; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
+**438/438 OK** em 1.2.422; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
 IDs estáveis para branches/commits. **Fonte única da fila de execução:**
 `marco.md` §8 — este arquivo registra o status por requisito.
 
@@ -33,9 +33,16 @@ IDs estáveis para branches/commits. **Fonte única da fila de execução:**
   `off < vsize` no modo link. `notepad`: 1238 refs com label (`rip_audit` 0
   falsos; `ptr_audit` 0). Fixture `tests/taildata.asm` + patch/check;
   `-m bin` segue byte-idêntico. `PE_NOTES §29`.
-- [ ] **Base simbólica do índice em x64** — x32 já sai
-  `[nosplit label_<VA>+idx*scale]` (1.2.379); em x64 o disp32 não é VA
-  (precisa de `+C` no `-f bin`), então segue numérico.
+- [x] **Base simbólica do índice em x64** (1.2.422, `[59]` 12 checks) — x32
+  já saía `[nosplit label_<VA>+idx*scale]` (1.2.379); em x64 o disp32 é
+  **sinal-estendido**, então só é VA da imagem quando positiva (base < 2
+  GiB). Fix: coletor `.cs_abs64sib` (`movsxd` + gate `mod00/rm100/has_sib`
+  antes do teste RIP) e emissor aceitando ambos os modos. No `-m bin` o
+  label vale file offset → `+ 0x<C>` com `C = VA - off` via `g_abs_corr`;
+  novo `.gb_rchunks` semeia `label_<VA>:` nos dados (seção sem imports,
+  gaps e resto de `.gb_db_slots`). Fixture `tests/absidx64.asm` (base
+  `0x400000`), `tests/absidx64_check.py`; bin byte-idêntico + exit 42.
+  `PE_NOTES §31`.
 - [ ] **Semântica de operandos VEX/EVEX/x87** — decodificação/limites são
   byte-exatos (R-2.7), mas o nativo emite `db`; falta a semântica de
   label/operando.

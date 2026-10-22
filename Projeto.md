@@ -889,15 +889,17 @@ Onde paramos (ponto exato):
   (fix: `img`→`[rbp-104]`); `[13]` verde, `[14]`/`[15]` criados,
   goldens `ref_native/` regenerados. Detalhe:
   `docs/SESSAO-2026-10-11-R643.md`.
-- ESTADO ATUAL (2026-10-22, Dexter 1.2.417, suíte 426/426 + lenta 7/7):
+- ESTADO ATUAL (2026-10-22, Dexter 1.2.422, suíte 438/438 + lenta 7/7):
   R-6.1–R-6.5, R-7.1–R-7.5, R-8.1/R-8.2 e R-5.3/R-5.4 FECHADOS; D-22,
   **D-19 fatia 2b** (import table simbólica), **D-19 fatia 2c fix**
   (disp32 RIP relocável via `dd label - $ - 4`, REX exato, `bss` nobits),
   **D-19 fatia 2c-3** (tail de `.data` `vsize>raw` com labels; notepad 1238
-  refs; fixture `taildata`) e **D-19 fatia 2c-2** (recusa honesta do `-native
-  -r` com EH C++ do GCC; ADR-0004; caminho fiel `-m bin`) fechadas —
+  refs; fixture `taildata`), **D-19 fatia 2c-2** (recusa honesta do `-native
+  -r` com EH C++ do GCC; ADR-0004; caminho fiel `-m bin`) e **base simbólica
+  do índice em x64** (SIB-abs `[disp32+idx*scale]`, correção `+C` e semeadura
+  de labels no bin; ADR-0005, `PE_NOTES §31`) fechadas —
   `var64.exe -native -r` roda exit 0, `notepad -native -r` linka e audita
   sem refs congeladas. Fila vigente em `marco.md` §8 / `docs/ROADMAP.md`:
-  base simbólica do índice em x64, semântica VEX/EVEX/x87, R-6.6 (opção C)
-  e evolução 2c-2(b) (pós-patch pcrel). Detalhe:
-  `docs/SESSAO-2026-10-21-D19-2C.md` + `docs/PE_NOTES.md` §29/§30.
+  semântica VEX/EVEX/x87, R-6.6 (opção C) e evolução 2c-2(b) (pós-patch
+  pcrel). Detalhe: `docs/SESSAO-2026-10-21-D19-2C.md` +
+  `docs/PE_NOTES.md` §29/§30/§31.

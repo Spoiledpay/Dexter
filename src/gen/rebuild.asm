@@ -44,6 +44,7 @@ extern dex_u64_to_dec
 extern g_abs_vas
 extern g_abs_n
 extern g_abs_base
+extern g_abs_corr
 extern dex_disasm_one
 extern dex_build_operands
 extern dex_emit_insn
@@ -338,11 +339,13 @@ dex_generate_asm:
     mov [rel g_rarr], rax
     mov [rel g_rn], rdx
     ; F5: expõe o R (RVAs ordenados) + base ao emissor p/ o índice simbólico
-    ; x32 (`[nosplit label_<VA>+eax*4]`). Os globais são do emit_nasm.asm.
+    ; (`[nosplit abs label_<VA>+eax*4]` em x32 e x64). Os globais são do
+    ; emit_nasm.asm. Em win64 o label já vale a VA: g_abs_corr fica 0.
     mov [rel g_abs_vas], rax
     mov [rel g_abs_n], rdx
     mov rax, [r15+PeImage.image_base]
     mov [rel g_abs_base], rax
+    mov qword [rel g_abs_corr], 0
 .no_rarr:
     ; ---- loop de seções ----
     mov edi, [r15+PeImage.num_sections]
@@ -1099,6 +1102,8 @@ dex_generate_asm:
 .cs_rip:
     ; RIP-ref em dados? (só modo 64: disp32, sem 67, rm==101, sem SIB.
     ; Em x32, mod00+rm101+disp32 é ABSOLUTO, não RIP: ver .cs_abs32/D2.)
+    ; rm==100 com SIB base=101 é o ABSOLUTO COM ÍNDICE (SIB-abs): vai p/
+    ; .cs_abs64sib (mesma família do x32, com disp32 sinal-estendido).
     lea rax, [rel g_insn]
     cmp byte [rax+Insn.addr_mode], 1
     je .cs_abs32
@@ -1111,7 +1116,13 @@ dex_generate_asm:
     movzx ecx, byte [rax+Insn.modrm]
     and ecx, 0xC7
     cmp ecx, 0x05
+    je .cs_rip_nosib
+    cmp ecx, 0x04
     jne .cs_adv
+    cmp byte [rax+Insn.has_sib], 0
+    je .cs_adv
+    jmp .cs_abs64sib             ; SIB-abs x64 (base=101): ramo próprio
+.cs_rip_nosib:
     cmp byte [rax+Insn.has_sib], 0
     jne .cs_adv
     ; target = va + len + disp
@@ -1233,7 +1244,29 @@ dex_generate_asm:
     and ecx, 7                   ; SIB base = bits 2-0
     cmp ecx, 5                   ; base=101: sem base (disp32 absoluto)
     jne .cs_adv
-    mov eax, [rax+Insn.disp]     ; VA absoluta (low32; zero-estende)
+    mov eax, [rax+Insn.disp]     ; x32: VA absoluta (low32; zero-estende)
+    jmp .cs_abs_va
+;-----------------------------------------------------------------------------
+; .cs_abs64sib — x64: MEM absoluto COM SIB (mod=00, rm=100, SIB base=101).
+; Mesma família do x32, mas o disp32 é SINAL-ESTENDIDO pela CPU: só endereça
+; a imagem quando positivo (ImageBase < 2 GiB). Usa movsxd para reproduzir a
+; VA efetiva — em base >= 4 GiB o valor cai fora do módulo e nada entra em R
+; (o emissor mantém `abs 0x..` numérico, byte-exato).
+; rax=&g_insn; rdi=base, r15=img, [rbp-112]=len intactos.
+;-----------------------------------------------------------------------------
+.cs_abs64sib:
+    cmp byte [rax+Insn.disp_size], 4
+    jne .cs_adv
+    movzx ecx, byte [rax+Insn.modrm]
+    and ecx, 0xC7
+    cmp ecx, 0x04                ; mod=00 rm=100 (SIB)
+    jne .cs_adv
+    movzx ecx, byte [rax+Insn.sib]
+    and ecx, 7
+    cmp ecx, 5                   ; base=101: sem base (disp32 absoluto)
+    jne .cs_adv
+    movsxd rax, dword [rax+Insn.disp]  ; VA efetiva (sinal-estendida)
+.cs_abs_va:
     cmp rax, rdi
     jb .cs_adv                   ; abaixo da base: fora do image
     sub rax, rdi                 ; trva
@@ -6269,6 +6302,49 @@ dex_generate_bin:
     jz .gb_oom_free
     mov [rel g_rarr], rax
     mov [rel g_rn], rdx
+    ; F5 bin: o emissor só conhece `label_<VA>`; em `-f bin` o label vale o
+    ; FILE OFFSET, então o disp32 SIB-abs simbólico precisa de C = VA - off.
+    ; Monta o array paralelo g_abs_corr (mesmo índice de g_abs_vas); 0 =
+    ; alvo sem bytes (bss) — nesse caso nenhum label é emitido.
+    mov [rel g_abs_vas], rax
+    mov [rel g_abs_n], rdx
+    mov rax, [r15+PeImage.image_base]
+    mov [rel g_abs_base], rax
+    mov qword [rel g_abs_corr], 0
+    mov rcx, rdx
+    shl rcx, 3
+    test rcx, rcx
+    jz .gb_corr_done
+    sub rsp, 32
+    call dex_malloc
+    add rsp, 32
+    test rax, rax
+    jz .gb_oom_free
+    mov [rel g_abs_corr], rax
+    mov qword [rbp-128], 0
+.gb_corr_l:
+    mov rcx, [rbp-128]
+    cmp rcx, [rel g_abs_n]
+    jae .gb_corr_done
+    mov rax, [rel g_abs_vas]
+    mov rdx, [rax+rcx*8]         ; rva
+    mov [rbp-136], rdx
+    mov rcx, r15
+    sub rsp, 32
+    call dex_rva_to_offset
+    add rsp, 32
+    test rax, rax
+    jz .gb_corr_nx
+    mov rdx, [rbp-136]
+    add rdx, [rel g_abs_base]
+    sub rdx, rax                 ; C = VA - off
+    mov rcx, [rbp-128]
+    mov rax, [rel g_abs_corr]
+    mov [rax+rcx*8], rdx
+.gb_corr_nx:
+    inc qword [rbp-128]
+    jmp .gb_corr_l
+.gb_corr_done:
 .gb_setup_done:
     cmp dword [r15+PeImage.arch], DEX_ARCH_X32
     je .gb_hdr32
@@ -6450,7 +6526,32 @@ dex_generate_bin:
     jnz .gb_oom_free
     jmp .gb_next
 .gb_db_plain:
-    ; db dos bytes
+    ; db dos bytes. Em x64 -native com R: semeia `label_<VA>:` nos alvos
+    ; (o emissor pode referenciar label_ em SIB-abs simbólico; sem definição
+    ; o nasm acusaria símbolo indefinido). Bytes/offsets intactos.
+    mov eax, [rbx+DexConfig.flags]
+    test eax, DF_NATIVE
+    jz .gb_db_plain_raw
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    jne .gb_db_plain_raw
+    cmp qword [rel g_rn], 0
+    je .gb_db_plain_raw
+    mov rax, [rbp-96]          ; sec
+    mov ecx, [rax+PeSection.raw_ptr]
+    lea rdx, [rsi+rcx]         ; fptr = file_base + rptr
+    mov r8, [r15+PeImage.image_base]
+    mov ecx, [rax+PeSection.vaddr]
+    add r8, rcx                ; va_base
+    mov rcx, r14               ; buf
+    xor r9d, r9d               ; k0 = 0
+    mov r10d, [rbp-112]        ; k1 = raw
+    sub rsp, 32
+    call .gb_rchunks
+    add rsp, 32
+    test eax, eax
+    jnz .gb_oom_free
+    jmp .gb_next
+.gb_db_plain_raw:
     mov rax, [rbp-96]
     mov ecx, [rax+PeSection.raw_ptr]
     lea rdx, [rsi+rcx]         ; file_base + rptr
@@ -6561,25 +6662,9 @@ dex_generate_bin:
     test eax, eax
     jnz .gb_oom_free
     ; ---- R-8.2 f1: libera setup nativo (frees NULL-safe; legado nada alocou).
-    mov rcx, [rel g_coded]
     sub rsp, 32
-    call dex_free
+    call .gb_free_all
     add rsp, 32
-    mov rcx, [rel g_symR]
-    sub rsp, 32
-    call symtab_free
-    add rsp, 32
-    mov rcx, [rel g_rarr]
-    sub rsp, 32
-    call dex_free
-    add rsp, 32
-    mov qword [rel g_coded], 0
-    mov qword [rel g_coded_n], 0
-    mov qword [rel g_symR], 0
-    mov qword [rel g_rarr], 0
-    mov qword [rel g_rn], 0
-    mov qword [rel g_spancfg], 0
-    mov qword [rel g_liftctx], 0
 .gb_write:
     mov rcx, [rbx+DexConfig.output_asm]
     sub rsp, 32
@@ -6647,25 +6732,9 @@ dex_generate_bin:
     pop rbp
     ret
 .gb_oom_free:
-    mov rcx, [rel g_coded]
     sub rsp, 32
-    call dex_free
+    call .gb_free_all
     add rsp, 32
-    mov rcx, [rel g_symR]
-    sub rsp, 32
-    call symtab_free
-    add rsp, 32
-    mov rcx, [rel g_rarr]
-    sub rsp, 32
-    call dex_free
-    add rsp, 32
-    mov qword [rel g_coded], 0
-    mov qword [rel g_coded_n], 0
-    mov qword [rel g_symR], 0
-    mov qword [rel g_rarr], 0
-    mov qword [rel g_rn], 0
-    mov qword [rel g_spancfg], 0
-    mov qword [rel g_liftctx], 0
     mov rcx, r14
     sub rsp, 32
     call asmbuf_free
@@ -6682,7 +6751,36 @@ dex_generate_bin:
     pop rbx
     pop rbp
     ret
+;-----------------------------------------------------------------------------
+; .gb_free_all — libera o setup nativo do bin (symtab R, array R ordenado,
+; bitmap de código e o array de correção) e zera os globais. Usado tanto no
+; caminho de OOM quanto no de falha de I/O (antes o I/O vazava R/symtab).
+; Frame: sub 40 (shadow 32 + alinhamento; entra com rsp%16==8).
+;-----------------------------------------------------------------------------
+.gb_free_all:
+    sub rsp, 40
+    mov rcx, [rel g_coded]
+    call dex_free
+    mov rcx, [rel g_symR]
+    call symtab_free
+    mov rcx, [rel g_rarr]
+    call dex_free
+    mov rcx, [rel g_abs_corr]
+    call dex_free
+    mov qword [rel g_coded], 0
+    mov qword [rel g_coded_n], 0
+    mov qword [rel g_symR], 0
+    mov qword [rel g_rarr], 0
+    mov qword [rel g_rn], 0
+    mov qword [rel g_abs_corr], 0
+    mov qword [rel g_spancfg], 0
+    mov qword [rel g_liftctx], 0
+    add rsp, 40
+    ret
 .gb_io_free2:
+    sub rsp, 32
+    call .gb_free_all
+    add rsp, 32
     mov rcx, r14
     sub rsp, 32
     call asmbuf_free
@@ -6733,6 +6831,127 @@ dex_generate_bin:
 .gs_d:
     add rsp, 32
     pop r12
+    pop rbx
+    pop rbp
+    ret
+
+;-----------------------------------------------------------------------------
+; .gb_rchunks — fatia [k0,k1) de uma seção de DADOS do `-m bin` em chunks,
+; emitindo `label_<VA>:` em cada alvo R (R-abs simbólico: base do índice).
+; Bytes sempre verbatim (dex_emit_data), offsets intocados — só símbolos a
+; mais; nenhum span/qstr aqui (layout do bin é byte-exato por construção).
+; O label no início da seção NÃO é emitido (o caller já emitiu label_<secVA>).
+; Args: rcx=buf, rdx=fptr (file_base+raw_ptr), r8=va_base, r9d=k0, r10d=k1.
+; Ret: eax=0 ok | 1 OOM. img em [rel g_bin_img] (padrão do modo bin).
+; Frame: 7 pushes (56) + sub 40 = 96 ≡ 0.
+; Slots: [rbp-64]image_base [rbp-72]idx [rbp-80]va do alvo.
+;-----------------------------------------------------------------------------
+.gb_rchunks:
+    push rbp
+    mov rbp, rsp
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
+    mov rbx, rcx                 ; buf
+    mov r12, rdx                 ; fptr
+    mov r13, r8                  ; va_base
+    mov r14d, r9d                ; cur
+    mov r15d, r10d               ; k1
+    mov rax, [rel g_bin_img]
+    mov rax, [rax+PeImage.image_base]
+    mov [rbp-64], rax
+    mov rdi, [rel g_rarr]
+    mov rsi, [rel g_rn]
+    test rdi, rdi
+    jz .gbr_tail
+    test rsi, rsi
+    jz .gbr_tail
+    mov qword [rbp-72], 0        ; idx
+.gbr_l:
+    mov rcx, [rbp-72]
+    cmp rcx, rsi
+    jae .gbr_tail
+    mov rax, [rdi+rcx*8]         ; key (rva, ordenado)
+    add rax, [rbp-64]            ; va do alvo
+    mov rdx, r13
+    mov r8d, r14d
+    add rdx, r8                  ; pos = va_base + cur
+    cmp rax, rdx
+    jb .gbr_nx                   ; antes de cur: pula
+    mov rdx, r13
+    mov r8d, r15d
+    add rdx, r8                  ; end = va_base + k1
+    cmp rax, rdx
+    jae .gbr_tail                ; ordenado: resto fora
+    mov [rbp-80], rax            ; va (sobrevive aos calls)
+    sub rax, r13                 ; off (cabe: < k1 <= raw < 2^32)
+    cmp eax, r14d
+    je .gbr_lab                  ; já na posição: label, sem fatia
+    mov r8d, eax
+    sub r8d, r14d                ; len > 0
+    mov rcx, rbx
+    lea rdx, [r12+r14]
+    mov r9, -1
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .gbr_fail
+    mov rax, [rbp-80]
+    sub rax, r13
+    mov r14d, eax                ; cur = off
+.gbr_lab:
+    cmp r14d, 0
+    je .gbr_nx                   ; início da seção: label do caller
+    mov rcx, rbx
+    mov rdx, [rbp-80]
+    sub rsp, 32
+    call dex_emit_label
+    add rsp, 32
+    test eax, eax
+    jnz .gbr_fail
+.gbr_nx:
+    inc qword [rbp-72]
+    jmp .gbr_l
+.gbr_tail:
+    cmp r14d, r15d
+    jae .gbr_ok
+    mov r8d, r15d
+    sub r8d, r14d
+    mov rcx, rbx
+    lea rdx, [r12+r14]
+    mov r9, -1
+    sub rsp, 32
+    call dex_emit_data
+    add rsp, 32
+    test eax, eax
+    jnz .gbr_fail
+.gbr_ok:
+    xor eax, eax
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    pop rbp
+    ret
+.gbr_fail:
+    mov eax, 1
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
     pop rbx
     pop rbp
     ret
@@ -7056,6 +7275,27 @@ dex_generate_bin:
     jbe .gbs_nodb
     cmp byte [rel g_impwds], 0
     jne .gbs_gap_chunks
+    ; bin: labels R no gap (SIB-abs x64 simbólico pode referenciar label_<VA>)
+    cmp qword [rel g_rn], 0
+    je .gbs_gap_raw
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    jne .gbs_gap_raw
+    mov rcx, rbx                 ; buf
+    mov rdx, r12                 ; file base
+    mov eax, [r13+PeSection.raw_ptr]
+    add rdx, rax                 ; fptr
+    mov r8, [r15+PeImage.image_base]
+    mov eax, [r13+PeSection.vaddr]
+    add r8, rax                  ; va_base
+    mov r9d, [rbp-64]            ; k0 = cur
+    mov r10d, [rbp-80]           ; k1 = best
+    sub rsp, 32
+    call dex_generate_bin.gb_rchunks
+    add rsp, 32
+    test eax, eax
+    jnz .gbs_fail
+    jmp .gbs_nodb
+.gbs_gap_raw:
     mov rdx, r12
     mov eax, [r13+PeSection.raw_ptr]
     add rdx, rax
@@ -7283,6 +7523,27 @@ dex_generate_bin:
     jae .gbs_done
     cmp byte [rel g_impwds], 0
     jne .gbs_rest_chunks
+    ; bin: resto da seção com labels R (mesmo contrato do gap)
+    cmp qword [rel g_rn], 0
+    je .gbs_rest_raw
+    cmp dword [r15+PeImage.arch], DEX_ARCH_X64
+    jne .gbs_rest_raw
+    mov rcx, rbx
+    mov rdx, r12
+    mov eax, [r13+PeSection.raw_ptr]
+    add rdx, rax
+    mov r8, [r15+PeImage.image_base]
+    mov eax, [r13+PeSection.vaddr]
+    add r8, rax
+    mov r9d, [rbp-64]            ; k0 = cur
+    mov r10d, r14d               ; k1 = raw
+    sub rsp, 32
+    call dex_generate_bin.gb_rchunks
+    add rsp, 32
+    test eax, eax
+    jnz .gbs_fail
+    jmp .gbs_done
+.gbs_rest_raw:
     mov rdx, r12
     mov eax, [r13+PeSection.raw_ptr]
     add rdx, rax

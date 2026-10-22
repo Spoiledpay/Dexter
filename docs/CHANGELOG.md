@@ -6,6 +6,16 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
 ### Adicionado
 
+- **Índice simbólico em x64** (1.2.422): `[disp32 + idx*scale]` (SIB-abs,
+  base ausente) passa a sair `[nosplit abs label_<VA>+<idx>*<scale>]` também
+  em x64, fechando a limitação declarada na 1.2.379 (x32). Em x64 o disp32 é
+  sinal-estendido, então a forma só é simbólica quando `ImageBase < 2 GiB`
+  (aí endereça a imagem de verdade); acima disso segue numérica e byte-exata.
+  No `-m bin` o label vale file offset: o emissor aplica `+ 0x<C>`
+  (`C = VA - off`) e o novo `.gb_rchunks` semeia `label_<VA>:` nos dados.
+  Fixture `tests/absidx64.asm` + `tests/absidx64_check.py`, seção `[59]`
+  (12 checks); suíte **438/438** e lenta 7/7.
+
 - `README.md` reescrito para o estado atual (1.2.419): o que a ferramenta
   faz hoje, modos `win64`/`bin`, `-native`, análise inspect-only, uso,
   flags, testes, limites conhecidos e versão.

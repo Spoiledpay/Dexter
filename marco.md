@@ -217,8 +217,8 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   com mensagem `pcrel` + `-m bin`; geração pura segue e o caminho fiel do
   `exc` é `-m bin -native -r` (exit 42). Gates de rebuild migraram de `exc`
   para `var64` (5 dirs/62 imports) e `notepad`. `PE_NOTES §30`.
-- Placar honesto: **426 passam, 0 falham** (`tests\run_tests.bat → 426/426 OK`
-  em 1.2.419; 403/403 em `DEXTER_SKIP_LARGE=1`). Lenta `run_slow.bat`:
+- Placar honesto: **438 passam, 0 falham** (`tests\run_tests.bat → 438/438 OK`
+  em 1.2.422; 415/415 em `DEXTER_SKIP_LARGE=1`). Lenta `run_slow.bat`:
   **7/7**. Build: `build.bat` OK. CI GitHub Actions: run #5 verde.
 - [x] **Publicação 1.2.419** (2026-10-22): README PT/EN/CN, GitHub Sponsors,
   CI em `windows-latest`, tag `v1.2.419` e release com `dexter.exe` + zip
@@ -229,10 +229,18 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   (2c-3). `exc` (EH C++ do GCC, pcrel) fica **recusado por decisão**
   (2c-2/ADR-0004); o comportamento dele é provado em `-m bin -native -r`
   (exit 42). Fecha o escopo medido da D-19;
-- [ ] **Próxima fila (1.2.419, ordem fixa):** (1) **base simbólica do índice
-  em x64** (x32 fechada em 1.2.379);
-  (2) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
-  (3) **R-6.6 opção C** — IR otimizável + backend próprio; (4) evolução
+- [x] **Base simbólica do índice em x64** (1.2.422, `[59]` 12 checks): o
+  disp32 do SIB-abs (base=101) é **sinal-estendido** — só endereça a imagem
+  com base < 2 GiB (`/BASE:0x400000`); coletor `.cs_abs64sib` (`movsxd` +
+  gate `mod00/rm100/has_sib` antes do teste RIP) e emissor
+  `[nosplit abs label_<VA>+idx*scale]` nos dois modos. No `-m bin` o label
+  vale file offset → `+ 0x<C>` (`C = VA - off`, array `g_abs_corr`) e novo
+  `.gb_rchunks` semeia `label_<VA>:` nos dados. Fixture `tests/absidx64.asm`
+  + `absidx64_check.py`: win64 e bin simbólicos, `.asm` monta, rebuild win64
+  exit 42, bin `fc /b` 0 + exit 42. `PE_NOTES §31`.
+- [ ] **Próxima fila (1.2.422, ordem fixa):** (1) **semântica de operandos
+  VEX/EVEX/x87** (nativo hoje emite `db`);
+  (2) **R-6.6 opção C** — IR otimizável + backend próprio; (3) evolução
   2c-2(b): pós-patch dos campos pcrel do LSDA (parser DWARF EH) + reverter
   a recusa para esses PEs. Espelho em `docs/ROADMAP.md` ("Fila de execução").
 

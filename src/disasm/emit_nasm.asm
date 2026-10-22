@@ -88,6 +88,7 @@ s_colon_nl   db ":", 13, 10, 0
 s_dd_rip     db 13, 10, "    dd ", 0
 s_rel32_4    db " - $ - 4", 0
 s_minus0x    db " - 0x", 0
+s_plus0x     db " + 0x", 0
 s_crlf_db    db 13, 10, "    db ", 0
 s_call_rel   db "    call [rel ", 0
 s_jmp_rel    db "    jmp [rel ", 0
@@ -101,17 +102,22 @@ s_global     db "global ", 0
 section .bss
 align 8
 g_emit_hex:  resb 8
-; F5 (índice simbólico x32): rebuild preenche com o array R ordenado (RVAs),
+; F5 (índice simbólico): rebuild preenche com o array R ordenado (RVAs),
 ; o count e o image_base; o emissor consulta p/ decidir `label_<VA>` num
-; operando SIB-abs (base ausente). 0 = desligado (numeric). Definidos AQUI
-; (não em rebuild) p/ os drivers que linkam só emit_nasm.obj fecharem.
+; operando SIB-abs (base ausente). g_abs_corr aponta um array paralelo com a
+; correção VA->file offset do modo `-m bin` (C = VA - off; 0 = sem correção,
+; caso do win64, onde o label já vale a VA). 0 = desligado (numérico).
+; Definidos AQUI (não em rebuild) p/ os drivers que linkam só emit_nasm.obj
+; fecharem.
 global g_abs_vas
 global g_abs_n
 global g_abs_base
+global g_abs_corr
 align 8
 g_abs_vas:   resq 1
 g_abs_n:     resq 1
 g_abs_base:  resq 1
+g_abs_corr:  resq 1
 
 section .text
 
@@ -1814,15 +1820,20 @@ dex_emit_native:
     mov eax, [r13+DexOp.val]     ; disp32 bruto (low32)
     test eax, eax
     jz .fo_sib_idx               ; disp 0: omite (a forma SIB-abs força 0)
-    ; x32: se o disp32 é uma VA rotulável (presente no R ordenado), sai
-    ; `label_<VA>` (índice simbólico). x64 fica numérico: a VA da imagem não
-    ; cabe em 32 bits (e em `-f bin` faltaria a correção `+C`). O R é
-    ; chaveado por RVA (g_abs_vas/g_abs_n/g_abs_base, preenchidos por rebuild).
-    cmp byte [r12+Insn.addr_mode], 1
-    jne .fo_sib_num
+    ; VA rotulável? O R é chaveado por RVA (g_abs_vas/g_abs_n/g_abs_base,
+    ; preenchidos por rebuild). x32: VA = low32 zero-estendida. x64: o disp32
+    ; é SINAL-ESTENDIDO pela CPU — só endereça a imagem quando positivo
+    ; (ImageBase < 2 GiB); acima disso (ex.: 0x140000000) a forma aponta para
+    ; fora do módulo e o operando segue numérico (`abs 0x..`), sem símbolo.
     cmp qword [rel g_abs_n], 0
     je .fo_sib_num
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_ab_va32
+    movsxd rax, dword [r13+DexOp.val]
+    jmp .fo_ab_vahave
+.fo_ab_va32:
     mov eax, [r13+DexOp.val]     ; VA absoluta (low32)
+.fo_ab_vahave:
     mov rdx, [rel g_abs_base]
     cmp rax, rdx
     jb .fo_sib_num
@@ -1846,13 +1857,66 @@ dex_emit_native:
     mov r11, rcx                 ; hi = mid
     jmp .fo_ab_bs
 .fo_ab_hit:
+    ; correção VA->file offset do `-m bin` (g_abs_corr[mid]; 0/ausente =
+    ; win64, onde `label_<VA>` já vale a VA). Cabe em r14 (volátil de fato
+    ; aqui: .en_fmt_op empilha r14 mas não usa).
+    mov r14, [rel g_abs_corr]
+    test r14, r14
+    jz .fo_ab_hit_lab
+    mov r14, [r14+rcx*8]
+.fo_ab_hit_lab:
+    ; `abs` explícito em x64: o índice já impede RIP, mas documenta a forma.
+    cmp byte [r12+Insn.addr_mode], 1
+    je .fo_ab_hit_va
+    lea rdx, [rel s_abs]
     mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    movsxd rdx, dword [r13+DexOp.val]  ; VA verdadeira (disp sinal-estendido)
+    jmp .fo_ab_hit_go
+.fo_ab_hit_va:
     mov edx, [r13+DexOp.val]     ; VA (não o rva)
+.fo_ab_hit_go:
+    mov rcx, rbx
     sub rsp, 32
     call dex_label_emit_va
     add rsp, 32
     test eax, eax
     jnz .fo_fail
+    test r14, r14
+    jz .fo_ab_plus
+    ; prefixo da correção: " + 0x" (C>0) ou " - 0x" (C<0)
+    mov rax, r14
+    test rax, rax
+    js .fo_ab_cneg
+    lea rdx, [rel s_plus0x]
+    jmp .fo_ab_cpre
+.fo_ab_cneg:
+    lea rdx, [rel s_minus0x]
+.fo_ab_cpre:
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov rax, r14
+    test rax, rax
+    jns .fo_ab_cval
+    neg rax
+.fo_ab_cval:
+    mov rcx, rbx
+    mov rdx, rax
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+.fo_ab_plus:
     mov rcx, rbx
     mov edx, '+'
     sub rsp, 32
