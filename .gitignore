@@ -1,5 +1,7 @@
-# Jimi Code
-.Jimi/settings.local.json
+# Arquivos locais de trabalho (não versionados)
+.Jimi/
+Jimi.md
+skill.md
 data/sessions/*
 data/backups/*
 
