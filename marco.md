@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-22, Dexter 1.2.417)
+## 0. Onde estamos (2026-10-22, Dexter 1.2.419)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -46,7 +46,7 @@
 - [x] Build: `build.bat` (`[0/3]` versão → `[1/3]` nasm → `[2/3]` link). Requer `nasm.exe` + `link.exe` + `kernel32.lib`
 - [x] CTX (`ctx.exe`, no PATH): `build.bat` registra proveniência (`ctx build record out\dexter.exe`) + atualiza índice (`ctx scan`) a cada build (best-effort). Uso obrigatório em `skill.md` §10 (descoberta/memórias/decisões/build/auditoria). `.ctx/` ignorado; `.ctx.yaml` versionado. Higiene: `tests/ld.lld.asm` (734 MB gerado) destrackeado (estourava o índice do CTX a ~3 GB).
 - [x] Versão: `version.bin` (magic `DXVB`) + `tools/bump_version.ps1` + `-ver`/banner dinâmicos
-- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[58]`, 426 checks em 1.2.417)
+- [x] Suite rápida: `tests\run_tests.bat` (seções `[0]`–`[58]`, 426 checks em 1.2.419; 403 com `DEXTER_SKIP_LARGE=1`)
 - [x] Suite lenta: `tests\run_slow.bat` (`[S1]` round-trip `ld.lld.exe` 68 MB + `[S2]` gcc byte-idêntico+comportamento)
 - [x] Corpus: `hello/tiny/loop/strings/no_relocs/jtable/t32` (round-trip bin-native) + `var64/gcc/ld.lld` (bin) + `gcc` (`-native-bin` byte-idêntico + comportamento = R-8.2 FECHADA) + negativos `var32/link` (saída 3)
 - [x] Regra D-12: checar dexter com `if !errorlevel! NEQ 0` (crash é negativo; `if errorlevel 1` ignora AV)
@@ -218,21 +218,90 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   `exc` é `-m bin -native -r` (exit 42). Gates de rebuild migraram de `exc`
   para `var64` (5 dirs/62 imports) e `notepad`. `PE_NOTES §30`.
 - Placar honesto: **426 passam, 0 falham** (`tests\run_tests.bat → 426/426 OK`
-  em 1.2.417). Lenta `run_slow.bat`: **7/7**. Build: `build.bat` OK.
-- [x] **Fila após a 2c (1.2.417, ordem fixa):** (1) **D-19 fatia 2** —
+  em 1.2.419; 403/403 em `DEXTER_SKIP_LARGE=1`). Lenta `run_slow.bat`:
+  **7/7**. Build: `build.bat` OK. CI GitHub Actions: run #5 verde.
+- [x] **Publicação 1.2.419** (2026-10-22): README PT/EN/CN, GitHub Sponsors,
+  CI em `windows-latest`, tag `v1.2.419` e release com `dexter.exe` + zip
+  + SHA256. Detalhe e processo em §9.
+- [x] **Fila após a 2c (1.2.419, ordem fixa):** (1) **D-19 fatia 2** —
   comportamento do `.exe` reconstruído pelo `win64` em PE real: `var64`
   roda exit 0; `notepad` linka com 1238 refs de `.data` agora rotuladas
   (2c-3). `exc` (EH C++ do GCC, pcrel) fica **recusado por decisão**
   (2c-2/ADR-0004); o comportamento dele é provado em `-m bin -native -r`
   (exit 42). Fecha o escopo medido da D-19;
-- [ ] **Próxima fila (1.2.417, ordem fixa):** (1) **base simbólica do índice
+- [ ] **Próxima fila (1.2.419, ordem fixa):** (1) **base simbólica do índice
   em x64** (x32 fechada em 1.2.379);
   (2) **semântica de operandos VEX/EVEX/x87** (nativo hoje emite `db`);
   (3) **R-6.6 opção C** — IR otimizável + backend próprio; (4) evolução
   2c-2(b): pós-patch dos campos pcrel do LSDA (parser DWARF EH) + reverter
   a recusa para esses PEs. Espelho em `docs/ROADMAP.md` ("Fila de execução").
 
-## 9. Como marcar
+## 9. Publicação 1.2.419 — CI, README trilíngue e release (2026-10-22)
+
+Fechamento de distribuição do projeto. Tudo abaixo está publicado no
+repositório real `Spoiledpay/Dexter` e provado por execução, não por inspeção.
+
+### 9.1 CI (GitHub Actions)
+
+- Workflow `.github/workflows/ci.yml`: `windows-latest`, MSVC x64
+  (`ilammy/msvc-dev-cmd`), NASM via Chocolatey, `build.bat` e suíte rápida.
+- `DEXTER_SKIP_LARGE=1` pula os fixtures grandes não versionados
+  (`tests/gcc.exe` e `tests/ld.lld.exe`); a suíte completa é local.
+- Última execução: run **#5**, conclusão **success**
+  (`https://github.com/Spoiledpay/Dexter/actions/runs/39779917551`).
+- Correções de portabilidade que a CI exigiu:
+  - `build.bat`: `exit /b 0` no fim (sem `ctx` no PATH o `where ctx`
+    deixava `errorlevel=1` e o step falhava apesar do `.exe` pronto).
+  - `src/cli/parse_args.asm`: default `C:\Nasm\nasm.exe`/`link.exe` cai
+    para `nasm.exe`/`link.exe` do PATH quando `C:\Nasm` não existe.
+  - `.gitattributes`: `*.asm`/`*.inc` em LF (golden do lexer 164 tokens;
+    CRLF virava 199) e binários marcados `binary`.
+  - `tests/run_tests.bat`: `LINKER`/`KLIB`/`X86LIB` portáveis (PATH/SDK) e
+    `DEXTER_SKIP_LARGE`.
+  - `tests/label_drift.py`: usa `shutil.which("nasm")`; não fixa `C:\Nasm`.
+  - Fixtures pequenos versionados: `loop/tiny/strings/no_relocs`, `t32`,
+    `Calculator/Case/Char/color/Color2/Contador`.
+  - CI instala `capstone` (usado por `tests/rip_audit.py`).
+
+### 9.2 README, licença e financiamento
+
+- `README.md` (pt-BR), `README.en.md` (US English) e `README.zh-CN.md`
+  (简体中文), com seletor de idioma e o mesmo conteúdo: recursos atuais,
+  uso, flags, testes, versão, limites e licença.
+- Logo oficial `Dexter_logo_US.png`; badges de CI, MIT e release.
+- Apoio via **GitHub Sponsors** (`https://github.com/sponsors/Spoiledpay`)
+  + `.github/FUNDING.yml` (`github: Spoiledpay`).
+- `LICENSE` MIT (`Labsobjects.org | Developer`), idêntico ao holder do
+  repositório remoto.
+
+### 9.3 Release
+
+- Tag anotada `v1.2.419` no commit da publicação; `version.bin` = 1.2.419.
+- Release: `https://github.com/Spoiledpay/Dexter/releases/tag/v1.2.419`.
+- Assets publicados:
+  - `dexter.exe` (114.688 B) — binário standalone (kernel32 apenas);
+  - `dexter-v1.2.419-win64.zip` (65.737 B) — exe + READMEs + LICENSE +
+    `docs/CLI.md`;
+  - `SHA256SUMS.txt`.
+- Hashes:
+  - `b9109771caeb09fb3c244d70b1ed47ee80055b28817d6953b2d945717e86bbde` (`dexter.exe`)
+  - `d786bf515c51039d9b979062025bcf50db648eb2ec8ecfbe0bfdf88a3de10a47` (zip)
+- Verificação pós-publicação: asset baixado de volta, hash confere e
+  `dexter.exe -ver` imprime **1.2.419** (exit 0).
+
+### 9.4 Higiene de histórico
+
+- O histórico local ainda continha `tests/ld.lld.asm` (blob de **712 MB**
+  em commits antigos), que o GitHub rejeitaria (>100 MB).
+- Histórico de `main` reescrito com `git filter-branch --index-filter`
+  removendo o path; tags antigas reapontadas para os commits equivalentes;
+  `git gc` aplicado. Repositório local: **4,31 MiB**, nenhum blob >100 MB.
+- O commit inicial do GitHub (`LICENSE`) foi integrado por merge; `main`
+  ficou fast-forward em relação ao remoto e foi enviada.
+- Regra: antes do primeiro push, conferir o maior blob de
+  `git rev-list --objects <branch>`; nunca enviar binário >100 MB.
+
+## 10. Como marcar
 
 - Só marque `[x]` com comando exato verde (ex: `tests\run_tests.bat → 80/80 OK`).
 - Cada `[x]` pede: commit Conventional (`Refs:` + `Testes:`) + linha em `docs/REVISAO.md`.

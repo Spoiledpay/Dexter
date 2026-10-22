@@ -13,6 +13,10 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
   **GitHub Sponsors**; `.github/FUNDING.yml` habilita o botão Sponsor.
 - `.github/workflows/ci.yml`: build em `windows-latest` com MSVC + NASM e
   suíte rápida (`DEXTER_SKIP_LARGE=1`); artefatos `dexter.exe`/map/logs.
+- `README.md`, `README.en.md` e `README.zh-CN.md` com seletor de idioma,
+  badges de CI/MIT/release e link de download.
+- Release `v1.2.419` publicada com `dexter.exe`, zip win64 e
+  `SHA256SUMS.txt`; CI run #5 verde no `windows-latest`.
 
 ### Alterado
 
