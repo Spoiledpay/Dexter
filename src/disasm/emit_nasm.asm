@@ -85,6 +85,10 @@ s_rel2       db "rel ", 0
 s_relpre     db "[rel ", 0
 s_crlf       db 13, 10, 0
 s_colon_nl   db ":", 13, 10, 0
+s_dd_rip     db 13, 10, "    dd ", 0
+s_rel32_4    db " - $ - 4", 0
+s_minus0x    db " - 0x", 0
+s_crlf_db    db 13, 10, "    db ", 0
 s_call_rel   db "    call [rel ", 0
 s_jmp_rel    db "    jmp [rel ", 0
 s_call_abs   db "    call [", 0
@@ -330,9 +334,12 @@ dex_emit_data:
 ;-----------------------------------------------------------------------------
 ; dex_emit_insn
 ; Args: rcx=buf, rdx=Insn*, r8=import_name (char* __imp_X ou 0),
-;       r9d=kind (0=db, 1=call[rel], 2=jmp[rel], 3=mov r64,[rel], 4=lea r64,[rel])
-;       + reg_idx em [rsp+40]? — simplificação: kinds 3/4 com reg em r10?
-; Para kinds 3/4 o chamador passa o índice do registrador via 5º arg na pilha.
+;       r9d=kind (0=db, 1=call[rel], 2=jmp[rel], 5=db com disp32 RIP-rel
+;       reemissivel). Kinds 3/4 nunca foram implementados (D-2).
+;       kind 5: 5º arg na pilha ([rbp+48]) = VA alvo. O chamador reserva
+;       48 B e grava o alvo em [rsp+32] antes do call.
+;       Emite "db <prefixo>" + "dd label_<alvo> - $ - 4 [- 0x<imm>]" +
+;       "db <imm>" — REL32 que o nasm/linker recalculam (D-19 2c).
 ; Ret: rax=0 ok, 1 OOM.
 ; Emite label + (db exato | instrução real com símbolo).
 ;-----------------------------------------------------------------------------
@@ -356,15 +363,26 @@ dex_emit_insn:
     add rsp, 32
     test eax, eax
     jnz .fail_i
+    cmp r14d, 5
+    je .as_db_rip              ; kind 5 não usa impname
     cmp r14d, 0
     je .as_db
     cmp r13, 0
     je .as_db
     cmp r14d, 1
-    je .do_call
+    je .do_imp
     cmp r14d, 2
-    je .do_jmp
-    jmp .as_db                 ; kinds 3/4: não implementado nesta fase -> db
+    jne .as_db
+.do_imp:
+    ; REX.W/B em `call|jmp [mem]` é redundante e o nasm o descarta (7 -> 6
+    ; bytes). Emitir db preserva os bytes; o walker então usa o kind 5 e
+    ; relocaliza o disp32 (D-19 fatia 2c: era o shift de 1 byte que fazia
+    ; o ponteiro do `.CRT` cair em label+(-1)).
+    cmp byte [r12+Insn.has_rex], 0
+    jne .as_db
+    cmp r14d, 1
+    je .do_call
+    jmp .do_jmp
 .do_call:
     cmp byte [r12+Insn.addr_mode], 1
     je .do_call_abs
@@ -432,52 +450,164 @@ dex_emit_insn:
     add rsp, 32
     test eax, eax
     jnz .fail_i
+    xor r13d, r13d             ; i = início
     mov r14d, [r12+Insn.length]
-    xor r13d, r13d             ; i
-.db_l:
-    cmp r13d, r14d
-    jae .tail_mne
-    movzx eax, byte [r12+r13+Insn.raw]
-    mov byte [rbp-48], '0'
-    mov byte [rbp-47], 'x'
-    mov ecx, eax
-    shr ecx, 4
-    cmp ecx, 9
-    jbe .hn2
-    add ecx, 55
-    jmp .hs2
-.hn2:
-    add ecx, 48
-.hs2:
-    mov [rbp-46], cl
-    and eax, 15
-    cmp eax, 9
-    jbe .ln2
-    add eax, 55
-    jmp .ls2
-.ln2:
-    add eax, 48
-.ls2:
-    mov [rbp-45], al
-    lea rdx, [rbp-48]
-    mov rcx, rbx
-    mov r8, 4
-    sub rsp, 32
-    call asmbuf_append
-    add rsp, 32
+    call .db_list
     test eax, eax
     jnz .fail_i
-    inc r13d
-    cmp r13d, r14d
-    jae .tail_mne
-    lea rdx, [rel s_comma]
+    jmp .tail_mne
+
+;-----------------------------------------------------------------------------
+; .as_db_rip — kind 5: "db <prefixo>" + "dd label_<alvo> - $ - 4 [- 0x<imm>]"
+; + "db <imm>". O disp32 (mod00/rm101) deixa de ser constante e vira REL32,
+; então o linker recalcula quando move a seção alvo (D-19 fatia 2c).
+; Requer disp_size==4 e imm depois do disp; qualquer dúvida -> db comum.
+;-----------------------------------------------------------------------------
+.as_db_rip:
+    mov rax, [rbp+48]             ; tva (5º arg; rbp+16 = shadow)
+    mov [rbp-72], rax
+    test rax, rax
+    jz .as_db
+    cmp byte [r12+Insn.disp_size], 4
+    jne .as_db
+    movzx eax, byte [r12+Insn.imm_size]
+    mov [rbp-56], rax             ; imm_size
+    mov ecx, [r12+Insn.length]
+    sub ecx, eax
+    sub ecx, 4                    ; disp_off = len - imm - 4
+    cmp ecx, 2                    ; disp vem depois de opcode+modrm
+    jb .as_db
+    mov [rbp-60], ecx
+    ; prefixo (bytes antes do disp)
+    lea rdx, [rel s_db]
     mov rcx, rbx
     sub rsp, 32
     call asmbuf_append_str
     add rsp, 32
     test eax, eax
     jnz .fail_i
-    jmp .db_l
+    xor r13d, r13d
+    mov r14d, [rbp-60]
+    call .db_list
+    test eax, eax
+    jnz .fail_i
+    ; disp relocável
+    lea rdx, [rel s_dd_rip]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fail_i
+    lea rdx, [rel s_label_pre]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fail_i
+    mov rcx, rbx
+    mov rdx, [rbp-72]
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .fail_i
+    lea rdx, [rel s_rel32_4]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fail_i
+    mov r14, [rbp-56]             ; imm_size
+    test r14, r14
+    jz .asr_done
+    ; o disp é relativo ao FIM da instrução (depois do imm)
+    lea rdx, [rel s_minus0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fail_i
+    mov rcx, rbx
+    mov rdx, r14
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .fail_i
+    ; imm (bytes depois do disp)
+    lea rdx, [rel s_crlf_db]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fail_i
+    mov r13d, [rbp-60]
+    add r13d, 4
+    mov r14d, [r12+Insn.length]
+    call .db_list
+    test eax, eax
+    jnz .fail_i
+.asr_done:
+    jmp .tail_mne
+
+;-----------------------------------------------------------------------------
+; .db_list — "0xNN, 0xNN, ..." (sem prefixo) de r13d até r14d (exclusivo).
+; Scratch: [rbp-48..-45] do frame do emissor. Chamado com rsp 16-alinhado;
+; reserva 40 B (sombra+alinhamento) p/ os calls internos.
+; Clobber: rax, rcx, rdx, r8. Preserva: rbx, rbp, r12-r14.
+;-----------------------------------------------------------------------------
+.db_list:
+    sub rsp, 40
+.dbl_l:
+    cmp r13d, r14d
+    jae .dbl_e
+    movzx eax, byte [r12+r13+Insn.raw]
+    mov byte [rbp-48], '0'
+    mov byte [rbp-47], 'x'
+    mov ecx, eax
+    shr ecx, 4
+    cmp ecx, 9
+    jbe .dbl_hn
+    add ecx, 55
+    jmp .dbl_hs
+.dbl_hn:
+    add ecx, 48
+.dbl_hs:
+    mov [rbp-46], cl
+    and eax, 15
+    cmp eax, 9
+    jbe .dbl_ln
+    add eax, 55
+    jmp .dbl_ls
+.dbl_ln:
+    add eax, 48
+.dbl_ls:
+    mov [rbp-45], al
+    lea rdx, [rbp-48]
+    mov rcx, rbx
+    mov r8, 4
+    call asmbuf_append
+    test eax, eax
+    jnz .dbl_e
+    inc r13d
+    cmp r13d, r14d
+    jae .dbl_e
+    lea rdx, [rel s_comma]
+    mov rcx, rbx
+    call asmbuf_append_str
+    test eax, eax
+    jnz .dbl_e
+    jmp .dbl_l
+.dbl_e:
+    add rsp, 40
+    ret
 .tail_mne:
     ; "  ; mne" se conhecido
     mov rax, [r12+Insn.mne]

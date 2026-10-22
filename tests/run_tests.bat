@@ -1185,6 +1185,34 @@ if errorlevel 1 ( echo "  FALHA: hello -native pos-2b" & set /a FAIL+=1 ) else (
 python tests\pe_impdesc.py tests\exc.exe tests\out\imp64b.asm >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin -native regrediu" & set /a FAIL+=1 ) else ( echo "  OK: -m bin -native intacto" & set /a PASS+=1 )
 
+echo === [57] D-19 fatia 2c: disp32 RIP relocavel + secao uninit nobits ===
+rem Instrucao que cai em db com disp32 RIP-relativo agora sai
+rem `dd label_<alvo> - $ - 4` (REL32 que o link recalcula); secao sem bytes
+rem sai classe bss (nobits: sem -w+zeroing e sem LNK4078). Os oraculos
+rem rip_audit/label_drift provam a classe inteira (nao so um caso).
+"%DX%" tests\exc.exe -o tests\out\d19c.asm -native -r -O tests\out\d19c.exe -q > tests\out\d19c.err 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate+rebuild exc -native (2c)" & set /a FAIL+=1 ) else ( echo "  OK: generate+rebuild exc -native (2c)" & set /a PASS+=1 )
+findstr /c:"dd label_" tests\out\d19c.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: sem dd label_ (kind 5 nao emitiu)" & set /a FAIL+=1 ) else ( echo "  OK: disp32 RIP relocavel (dd label_ - $ - 4)" & set /a PASS+=1 )
+findstr /c:"section .bss bss" tests\out\d19c.asm >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: .bss nao saiu nobits" & set /a FAIL+=1 ) else ( echo "  OK: .bss nobits (CNT_UNINIT)" & set /a PASS+=1 )
+findstr /c:"zeroing" tests\out\d19c.err >nul 2>&1
+if not errorlevel 1 ( echo "  FALHA: nasm -w+zeroing em .bss" & set /a FAIL+=1 ) else ( echo "  OK: sem aviso de zeroing" & set /a PASS+=1 )
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\d19c.obj tests\out\d19c.asm > tests\out\d19c_n.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm exc 2c" & type tests\out\d19c_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm exc 2c (0 erros)" & set /a PASS+=1 )
+python tests\rip_audit.py tests\out\d19c.asm tests\exc.exe tests\out\d19c.exe > tests\out\d19c_rip.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: disp32 congelado (exc)" & type tests\out\d19c_rip.txt & set /a FAIL+=1 ) else ( echo "  OK: nenhum disp32 congelado (exc)" & set /a PASS+=1 )
+python tests\label_drift.py tests\out\d19c.asm tests\exc.exe > tests\out\d19c_drift.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: deriva de comprimento (exc)" & type tests\out\d19c_drift.txt & set /a FAIL+=1 ) else ( echo "  OK: comprimentos exatos (exc)" & set /a PASS+=1 )
+"%DX%" tests\notepad.exe -native -r -O tests\out\d19n.exe -o tests\out\d19n.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native notepad (2c)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native notepad (2c)" & set /a PASS+=1 )
+python tests\rip_audit.py tests\out\d19n.asm tests\notepad.exe tests\out\d19n.exe > tests\out\d19n_rip.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: disp32 congelado (notepad)" & type tests\out\d19n_rip.txt & set /a FAIL+=1 ) else ( echo "  OK: nenhum disp32 congelado corrigivel (notepad)" & set /a PASS+=1 )
+"%DX%" tests\var64.exe -native -r -O tests\out\d19v.exe -o tests\out\d19v.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild -native var64 (2c)" & set /a FAIL+=1 ) else ( echo "  OK: rebuild -native var64 (2c)" & set /a PASS+=1 )
+tests\out\d19v.exe > nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: comportamento var64 (era 0)" & set /a FAIL+=1 ) else ( echo "  OK: var64 win64 reconstruido roda (exit 0)" & set /a PASS+=1 )
+
 echo.
 echo =====================================================
 echo Passaram: %PASS%   Falharam: %FAIL%

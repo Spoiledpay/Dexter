@@ -152,6 +152,12 @@ dex_codegen_ir:
 .cg_imp_jmp:
     mov dword [rbp-56], 2
 .cg_imp_go:
+    ; D-19 2c: `call|jmp [mem]` com REX.W/B não é reencodável pelo nasm
+    ; (ele descarta o REX e a instrução encolhe 7->6 B, deslocando todos os
+    ; labels seguintes). Devolver 1 faz o walker cair em db + kind 5, que
+    ; preserva os bytes e relocaliza o disp32.
+    cmp byte [r12+Insn.has_rex], 0
+    jne .cg_imp_db
     mov rax, [rbx+AsmBuf.len]
     mov [rbp-64], rax            ; snapshot p/ rollback
     ; SEM label separado: dex_emit_insn kinds 1/2 já emitem label_<VA>:

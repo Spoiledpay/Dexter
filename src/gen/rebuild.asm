@@ -90,6 +90,7 @@ s_global db "global ", 0
 s_sect  db "section ", 0
 s_code  db " code", 13, 10, 0
 s_data  db " data", 13, 10, 0
+s_bss   db " bss", 13, 10, 0
 s_rdata db " rdata", 13, 10, 0
 s_crlf2 db 13, 10, 0
 s_dd4    db "    dd ", 0
@@ -389,9 +390,22 @@ dex_generate_asm:
     lea rdx, [rel s_code]
     jmp .after_cls
 .is_not_exec:
+    ; Seção sem bytes no arquivo (CNT_UNINIT, ou raw==0 com vsize>0) tem de
+    ; sair como classe `bss` (nobits): com `data` o nasm zera cada `resb`
+    ; (`-w+zeroing`) e o link vê atributos divergentes do `.bss` (LNK4078).
+    test eax, IMAGE_SCN_CNT_UNINITIALIZED_DATA
+    jnz .is_bss
+    cmp dword [r12+PeSection.raw_size], 0
+    jne .is_writable
+    cmp dword [r12+PeSection.vsize], 0
+    jne .is_bss
+.is_writable:
     test eax, IMAGE_SCN_MEM_WRITE
     jnz .is_data
     lea rdx, [rel s_rdata]     ; somente-leitura: classe rdata (funde com linker)
+    jmp .after_cls
+.is_bss:
+    lea rdx, [rel s_bss]
     jmp .after_cls
 .is_data:
     lea rdx, [rel s_data]
@@ -1787,13 +1801,71 @@ dex_generate_asm:
     je .wcs_fail                  ; OOM real (label): fatal
     jmp .wcs_emit_db              ; 1 -> db (rollback já feito no codegen)
 .wcs_emit_db:
+    ; D-19 fatia 2c: instrução que cai em db mas tem disp32 RIP-relativo
+    ; com alvo ROTULADO sai como "db <prefixo>" + "dd label - $ - 4" +
+    ; "db <imm>". Sem isso o disp congela no layout antigo e o link, ao
+    ; mover a seção alvo, aponta p/ outro lugar (zeros da .bss -> call 0).
+    ; Só win64: em -f bin o layout é preservado (disp byte-exato já vale).
+    ; Direção segura (D-17): sem label garantido => db puro.
+    xor r9d, r9d
+    mov qword [rbp-120], 0
+    mov eax, [rbx+DexConfig.mode]
+    cmp eax, DEX_MODE_BIN
+    je .wcs_db_go
+    cmp qword [rel g_rn], 0
+    je .wcs_db_go                ; R desligado (sem -native): db puro
+    lea rax, [rel g_insn]
+    cmp byte [rax+Insn.addr_mode], 1
+    je .wcs_db_go
+    cmp byte [rax+Insn.has_modrm], 0
+    je .wcs_db_go
+    cmp byte [rax+Insn.disp_size], 4
+    jne .wcs_db_go
+    cmp byte [rax+Insn.legacy67], 0
+    jne .wcs_db_go
+    movzx ecx, byte [rax+Insn.modrm]
+    and ecx, 0xC7
+    cmp ecx, 0x05                ; mod=00 rm=101 (RIP-relative)
+    jne .wcs_db_go
+    cmp byte [rax+Insn.has_sib], 0
+    jne .wcs_db_go
+    mov rcx, [rax+Insn.address]
+    mov edx, [rax+Insn.length]
+    add rcx, rdx
+    add rcx, [rax+Insn.disp]     ; tva = va + len + disp
+    mov [rbp-120], rcx
+    mov rdx, [r15+PeImage.image_base]
+    cmp rcx, rdx
+    jb .wcs_db_go
+    sub rcx, rdx                 ; trva
+    mov rdx, rcx
+    shr rdx, 32
+    jnz .wcs_db_go               ; fora de 32 bits: nunca em R
+    mov [rbp-128], rcx
+    mov rdx, r15
+    sub rsp, 32
+    call .ptr_tgt_ok             ; dados rotuláveis (R / .wds_*)
+    add rsp, 32
+    test eax, eax
+    jnz .wcs_db_k5
+    mov rcx, [rbp-128]
+    mov rdx, r15
+    sub rsp, 32
+    call .code_tgt_ok            ; código com início decodificado (bit D)
+    add rsp, 32
+    test eax, eax
+    jz .wcs_db_go
+.wcs_db_k5:
+    mov r9d, 5
+.wcs_db_go:
     mov rcx, r14
     lea rdx, [rel g_insn]
     xor r8d, r8d               ; impname = NULL
-    xor r9d, r9d               ; kind = 0 (db)
-    sub rsp, 32
+    sub rsp, 48
+    mov rax, [rbp-120]
+    mov [rsp+32], rax          ; 5º arg: tva (usado só no kind 5)
     call dex_emit_insn
-    add rsp, 32
+    add rsp, 48
     test eax, eax
     jnz .wcs_fail
 .wcs_emit_ok:
