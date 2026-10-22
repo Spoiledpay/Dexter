@@ -17,6 +17,7 @@ Nunca executa o binário.
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -35,6 +36,8 @@ def main():
         return 2
     asm, orig_p = args[0], args[1]
     nasm = r"C:\Nasm\nasm.exe"
+    if not os.path.exists(nasm):
+        nasm = shutil.which("nasm") or "nasm"
     i = 2
     while i < len(args):
         if args[i] == '--nasm' and i + 1 < len(args):
