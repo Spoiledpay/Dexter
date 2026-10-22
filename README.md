@@ -7,8 +7,15 @@
 <p align="center">Desassemblador / Reassemblador PE nativo — x86-64 e x86 — NASM / Windows</p>
 
 <p align="center">
+  <a href="README.md"><strong>Português</strong></a> ·
+  <a href="README.en.md">English</a> ·
+  <a href="README.zh-CN.md">中文</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/Spoiledpay/Dexter/actions/workflows/ci.yml"><img src="https://github.com/Spoiledpay/Dexter/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
+  <a href="https://github.com/Spoiledpay/Dexter/releases/latest"><img src="https://img.shields.io/github/v/release/Spoiledpay/Dexter?display_name=tag" alt="Release"></a>
 </p>
 
 > **Apoie o projeto.** O Dexter é desenvolvido de forma independente e
@@ -24,6 +31,7 @@ Ferramenta real, 100% NASM x86-64, sem CRT: lê um PE (PE32/PE32+), gera
 ld.lld 68 MB), com comportamento verificado.
 
 Projeto: [github.com/Spoiledpay/Dexter](https://github.com/Spoiledpay/Dexter)
+· Download: [Releases](https://github.com/Spoiledpay/Dexter/releases/latest)
 
 ## O que a ferramenta faz hoje
 
