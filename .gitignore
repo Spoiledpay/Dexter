@@ -27,4 +27,11 @@ tests/ld.lld.asm
 !tests/link.exe
 !tests/exc.exe
 !tests/notepad.exe
+!tests/t32.exe
+!tests/Calculator.exe
+!tests/Case.exe
+!tests/Char.exe
+!tests/color.exe
+!tests/Color2.exe
+!tests/Contador.exe
 

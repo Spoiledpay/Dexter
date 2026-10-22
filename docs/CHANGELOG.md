@@ -2,6 +2,35 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
+## [Unreleased] — README público, licença MIT, CI e financiamento (2026-10-22)
+
+### Adicionado
+
+- `README.md` reescrito para o estado atual (1.2.417): o que a ferramenta
+  faz hoje, modos `win64`/`bin`, `-native`, análise inspect-only, uso,
+  flags, testes, limites conhecidos e versão.
+- Logo oficial `Dexter_logo_US.png` no topo do README e seção de apoio via
+  **GitHub Sponsors**; `.github/FUNDING.yml` habilita o botão Sponsor.
+- `.github/workflows/ci.yml`: build em `windows-latest` com MSVC + NASM e
+  suíte rápida (`DEXTER_SKIP_LARGE=1`); artefatos `dexter.exe`/map/logs.
+
+### Alterado
+
+- `LICENSE` MIT com o holder do repositório (`Labsobjects.org | Developer`).
+- `.gitignore`: `.Jimi/`, `Jimi.md` e `skill.md` são locais (removidos do
+  índice com `git rm --cached`, mantidos no disco).
+- `tests/run_tests.bat`: toolchain portável (`LINKER`/`KLIB`/`X86LIB` via
+  PATH/SDK) e skip determinístico dos fixtures grandes na CI.
+- Fixtures x32 (`Calculator/Case/Char/color/Color2/Contador`) e `t32.exe`
+  passam a ser versionados para a suíte rodar em clone limpo/CI.
+
+### Verificado
+
+- `tests\run_tests.bat` **426/426 OK** (local, completo);
+  `DEXTER_SKIP_LARGE=1 tests\run_tests.bat` **403/403 OK** (modo CI);
+  `tests\run_slow.bat` **7/7 OK**.
+
+
 ## [Unreleased] — D-19 2c-3 (tail de `.data`) + 2c-2 (recusa EH C++ GCC) (2026-10-22)
 
 ### Adicionado

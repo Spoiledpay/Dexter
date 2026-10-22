@@ -43,13 +43,30 @@ if not exist version.bin ( echo "  FALHA: version.bin ausente" & set /a FAIL+=1 
 if not exist obj\version.inc ( echo "  FALHA: obj\version.inc ausente" & set /a FAIL+=1 ) else ( echo "  OK: obj\version.inc existe" & set /a PASS+=1 )
 
 echo === [1] build golden hello.exe ===
+rem Toolchain portavel: C:\Nasm (instalacao local) ou PATH/MSVC (CI).
 if exist "C:\Nasm\nasm.exe" ( set NASM=C:\Nasm\nasm.exe ) else ( set NASM=nasm.exe )
+if exist "C:\Nasm\link.exe" ( set LINKER=C:\Nasm\link.exe ) else ( set LINKER=link.exe )
+set KLIB=
+if defined SDKLIBDIR if exist "%SDKLIBDIR%\kernel32.lib" set "KLIB=%SDKLIBDIR%\kernel32.lib"
+if not defined KLIB if exist "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64\kernel32.lib" set "KLIB=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64\kernel32.lib"
+if not defined KLIB (
+    for /f "delims=" %%D in ('dir /b /ad "C:\Program Files (x86)\Windows Kits\10\Lib" 2^>nul') do (
+        if exist "C:\Program Files (x86)\Windows Kits\10\Lib\%%D\um\x64\kernel32.lib" set "KLIB=C:\Program Files (x86)\Windows Kits\10\Lib\%%D\um\x64\kernel32.lib"
+    )
+)
+if not defined KLIB set KLIB=kernel32.lib
+set X86LIB=
+if not defined X86LIB if exist "C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x86\kernel32.lib" set "X86LIB=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x86\kernel32.lib"
+if not defined X86LIB (
+    for /f "delims=" %%D in ('dir /b /ad "C:\Program Files (x86)\Windows Kits\10\Lib" 2^>nul') do (
+        if exist "C:\Program Files (x86)\Windows Kits\10\Lib\%%D\um\x86\kernel32.lib" set "X86LIB=C:\Program Files (x86)\Windows Kits\10\Lib\%%D\um\x86\kernel32.lib"
+    )
+)
+if not defined X86LIB set X86LIB=kernel32.lib
 "%NASM%" -f win64 -o tests\out\hello_g.obj tests\hello.asm
 if errorlevel 1 ( echo "  FALHA: nasm hello" & set /a FAIL+=1 ) else ( echo "  OK: nasm hello" & set /a PASS+=1 )
-set KLIB=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x64\kernel32.lib
-set X86LIB=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.26100.0\um\x86\kernel32.lib
 if exist tests\out\hello_g.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\hello.exe tests\out\hello_g.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\hello.exe tests\out\hello_g.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link hello" & set /a FAIL+=1 ) else ( echo "  OK: link hello" & set /a PASS+=1 )
 )
 if not exist tests\hello.exe (
@@ -114,6 +131,7 @@ if exist tests\out\var64_bin.exe (
     echo "  FALHA: var64_bin.exe nao criado" & set /a FAIL+=1
 )
 
+if defined DEXTER_SKIP_LARGE goto :ci_skip_6b
 echo === [6b] round-trip binario (gcc 15.2.0 - byte-identico - --version)
 "%DX%" tests\gcc.exe -o tests\out\gcc_bin.asm -m bin -r -O tests\out\gcc_bin.exe -q
 if errorlevel 1 ( echo "  FALHA: rebuild bin gcc" & set /a FAIL+=1 ) else ( echo "  OK: rebuild bin gcc" & set /a PASS+=1 )
@@ -129,6 +147,7 @@ if exist tests\out\gcc_bin.exe (
 ) else (
     echo "  FALHA: gcc_bin.exe nao criado" & set /a FAIL+=1
 )
+:ci_skip_6b
 
 echo === [6c] 32-bit extras (x32 validos: generate 0 + bits 32)
 for %%X in (Calculator Case Char color Color2 Contador) do (
@@ -138,11 +157,13 @@ for %%X in (Calculator Case Char color Color2 Contador) do (
 findstr /c:"bits 32" tests\out\x32_Calculator.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: x32 sem bits 32" & set /a FAIL+=1 ) else ( echo "  OK: x32 com bits 32" & set /a PASS+=1 )
 
+if defined DEXTER_SKIP_LARGE goto :ci_skip_6d
 echo === [6d] ld.lld 68MB (dump rapido; round-trip completo em run_slow.bat)
 "%DX%" tests\ld.lld.exe -o tests\out\ldlld.asm -v > tests\out\ldlld_v.log 2>&1
 if errorlevel 1 ( echo "  FALHA: dump ld.lld" & set /a FAIL+=1 ) else ( echo "  OK: dump ld.lld" & set /a PASS+=1 )
 findstr /c:"Sections: 9" tests\out\ldlld_v.log >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: 9 secoes esperadas" & set /a FAIL+=1 ) else ( echo "  OK: 9 secoes" & set /a PASS+=1 )
+:ci_skip_6d
 
 echo === [7] flags (fumaca: exit 0 + .asm gerado) ===
 "%DX%" tests\hello.exe -o tests\out\f_hex.asm -hex -q
@@ -168,7 +189,7 @@ echo === [8] lexer (tokens golden tests\hello.asm) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\lex_check.obj tests\lex_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm lex_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm lex_check" & set /a PASS+=1 )
 if exist tests\out\lex_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\lex_check.exe tests\out\lex_check.obj obj\lexer.obj obj\opcode_tbl.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\lex_check.exe tests\out\lex_check.obj obj\lexer.obj obj\opcode_tbl.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link lex_check" & set /a FAIL+=1 ) else ( echo "  OK: link lex_check" & set /a PASS+=1 )
 )
 if exist tests\out\lex_check.exe (
@@ -182,7 +203,7 @@ echo === [9] parser AST (golden tests\hello.asm + tests\loop.asm) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\ast_check.obj tests\ast_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm ast_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm ast_check" & set /a PASS+=1 )
 if exist tests\out\ast_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\ast_check.exe tests\out\ast_check.obj obj\parser.obj obj\ast.obj obj\lexer.obj obj\memory.obj obj\string.obj obj\console.obj obj\opcode_tbl.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\ast_check.exe tests\out\ast_check.obj obj\parser.obj obj\ast.obj obj\lexer.obj obj\memory.obj obj\string.obj obj\console.obj obj\opcode_tbl.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link ast_check" & set /a FAIL+=1 ) else ( echo "  OK: link ast_check" & set /a PASS+=1 )
 )
 if exist tests\out\ast_check.exe (
@@ -207,7 +228,7 @@ echo === [11] lifter IR (golden craftado) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\lift_check.obj tests\lift_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm lift_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm lift_check" & set /a PASS+=1 )
 if exist tests\out\lift_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\lift_check.exe tests\out\lift_check.obj obj\lift.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\lift_check.exe tests\out\lift_check.obj obj\lift.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link lift_check" & set /a FAIL+=1 ) else ( echo "  OK: link lift_check" & set /a PASS+=1 )
 )
 if exist tests\out\lift_check.exe (
@@ -223,7 +244,7 @@ echo === [12] codegen (golden textual + rollback) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\codegen_check.obj tests\codegen_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm codegen_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm codegen_check" & set /a PASS+=1 )
 if exist tests\out\codegen_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\codegen_check.exe tests\out\codegen_check.obj obj\codegen.obj obj\emit_nasm.obj obj\asm_buffer.obj obj\labels.obj obj\memory.obj obj\string.obj obj\opcode_tbl.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\codegen_check.exe tests\out\codegen_check.obj obj\codegen.obj obj\emit_nasm.obj obj\asm_buffer.obj obj\labels.obj obj\memory.obj obj\string.obj obj\opcode_tbl.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link codegen_check" & set /a FAIL+=1 ) else ( echo "  OK: link codegen_check" & set /a PASS+=1 )
 )
 if exist tests\out\codegen_check.exe (
@@ -306,7 +327,7 @@ echo === [14] imp label-at-slot (driver imp_check: HIT/dup/MISS) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp_check.obj tests\imp_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm imp_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm imp_check" & set /a PASS+=1 )
 if exist tests\out\imp_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\x87.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\pe_unwind.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\x87.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\pe_unwind.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link imp_check" & set /a FAIL+=1 ) else ( echo "  OK: link imp_check" & set /a PASS+=1 )
 )
 if exist tests\out\imp_check.exe (
@@ -324,7 +345,7 @@ echo === [15] symtab (driver sym_check: golden ordenado) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\sym_check.obj tests\sym_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm sym_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm sym_check" & set /a PASS+=1 )
 if exist tests\out\sym_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\sym_check.exe tests\out\sym_check.obj obj\symbols.obj obj\memory.obj obj\string.obj obj\hash.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\sym_check.exe tests\out\sym_check.obj obj\symbols.obj obj\memory.obj obj\string.obj obj\hash.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link sym_check" & set /a FAIL+=1 ) else ( echo "  OK: link sym_check" & set /a PASS+=1 )
 )
 if exist tests\out\sym_check.exe (
@@ -396,6 +417,7 @@ if errorlevel 1 ( echo "  FALHA: sem chain no json" & set /a FAIL+=1 ) else ( ec
 "%DX%" tests\hello.exe -func 0x140001000 -o tests\out\should_not2.asm -q >nul 2>&1
 if exist tests\out\should_not2.asm ( echo "  FALHA: query escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: query inspect-only" & set /a PASS+=1 )
 
+if defined DEXTER_SKIP_LARGE goto :ci_skip_18
 echo === [18] -rsrc (inventario de recursos PE) ===
 "%DX%" tests\gcc.exe -rsrc -q > tests\out\rsrc.txt 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: -rsrc gcc exit!=0" & set /a FAIL+=1 ) else ( echo "  OK: -rsrc gcc exit 0" & set /a PASS+=1 )
@@ -431,6 +453,7 @@ powershell -NoProfile -Command "$b=[IO.File]::ReadAllBytes('tests\gcc.exe'); $b[
 if !errorlevel! EQU 3 ( echo "  OK: count inflado rejeitado (3)" & set /a PASS+=1 ) else ( echo "  FALHA: deveria retornar 3" & set /a FAIL+=1 )
 "%DX%" tests\gcc.exe -rsrc -o tests\out\should_not3.asm -q >nul 2>&1
 if exist tests\out\should_not3.asm ( echo "  FALHA: rsrc escreveu .asm" & set /a FAIL+=1 ) else ( echo "  OK: rsrc inspect-only" & set /a PASS+=1 )
+:ci_skip_18
 
 echo === [19] -snapshot/-compare (fingerprint FNV-1a + diff) ===
 "%DX%" tests\hello.exe -snapshot tests\out\snap.json -q >nul 2>&1
@@ -566,7 +589,7 @@ echo === [27] jump table absoluta (jtable switch + jmp rax) ===
 "%NASM%" -f win64 -o tests\out\jtable.obj tests\jtable.asm
 if errorlevel 1 ( echo "  FALHA: nasm jtable" & set /a FAIL+=1 ) else ( echo "  OK: nasm jtable" & set /a PASS+=1 )
 if exist tests\out\jtable.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\jtable.exe tests\out\jtable.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\jtable.exe tests\out\jtable.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link jtable" & set /a FAIL+=1 ) else ( echo "  OK: link jtable" & set /a PASS+=1 )
 )
 tests\jtable.exe > tests\out\jt_orig.txt 2>&1
@@ -635,7 +658,7 @@ echo === [31] rebuild x32 (tiny32 exit 42, Fase C) ===
 "%NASM%" -f win32 -o tests\out\tiny32.obj tests\tiny32.asm
 if errorlevel 1 ( echo "  FALHA: nasm tiny32" & set /a FAIL+=1 ) else ( echo "  OK: nasm tiny32" & set /a PASS+=1 )
 if exist tests\out\tiny32.obj (
-    "C:\Nasm\link.exe" /nologo /nodefaultlib /subsystem:console /entry:start /out:tests\tiny32.exe tests\out\tiny32.obj "%X86LIB%"
+    "%LINKER%" /nologo /nodefaultlib /subsystem:console /entry:start /out:tests\tiny32.exe tests\out\tiny32.obj "%X86LIB%"
     if errorlevel 1 ( echo "  FALHA: link tiny32" & set /a FAIL+=1 ) else ( echo "  OK: link tiny32" & set /a PASS+=1 )
 )
 tests\tiny32.exe >nul 2>&1
@@ -679,7 +702,7 @@ echo === [34] prefixo de tamanho em refs RIP (movzx/cmp, gcc-native) ===
 "%NASM%" -f win64 -o tests\out\memsz.obj tests\memsz.asm
 if errorlevel 1 ( echo "  FALHA: nasm memsz" & set /a FAIL+=1 ) else ( echo "  OK: nasm memsz" & set /a PASS+=1 )
 if exist tests\out\memsz.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\memsz.exe tests\out\memsz.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\memsz.exe tests\out\memsz.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link memsz" & set /a FAIL+=1 ) else ( echo "  OK: link memsz" & set /a PASS+=1 )
 )
 "%DX%" tests\out\memsz.exe -o tests\out\memsz_nat.asm -native -q >nul 2>&1
@@ -706,10 +729,12 @@ if exist tests\out\v64bss.exe (
     findstr /c:"dq label_140011" tests\out\v64bss.asm >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: sem dq p/ .bss" & set /a FAIL+=1 ) else ( echo "  OK: dq p/ .bss" & set /a PASS+=1 )
 ) else ( echo "  FALHA: sem v64bss.exe" & set /a FAIL+=1 )
+if defined DEXTER_SKIP_LARGE goto :ci_skip_gccbss
 "%DX%" tests\gcc.exe -o tests\out\gccbss.asm -native -q >nul 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native gcc" & set /a FAIL+=1 ) else ( echo "  OK: generate -native gcc" & set /a PASS+=1 )
 findstr /c:"resb 0x" tests\out\gccbss.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem resb no gcc" & set /a FAIL+=1 ) else ( echo "  OK: resb no gcc" & set /a PASS+=1 )
+:ci_skip_gccbss
 
 echo === [36] bin nativo em PE simples (R-8.2 f1) ===
 "%DX%" tests\hello.exe -o tests\out\hello_nb.asm -m bin -native -r -O tests\out\hello_nb.exe -q >nul 2>&1
@@ -806,7 +831,7 @@ echo === [39] VEX/EVEX/x87/3DNow! (R-2.7: limites + mnemonicos) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\x87_check.obj tests\x87_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm x87_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm x87_check" & set /a PASS+=1 )
 if exist tests\out\x87_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\x87_check.exe tests\out\x87_check.obj obj\x87.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\x87_check.exe tests\out\x87_check.obj obj\x87.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link x87_check" & set /a FAIL+=1 ) else ( echo "  OK: link x87_check" & set /a PASS+=1 )
 )
 if exist tests\out\x87_check.exe (
@@ -832,7 +857,7 @@ if exist tests\out\x87_check.exe (
 "%NASM%" -f win64 -o tests\out\vex.obj tests\vex.asm
 if errorlevel 1 ( echo "  FALHA: nasm vex" & set /a FAIL+=1 ) else ( echo "  OK: nasm vex" & set /a PASS+=1 )
 if exist tests\out\vex.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\vex.exe tests\out\vex.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\vex.exe tests\out\vex.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link vex" & set /a FAIL+=1 ) else ( echo "  OK: link vex" & set /a PASS+=1 )
 )
 tests\vex.exe >nul 2>&1
@@ -875,7 +900,7 @@ echo === [40] SEH/unwind F1: parser .pdata/.xdata (R-5.4) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\unwind_check.obj tests\unwind_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm unwind_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm unwind_check" & set /a PASS+=1 )
 if exist tests\out\unwind_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\unwind_check.exe tests\out\unwind_check.obj obj\pe_unwind.obj obj\pe_sections.obj obj\rva.obj obj\string.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\unwind_check.exe tests\out\unwind_check.obj obj\pe_unwind.obj obj\pe_sections.obj obj\rva.obj obj\string.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link unwind_check" & set /a FAIL+=1 ) else ( echo "  OK: link unwind_check" & set /a PASS+=1 )
 )
 if exist tests\out\unwind_check.exe (
@@ -939,7 +964,7 @@ echo === [44] strpool dedicado (D-3) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\strpool_check.obj tests\strpool_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm strpool_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm strpool_check" & set /a PASS+=1 )
 if exist tests\out\strpool_check.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\strpool_check.exe tests\out\strpool_check.obj obj\strings.obj obj\asm_buffer.obj obj\string.obj obj\memory.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\strpool_check.exe tests\out\strpool_check.obj obj\strings.obj obj\asm_buffer.obj obj\string.obj obj\memory.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link strpool_check" & set /a FAIL+=1 ) else ( echo "  OK: link strpool_check" & set /a PASS+=1 )
 )
 if exist tests\out\strpool_check.exe (
@@ -1027,7 +1052,7 @@ rem e o round-trip bin-native e byte-identico + comportamento (exit 42).
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\sibabs.obj tests\sibabs.asm
 if errorlevel 1 ( echo "  FALHA: nasm sibabs" & set /a FAIL+=1 ) else ( echo "  OK: nasm sibabs" & set /a PASS+=1 )
 if exist tests\out\sibabs.obj (
-    "C:\Nasm\link.exe" /nologo /subsystem:console /entry:main /out:tests\out\sibabs.exe tests\out\sibabs.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\sibabs.exe tests\out\sibabs.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link sibabs" & set /a FAIL+=1 ) else ( echo "  OK: link sibabs" & set /a PASS+=1 )
 )
 if not exist tests\out\sibabs.exe ( echo "  FALHA: sem sibabs.exe" & set /a FAIL+=1 )
@@ -1064,7 +1089,7 @@ rem e o emissor sai `[nosplit label_<VA>+eax*4]` (antes: `0x402008` cru).
 "%NASM%" -f win32 -o tests\out\absidx.obj tests\absidx.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: nasm absidx" & set /a FAIL+=1 ) else ( echo "  OK: nasm absidx" & set /a PASS+=1 )
 if exist tests\out\absidx.obj (
-    "C:\Nasm\link.exe" /nologo /nodefaultlib /machine:x86 /subsystem:console /entry:main /out:tests\out\absidx.exe tests\out\absidx.obj "%X86LIB%" >nul 2>&1
+    "%LINKER%" /nologo /nodefaultlib /machine:x86 /subsystem:console /entry:main /out:tests\out\absidx.exe tests\out\absidx.obj "%X86LIB%" >nul 2>&1
     if errorlevel 1 ( echo "  FALHA: link absidx" & set /a FAIL+=1 ) else ( echo "  OK: link absidx" & set /a PASS+=1 )
 )
 if not exist tests\out\absidx.exe ( echo "  FALHA: sem absidx.exe" & set /a FAIL+=1 )
@@ -1232,7 +1257,7 @@ rem SizeOfRawData para 0x400 (loader zera o tail). O original patchado sai 42;
 rem o rebuildado tem de sair 42 tambem e manter vsize/raw e os labels do tail.
 "%NASM%" -f win64 -o tests\out\taildata.obj tests\taildata.asm > tests\out\taildata_n.err 2>&1
 if errorlevel 1 ( echo "  FALHA: nasm taildata" & type tests\out\taildata_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm taildata" & set /a PASS+=1 )
-"C:\Nasm\link.exe" /nologo /nodefaultlib /subsystem:console /entry:start /out:tests\out\taildata_orig.exe tests\out\taildata.obj "%KLIB%" > tests\out\taildata_l.err 2>&1
+"%LINKER%" /nologo /nodefaultlib /subsystem:console /entry:start /out:tests\out\taildata_orig.exe tests\out\taildata.obj "%KLIB%" > tests\out\taildata_l.err 2>&1
 if errorlevel 1 ( echo "  FALHA: link taildata" & type tests\out\taildata_l.err & set /a FAIL+=1 ) else ( echo "  OK: link taildata" & set /a PASS+=1 )
 python tests\taildata_patch.py tests\out\taildata_orig.exe tests\out\taildata.exe > tests\out\taildata_patch.txt 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: patch taildata" & type tests\out\taildata_patch.txt & set /a FAIL+=1 ) else ( echo "  OK: patch .data raw=0x400" & set /a PASS+=1 )
