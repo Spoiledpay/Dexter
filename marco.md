@@ -331,7 +331,9 @@ repositório real `Spoiledpay/Dexter` e provado por execução, não por inspeç
   locais desde a 1.2.419.
 - `tests\run_tests.bat` **464/464 OK** (441/441 em `DEXTER_SKIP_LARGE=1`) e
   `tests\run_slow.bat` **7/7 OK** antes do push.
-- Tag anotada `v1.2.435` no commit publicado; CI do `main` **success**.
+- Tag anotada `v1.2.435` no commit publicado; CI do `main` **success**
+  (run `39885426216`,
+  `https://github.com/Spoiledpay/Dexter/actions/runs/39885426216`).
 - Release: `https://github.com/Spoiledpay/Dexter/releases/tag/v1.2.435`.
 - Assets: `dexter.exe` (133.120 B), `dexter-v1.2.435-win64.zip` (70.961 B) e
   `SHA256SUMS.txt`.

@@ -83,7 +83,8 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
   `DEXTER_SKIP_LARGE=1 tests\run_tests.bat` **441/441 OK** (modo CI);
   `tests\run_slow.bat` **7/7 OK**.
 - Release 1.2.435: assets baixados de volta, SHA-256 confere e
-  `dexter.exe -ver` imprime **1.2.435** (exit 0).
+  `dexter.exe -ver` imprime **1.2.435** (exit 0). CI verde no run
+  `39885426216` (`windows-latest`).
 
 
 ## [Unreleased] — D-19 2c-3 (tail de `.data`) + 2c-2 (recusa EH C++ GCC) (2026-10-22)
