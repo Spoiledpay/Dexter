@@ -131,7 +131,7 @@ Exit codes: `0` success, `1` usage error, `2` I/O, `3` invalid PE,
 
 ## Tests
 
-- **Fast suite** (`tests\run_tests.bat`): **426/426 OK** on 1.2.419.
+- **Fast suite** (`tests\run_tests.bat`): **464/464 OK** on 1.2.435.
 - **Slow suite** (`tests\run_slow.bat`): **7/7 OK** — ld.lld 68 MB
   byte-identical + gcc 2 MB byte-identical and compiling `hello.c`.
 - **Fuzz** (`tests/fuzz_pe.py`): corrupted PEs must never crash/hang;
@@ -143,7 +143,7 @@ Exit codes: `0` success, `1` usage error, `2` I/O, `3` invalid PE,
 
 ## Current version
 
-**Dexter 1.2.419** (`-ver`). The patch number is incremented on every
+**Dexter 1.2.435** (`-ver`). The patch number is incremented on every
 `build.bat` via `version.bin` + `tools\bump_version.ps1`.
 
 ## Known limitations (honest)
@@ -152,9 +152,10 @@ Exit codes: `0` success, `1` usage error, `2` I/O, `3` invalid PE,
   `__gcc_personality_*`) use pcrel tables that `link.exe` does not relocate;
   `-native -r` in link mode is **refused with exit 4** and recommends
   `-m bin` (ADR-0004). The faithful path is `-m bin -native -r`.
-- x64 SIB-abs symbolic index is still numeric (x32 is already symbolic).
-- VEX/EVEX/x87 operands are decoded with byte-exact lengths, but the native
-  emitter still uses `db` for them.
+- x64 SIB-abs symbolic indexing is only possible when `ImageBase < 2 GiB`
+  (the disp32 is sign-extended); above that it stays numeric and byte-exact.
+- VEX3/EVEX are decoded with byte-exact lengths, but the native emitter still
+  uses `db` for them (VEX2 and x87 already emit native instructions).
 - `-no-imports` disables GCC personality detection (documented limit).
 - R-6.6 (optimizable IR + own backend, no nasm) remains future work.
 

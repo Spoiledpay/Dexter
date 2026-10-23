@@ -2,10 +2,14 @@
 
 Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
-## [Unreleased] — README público, licença MIT, CI e financiamento (2026-10-22)
+## [1.2.435] — Publicação: VEX2/x87/índice x64, README trilíngue e CI (2026-10-22)
 
 ### Adicionado
 
+- **Release `v1.2.435`** publicada no repositório real (`Spoiledpay/Dexter`)
+  com `dexter.exe`, `dexter-v1.2.435-win64.zip` (exe + READMEs + `LICENSE` +
+  `docs/CLI.md`) e `SHA256SUMS.txt`; tag anotada no commit publicado e
+  verificação pós-publicação pelo asset baixado de volta (`-ver` = 1.2.435).
 - **VEX2 nativo (2b)** (1.2.434): o mapa `0F` sob `C5` deixa de sair em `db`.
   Tabela **derivada** (`src/disasm/vex2_tbl.inc`, gerada por
   `tools/gen_vex2.py` com capstone + NASM como juiz): 371 entradas válidas,
@@ -75,9 +79,11 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
 ### Verificado
 
-- `tests\run_tests.bat` **426/426 OK** (local, completo);
-  `DEXTER_SKIP_LARGE=1 tests\run_tests.bat` **403/403 OK** (modo CI);
+- `tests\run_tests.bat` **464/464 OK** (local, completo);
+  `DEXTER_SKIP_LARGE=1 tests\run_tests.bat` **441/441 OK** (modo CI);
   `tests\run_slow.bat` **7/7 OK**.
+- Release 1.2.435: assets baixados de volta, SHA-256 confere e
+  `dexter.exe -ver` imprime **1.2.435** (exit 0).
 
 
 ## [Unreleased] — D-19 2c-3 (tail de `.data`) + 2c-2 (recusa EH C++ GCC) (2026-10-22)

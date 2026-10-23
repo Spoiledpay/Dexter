@@ -126,7 +126,7 @@ out\dexter.exe app.exe --doctor
 
 ## 测试
 
-- **快速套件**（`tests\run_tests.bat`）：1.2.419 下 **426/426 通过**。
+- **快速套件**（`tests\run_tests.bat`）：1.2.435 下 **464/464 通过**。
 - **慢速套件**（`tests\run_slow.bat`）：**7/7 通过** —— ld.lld 68 MB
   字节一致 + gcc 2 MB 字节一致，并能编译 `hello.c`。
 - **模糊测试**（`tests/fuzz_pe.py`）：损坏的 PE 不得崩溃/挂起；
@@ -138,7 +138,7 @@ out\dexter.exe app.exe --doctor
 
 ## 当前版本
 
-**Dexter 1.2.419**（`-ver`）。每次运行 `build.bat` 都会通过
+**Dexter 1.2.435**（`-ver`）。每次运行 `build.bat` 都会通过
 `version.bin` + `tools\bump_version.ps1` 递增补丁号。
 
 ## 已知限制（如实说明）
@@ -147,8 +147,10 @@ out\dexter.exe app.exe --doctor
   `__gcc_personality_*`）的 PE 使用 pcrel 表，`link.exe` 不会重定位它们；
   链接模式下的 `-native -r` 会**以返回码 4 拒绝**并建议使用 `-m bin`
   （ADR-0004）。可靠路径是 `-m bin -native -r`。
-- x64 的 SIB-abs 符号索引仍为数值（x32 已符号化）。
-- VEX/EVEX/x87 操作数已按字节精确解码，但原生发射器仍使用 `db`。
+- x64 的 SIB-abs 符号索引仅在 `ImageBase < 2 GiB` 时可行
+  （disp32 为符号扩展）；超出后保持数值形式且字节一致。
+- VEX3/EVEX 已按字节精确解码，但原生发射器仍使用 `db`
+  （VEX2 与 x87 已输出原生指令）。
 - `-no-imports` 会关闭 GCC personality 检测（已记录的限制）。
 - R-6.6（可优化 IR + 自有后端，不依赖 nasm）仍在未来计划中。
 

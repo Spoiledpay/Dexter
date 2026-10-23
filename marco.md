@@ -3,7 +3,7 @@
 > Arquivo de acompanhamento. Leitura: `skill.md` → `Projeto.md` → este arquivo → `docs/ROADMAP.md`.
 > Marcar `[x]` somente com teste verde (`tests\run_tests.bat`). Nada é "pronto" sem prova.
 
-## 0. Onde estamos (2026-10-22, Dexter 1.2.419)
+## 0. Onde estamos (2026-10-22, Dexter 1.2.435)
 
 - [x] Fases 0–4 + modo `-m bin` (round-trip byte-idêntico hello/var64)
 - [x] R-6.1 `-native` opt-in (round-trip corpus simples)
@@ -218,8 +218,9 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   `exc` é `-m bin -native -r` (exit 42). Gates de rebuild migraram de `exc`
   para `var64` (5 dirs/62 imports) e `notepad`. `PE_NOTES §30`.
 - Placar honesto: **464 passam, 0 falham** (`tests\run_tests.bat → 464/464 OK`
-  em 1.2.434; 441/441 em `DEXTER_SKIP_LARGE=1`). Lenta `run_slow.bat`:
-  **7/7**. Build: `build.bat` OK. CI GitHub Actions: run #5 verde.
+  em 1.2.435; 441/441 em `DEXTER_SKIP_LARGE=1`). Lenta `run_slow.bat`:
+  **7/7**. Build: `build.bat` OK. CI GitHub Actions: verde no commit
+  publicado da 1.2.435.
 - [x] **Publicação 1.2.419** (2026-10-22): README PT/EN/CN, GitHub Sponsors,
   CI em `windows-latest`, tag `v1.2.419` e release com `dexter.exe` + zip
   + SHA256. Detalhe e processo em §9.
@@ -249,7 +250,10 @@ Inspiração REA: `binary_overview` / `inspect_analysis_view` / `--json` / evide
   caller de `dex_vex2_flags` (AV), `.vex_set` lendo `eax` e vvvv=0 nas
   entradas sem vvvv (cobertura). Fixture 1442 instruções: 1418 nativas + 24
   db; bin byte-idêntico, exit 42. `PE_NOTES §33`, ADR-0007.
-- [ ] **Próxima fila (1.2.434, ordem fixa):** (1) **2c/2d — VEX3/EVEX**
+- [x] **Publicação 1.2.435** (2026-10-22): tag `v1.2.435` no commit
+  publicado e release com `dexter.exe` + zip + `SHA256SUMS.txt`; assets
+  conferidos de volta (`-ver` = 1.2.435). Detalhe em §9.5.
+- [ ] **Próxima fila (1.2.435, ordem fixa):** (1) **2c/2d — VEX3/EVEX**
   (mesma metodologia por mapa/pp/W/L; EVEX com máscara/broadcast/`disp8*N`);
   (2) **R-6.6 opção C** — IR otimizável + backend próprio; (3) evolução
   2c-2(b): pós-patch dos campos pcrel do LSDA (parser DWARF EH) + reverter
@@ -319,6 +323,23 @@ repositório real `Spoiledpay/Dexter` e provado por execução, não por inspeç
   ficou fast-forward em relação ao remoto e foi enviada.
 - Regra: antes do primeiro push, conferir o maior blob de
   `git rev-list --objects <branch>`; nunca enviar binário >100 MB.
+
+### 9.5 Publicação 1.2.435
+
+- Escopo publicado: 2b (VEX2 nativo), 2a (x87 nativo) e o índice simbólico
+  de SIB-abs em x64 (1.2.422/1.2.427/1.2.434) — os três commits que estavam
+  locais desde a 1.2.419.
+- `tests\run_tests.bat` **464/464 OK** (441/441 em `DEXTER_SKIP_LARGE=1`) e
+  `tests\run_slow.bat` **7/7 OK** antes do push.
+- Tag anotada `v1.2.435` no commit publicado; CI do `main` **success**.
+- Release: `https://github.com/Spoiledpay/Dexter/releases/tag/v1.2.435`.
+- Assets: `dexter.exe` (133.120 B), `dexter-v1.2.435-win64.zip` (70.961 B) e
+  `SHA256SUMS.txt`.
+- Hashes: `1b1bc9818244a882ec75d57c755ca0efe499c9d3cbd6c9f16dd1f0426bf770c1`
+  (`dexter.exe`) e `6654adcd6710875bd8189863c7745b89b38c8880cb267bdac3ac2cba47911f00`
+  (zip).
+- Verificação pós-publicação: assets baixados de volta, SHA-256 confere e
+  `dexter.exe -ver` imprime **1.2.435** (exit 0).
 
 ## 10. Como marcar
 

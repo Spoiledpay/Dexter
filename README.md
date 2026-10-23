@@ -128,7 +128,7 @@ Códigos de retorno: `0` sucesso, `1` uso incorreto, `2` I/O, `3` PE inválido,
 
 ## Testes
 
-- **Suíte rápida** (`tests\run_tests.bat`): **426/426 OK** em 1.2.419.
+- **Suíte rápida** (`tests\run_tests.bat`): **464/464 OK** em 1.2.435.
 - **Suíte lenta** (`tests\run_slow.bat`): **7/7 OK** — ld.lld 68 MB
   byte-idêntico + gcc 2 MB byte-idêntico e compilando `hello.c`.
 - **Fuzz** (`tests/fuzz_pe.py`): PE corrompido nunca deve crashar/hang;
@@ -140,7 +140,7 @@ Códigos de retorno: `0` sucesso, `1` uso incorreto, `2` I/O, `3` PE inválido,
 
 ## Versão atual
 
-**Dexter 1.2.419** (`-ver`). O patch é incrementado a cada `build.bat` via
+**Dexter 1.2.435** (`-ver`). O patch é incrementado a cada `build.bat` via
 `version.bin` + `tools\bump_version.ps1`.
 
 ## Limites conhecidos (honestos)
@@ -149,9 +149,10 @@ Códigos de retorno: `0` sucesso, `1` uso incorreto, `2` I/O, `3` PE inválido,
   `__gcc_personality_*`) usam tabelas pcrel que o `link.exe` não relocaliza;
   `-native -r` no modo link é **recusado com exit 4** e recomenda `-m bin`
   (ADR-0004). O caminho fiel é `-m bin -native -r`.
-- Índice simbólico de SIB-abs em x64 ainda é numérico (x32 já é simbólico).
-- Operandos VEX/EVEX/x87 têm decodificação e limites byte-exatos, mas o
-  emissor nativo ainda usa `db` para eles.
+- Índice simbólico de SIB-abs em x64 só é possível quando `ImageBase < 2 GiB`
+  (o disp32 é sinal-estendido); acima disso segue numérico e byte-exato.
+- VEX3/EVEX têm decodificação e limites byte-exatos, mas o emissor nativo
+  ainda usa `db` para eles (VEX2 e x87 já saem nativos).
 - `-no-imports` desativa a detecção de personalidade GCC (limite declarado).
 - R-6.6 (IR otimizável + backend próprio, sem nasm) segue como evolução.
 
