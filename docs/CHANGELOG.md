@@ -6,6 +6,16 @@ Formato: Keep a Changelog. Versões: `vX.Y.Z` (motor.novidades.correções).
 
 ### Adicionado
 
+- **VEX2 nativo (2b)** (1.2.434): o mapa `0F` sob `C5` deixa de sair em `db`.
+  Tabela **derivada** (`src/disasm/vex2_tbl.inc`, gerada por
+  `tools/gen_vex2.py` com capstone + NASM como juiz): 371 entradas válidas,
+  337 com forma de operando; descritor de 20 B com papel (R/V/M/I) e classe
+  (xmm/ymm/GPR/k/memória/imm) por operando, mais flags de decode
+  (ModRM/imm8) lidas pelo decoder. Novos `DEX_OP_VEC`/`DEX_OP_MASK` e
+  `Insn.vex_imm8`. Fixture `tests/vex2nat.asm` (1442 instruções) e
+  `tests/vex2_native_check.py`: **1418 nativas + 24 db declaradas**
+  (escalares com `L=1` reservado); `-m bin -native -r` byte-idêntico e
+  exit 42. Seção `[61]`; suíte **464/464**, lenta 7/7.
 - **x87 nativo (2a)** (1.2.427): as 2048 codificações `D8-DF` (8 opcodes ×
   256 ModRM) deixam de sair em `db` e passam a instrução real, com forma de
   operando em tabela (`x87_shape`/`x87_memsz` + `dex_x87_form`), novo kind

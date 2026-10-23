@@ -21,12 +21,13 @@ extern dex_rva_to_offset
 extern dex_decode_prefixes
 extern dex_decode_modrm
 extern dex_decode_operands
-extern dex_tbl1_flag
-extern dex_tbl1_mne
-extern dex_tbl2_flag
-extern dex_tbl2_mne
-extern dex_tbl38_flag
-extern dex_tbl3a_flag
+extern dex_tbl1_flag      
+extern dex_tbl1_mne       
+extern dex_tbl2_flag      
+extern dex_tbl2_mne       
+extern dex_tbl38_flag     
+extern dex_tbl3a_flag     
+extern dex_vex2_flags
 extern dex_build_operands
 extern s_vex
 extern s_evex
@@ -353,6 +354,81 @@ dex_disasm_one:
 .vex_go:
     add [rbp-72], r8d                ; npre += tamanho do prefixo
     mov [r15+Insn.enc], al
+    ; R-2.7/2b: campos do prefixo p/ a semântica (pp/L/W/vvvv/mm + extensões).
+    ; r11d = mapa, r10 = início do prefixo, r8d = tamanho (2/3/4).
+    mov byte [r15+Insn.vex_mm], r11b
+    mov [r15+Insn.vex_npre], r8b
+    cmp r8d, 2
+    jne .vex_f3
+    movzx ecx, byte [r10+1]          ; VEX2: R̄ vvvv L pp
+    mov eax, ecx
+    and eax, 0x80
+    shr eax, 7
+    xor eax, 1
+    shl eax, 3
+    mov [r15+Insn.vex_r], al
+    mov byte [r15+Insn.vex_b], 0
+    mov byte [r15+Insn.vex_x], 0
+    mov byte [r15+Insn.vex_w], 0
+    jmp .vex_fc
+.vex_f3:
+    movzx ecx, byte [r10+1]          ; P0 (VEX3/EVEX): R̄ X̄ B̄ ...
+    mov eax, ecx
+    and eax, 0x80
+    shr eax, 7
+    xor eax, 1
+    shl eax, 3
+    mov [r15+Insn.vex_r], al
+    mov eax, ecx
+    and eax, 0x40
+    shr eax, 6
+    xor eax, 1
+    shl eax, 3
+    mov [r15+Insn.vex_x], al
+    mov eax, ecx
+    and eax, 0x20
+    shr eax, 5
+    xor eax, 1
+    shl eax, 3
+    mov [r15+Insn.vex_b], al
+    movzx ecx, byte [r10+2]          ; P1: W ...
+    mov eax, ecx
+    shr eax, 7
+    mov [r15+Insn.vex_w], al
+.vex_fc:
+    cmp r8d, 2
+    jne .vex_fc3
+    movzx ecx, byte [r10+1]          ; VEX2: pp/vvvv/L no byte2
+    jmp .vex_fcgo
+.vex_fc3:
+    movzx ecx, byte [r10+2]          ; VEX3/EVEX: P1
+.vex_fcgo:
+    mov eax, ecx
+    shr eax, 3
+    not eax
+    and eax, 0xF
+    mov [r15+Insn.vex_vvvv], al      ; valor LÓGICO (campo é invertido)
+    mov eax, ecx
+    and eax, 3
+    mov [r15+Insn.vex_pp], al
+    cmp r8d, 4
+    jne .vex_lok
+    movzx ecx, byte [r10+3]          ; EVEX: L'L = P2 bits 6:5
+    shr ecx, 5
+    and ecx, 3
+    xor eax, eax
+    test ecx, ecx
+    jz .vex_lset
+    mov eax, 1
+.vex_lset:
+    mov [r15+Insn.vex_l], al
+    jmp .vex_fdone
+.vex_lok:
+    mov eax, ecx
+    shr eax, 2
+    and eax, 1
+    mov [r15+Insn.vex_l], al
+.vex_fdone:
     movzx ecx, byte [r9]             ; byte de opcode
     mov dword [rbp-104], 1           ; oplen = 1
     cmp r11d, 1
@@ -373,15 +449,39 @@ dex_disasm_one:
     mov dword [r15+Insn.opcode_len], 3
     jmp .vex_set
 .vex_map0f:
+    ; 2b: flags de decode da tabela VEX2 (ModRM/imm) quando houver entrada;
+    ; a tabela legada tem lacunas (ex.: 0F F2 sem ModRM) e desalinharia.
+    movzx r8d, byte [r9]             ; byte de opcode
+    cmp byte [r15+Insn.enc], 1
+    jne .vex_m0f_legacy
+    cmp byte [r15+Insn.vex_npre], 2   ; só VEX2 (C5); VEX3 (C4) tem tabela própria (2c)
+    jne .vex_m0f_legacy
+    push r8                          ; o callee clobbra r8-r11 (ABI)
+    mov rcx, r15
+    mov edx, r8d
+    sub rsp, 40
+    call dex_vex2_flags
+    add rsp, 40
+    pop r8
+    test eax, 0x100
+    jz .vex_m0f_legacy
+    and eax, 3
+    mov [rbp-80], eax
+    mov ecx, r8d
+    or ecx, 0x0F00
+    mov dword [r15+Insn.opcode_len], 2
+    jmp .vex_set
+.vex_m0f_legacy:
     lea rdx, [rel dex_tbl2_flag]
-    movzx r10d, byte [rdx+rcx]
+    movzx r10d, byte [rdx+r8]
     mov [rbp-80], r10d
+    mov ecx, r8d
     or ecx, 0x0F00
     mov dword [r15+Insn.opcode_len], 2
 .vex_set:
     mov [r15+Insn.opcode], ecx
     lea rdx, [rel s_vex]
-    cmp eax, 1
+    cmp byte [r15+Insn.enc], 1
     je .vex_smne
     lea rdx, [rel s_evex]
 .vex_smne:

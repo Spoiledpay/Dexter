@@ -889,7 +889,7 @@ Onde paramos (ponto exato):
   (fix: `img`→`[rbp-104]`); `[13]` verde, `[14]`/`[15]` criados,
   goldens `ref_native/` regenerados. Detalhe:
   `docs/SESSAO-2026-10-11-R643.md`.
-- ESTADO ATUAL (2026-10-22, Dexter 1.2.427, suíte 453/453 + lenta 7/7):
+- ESTADO ATUAL (2026-10-22, Dexter 1.2.434, suíte 464/464 + lenta 7/7):
   R-6.1–R-6.5, R-7.1–R-7.5, R-8.1/R-8.2 e R-5.3/R-5.4 FECHADOS; D-22,
   **D-19 fatia 2b** (import table simbólica), **D-19 fatia 2c fix**
   (disp32 RIP relocável via `dd label - $ - 4`, REX exato, `bss` nobits),
@@ -897,10 +897,10 @@ Onde paramos (ponto exato):
   refs; fixture `taildata`), **D-19 fatia 2c-2** (recusa honesta do `-native
   -r` com EH C++ do GCC; ADR-0004; caminho fiel `-m bin`), **base simbólica
   do índice em x64** (SIB-abs `[disp32+idx*scale]`, correção `+C` e semeadura
-  de labels no bin; ADR-0005, `PE_NOTES §31`) e **2a — x87 nativo** (forma
-  de operando em tabela, 2048 codificações provadas byte a byte; ADR-0006,
-  `PE_NOTES §32`) fechadas — `var64.exe -native -r` roda exit 0,
+  de labels no bin; ADR-0005, `PE_NOTES §31`), **2a — x87 nativo** (ADR-0006,
+  `PE_NOTES §32`) e **2b — VEX2 nativo** (tabela derivada com capstone+NASM,
+  `PE_NOTES §33`, ADR-0007) fechadas — `var64.exe -native -r` roda exit 0,
   `notepad -native -r` linka e audita sem refs congeladas. Fila vigente em
-  `marco.md` §8 / `docs/ROADMAP.md`: 2b/2c/2d (VEX/EVEX), R-6.6 (opção C) e
+  `marco.md` §8 / `docs/ROADMAP.md`: 2c/2d (VEX3/EVEX), R-6.6 (opção C) e
   evolução 2c-2(b) (pós-patch pcrel). Detalhe:
-  `docs/SESSAO-2026-10-21-D19-2C.md` + `docs/PE_NOTES.md` §29/§30/§31/§32.
+  `docs/SESSAO-2026-10-21-D19-2C.md` + `docs/PE_NOTES.md` §29–§33.

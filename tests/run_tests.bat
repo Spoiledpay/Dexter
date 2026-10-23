@@ -30,7 +30,7 @@ echo === [0] integridade do corpus ===
 rem Guarda todos os fontes sagrados (nao so hello): qualquer .asm gerado
 rem por engano em cima de um fonte do corpus (ex.: `dexter x.exe -v` usa
 rem o default <input>.asm) e detectado antes de rodar a suite.
-for %%A in (absidx absidx64 hello jtable loop memsz no_relocs sibabs strings taildata tiny tiny32 vex x87nat x87nat32) do (
+for %%A in (absidx absidx64 hello jtable loop memsz no_relocs sibabs strings taildata tiny tiny32 vex vex2nat x87nat x87nat32) do (
     findstr /c:"FONTE SAGRADA DO CORPUS" "tests\%%A.asm" >nul 2>&1
     if errorlevel 1 (
         echo FALHA: tests\%%A.asm foi sobrescrito - restaure o arquivo.
@@ -327,7 +327,7 @@ echo === [14] imp label-at-slot (driver imp_check: HIT/dup/MISS) ===
 "%NASM%" -f win64 -I obj\ -I include\ -o tests\out\imp_check.obj tests\imp_check.asm
 if errorlevel 1 ( echo "  FALHA: nasm imp_check" & set /a FAIL+=1 ) else ( echo "  OK: nasm imp_check" & set /a PASS+=1 )
 if exist tests\out\imp_check.obj (
-    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\x87.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\pe_unwind.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
+    "%LINKER%" /nologo /subsystem:console /entry:main /out:tests\out\imp_check.exe tests\out\imp_check.obj obj\rebuild.obj obj\asm_buffer.obj obj\memory.obj obj\string.obj obj\hash.obj obj\emit_nasm.obj obj\opcode_tbl.obj obj\decoder.obj obj\prefixes.obj obj\modrm.obj obj\operands.obj obj\semantics.obj obj\x87.obj obj\vex.obj obj\symbols.obj obj\labels.obj obj\strings.obj obj\file_read.obj obj\file_write.obj obj\mmap.obj obj\console.obj obj\pe_load.obj obj\pe_sections.obj obj\pe_imports.obj obj\pe_exports.obj obj\pe_relocs.obj obj\rva.obj obj\pe_unwind.obj obj\lexer.obj obj\parser.obj obj\ast.obj obj\lift.obj obj\codegen.obj obj\log.obj obj\parse_args.obj obj\help.obj "%KLIB%"
     if errorlevel 1 ( echo "  FALHA: link imp_check" & set /a FAIL+=1 ) else ( echo "  OK: link imp_check" & set /a PASS+=1 )
 )
 if exist tests\out\imp_check.exe (
@@ -877,9 +877,9 @@ if errorlevel 1 ( echo "  FALHA: sem x87 real (fstp)" & set /a FAIL+=1 ) else ( 
 findstr /c:"fninit" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: sem x87 real (fninit)" & set /a FAIL+=1 ) else ( echo "  OK: x87 real (fninit)" & set /a PASS+=1 )
 rem limites byte-a-byte: cada instrucao VEX/EVEX/3DNow numa unica linha db
-findstr /c:"db 0xC5, 0xE8, 0x58, 0xCB" tests\out\vex_nb.asm >nul 2>&1
+findstr /c:"vaddps xmm1, xmm2, xmm3" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: VEX2 (vaddps) partido" & set /a FAIL+=1 ) else ( echo "  OK: limite VEX2" & set /a PASS+=1 )
-findstr /c:"db 0xC5, 0xF8, 0x77" tests\out\vex_nb.asm >nul 2>&1
+findstr /c:"vzeroupper" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: VEX2 sem modrm (vzeroupper) partido" & set /a FAIL+=1 ) else ( echo "  OK: limite VEX2 sem modrm" & set /a PASS+=1 )
 findstr /c:"db 0xC4, 0xE2, 0x75, 0xA8, 0xC2" tests\out\vex_nb.asm >nul 2>&1
 if errorlevel 1 ( echo "  FALHA: VEX3 0F38 partido" & set /a FAIL+=1 ) else ( echo "  OK: limite VEX3 0F38" & set /a PASS+=1 )
@@ -1351,6 +1351,39 @@ if exist tests\out\x87nat32_rt.exe (
 ) else ( echo "  FALHA: sem x87nat32_rt.exe" & set /a FAIL+=1 )
 python tests\x87_native_check.py x32 tests\out\x87nat32_nat.asm tests\x87nat32.asm tests\expected\x87nat.tsv "%NASM%" > tests\out\x87nat32_chk.txt 2>&1
 if !errorlevel! NEQ 0 ( echo "  FALHA: oraculo x87 x32" & type tests\out\x87nat32_chk.txt & set /a FAIL+=1 ) else ( echo "  OK: oraculo x87 x32 (2048 codificacoes)" & set /a PASS+=1 )
+
+echo === [61] VEX2 nativo (2b): mapa 0F, variacoes de operando ===
+rem Fixture gerado por tools\gen_vex2_fixture.py (entrada: expected\vex2.tsv,
+rem derivado por tools\gen_vex2.py com capstone+NASM). Oraculo
+rem tests\vex2_native_check.py: o texto do Dexter remonta byte-a-byte
+rem (nasm -f bin) e cada instrucao respeita o manifesto (1020 nativas +
+rem 24 db declaradas: escalares com L reservado, que o NASM normaliza).
+"%NASM%" -f win64 -o tests\out\vex2nat.obj tests\vex2nat.asm > tests\out\vex2nat_n.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm vex2nat" & type tests\out\vex2nat_n.err & set /a FAIL+=1 ) else ( echo "  OK: nasm vex2nat" & set /a PASS+=1 )
+"%LINKER%" /nologo /nodefaultlib /machine:x64 /subsystem:console /entry:main /out:tests\out\vex2nat.exe tests\out\vex2nat.obj "%KLIB%" > tests\out\vex2nat_l.err 2>&1
+if errorlevel 1 ( echo "  FALHA: link vex2nat" & set /a FAIL+=1 ) else ( echo "  OK: link vex2nat" & set /a PASS+=1 )
+tests\out\vex2nat.exe >nul 2>&1
+if !errorlevel! NEQ 42 ( echo "  FALHA: fixture vex2nat deveria sair 42" & set /a FAIL+=1 ) else ( echo "  OK: fixture vex2nat sai 42" & set /a PASS+=1 )
+"%DX%" tests\out\vex2nat.exe -o tests\out\vex2nat_nat.asm -native -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: generate -native vex2nat" & set /a FAIL+=1 ) else ( echo "  OK: generate -native vex2nat" & set /a PASS+=1 )
+"%NASM%" -f win64 -I obj\ -I include\ -o tests\out\vex2nat_nat.obj tests\out\vex2nat_nat.asm > tests\out\vex2nat_na.err 2>&1
+if errorlevel 1 ( echo "  FALHA: nasm do .asm VEX2 nativo (win64)" & type tests\out\vex2nat_na.err & set /a FAIL+=1 ) else ( echo "  OK: .asm VEX2 nativo monta (win64)" & set /a PASS+=1 )
+"%DX%" tests\out\vex2nat.exe -m bin -native -r -O tests\out\vex2nat_rt.exe -o tests\out\vex2nat_bin.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: -m bin -native -r vex2nat" & set /a FAIL+=1 ) else ( echo "  OK: -m bin -native -r vex2nat" & set /a PASS+=1 )
+fc /b tests\out\vex2nat.exe tests\out\vex2nat_rt.exe >nul 2>&1
+if errorlevel 1 ( echo "  FALHA: vex2nat bin difere (bytes)" & set /a FAIL+=1 ) else ( echo "  OK: vex2nat bin byte-identico" & set /a PASS+=1 )
+if exist tests\out\vex2nat_rt.exe (
+    tests\out\vex2nat_rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rebuild vex2nat sai 42" & set /a PASS+=1 ) else ( echo "  FALHA: rebuild vex2nat nao sai 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem vex2nat_rt.exe" & set /a FAIL+=1 )
+python tests\vex2_native_check.py tests\out\vex2nat_bin.asm tests\out\vex2nat.exe tests\expected\vex2nat.tsv "%NASM%" > tests\out\vex2nat_chk.txt 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: oraculo VEX2" & type tests\out\vex2nat_chk.txt & set /a FAIL+=1 ) else ( echo "  OK: oraculo VEX2 (1418 nativas + 24 db)" & set /a PASS+=1 )
+"%DX%" tests\out\vex2nat.exe -native -r -O tests\out\vex2nat_win_rt.exe -o tests\out\vex2nat_win_rt.asm -q >nul 2>&1
+if !errorlevel! NEQ 0 ( echo "  FALHA: rebuild win64 vex2nat" & set /a FAIL+=1 ) else ( echo "  OK: rebuild win64 vex2nat" & set /a PASS+=1 )
+if exist tests\out\vex2nat_win_rt.exe (
+    tests\out\vex2nat_win_rt.exe >nul 2>&1
+    if !errorlevel! EQU 42 ( echo "  OK: rebuild win64 vex2nat sai 42" & set /a PASS+=1 ) else ( echo "  FALHA: rebuild win64 vex2nat nao sai 42" & set /a FAIL+=1 )
+) else ( echo "  FALHA: sem vex2nat_win_rt.exe" & set /a FAIL+=1 )
 
 echo.
 echo =====================================================

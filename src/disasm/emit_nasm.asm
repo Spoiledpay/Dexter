@@ -81,6 +81,9 @@ s_strict4    db "strict dword ", 0
 s_strict8    db "strict qword ", 0
 s_tword      db "tword ", 0
 s_st         db "st", 0
+s_xmm        db "xmm", 0
+s_ymm        db "ymm", 0
+s_kpre       db "k", 0
 s_abs        db "abs ", 0
 s_nosplit    db "nosplit ", 0
 s_rel2       db "rel ", 0
@@ -1112,6 +1115,35 @@ dex_emit_native:
     jnz .en_db
     jmp .en_tail
 .en_tail:
+    ; VEX2 com imm8 (vshufps/vpinsrw/...): imediato é impresso DEPOIS dos
+    ; operandos (o modelo DexOp cobre até 3 registradores/memória).
+    cmp byte [r15+Insn.vex_imm8], 0
+    je .en_tail_hex
+    lea rdx, [rel s_comma]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .en_fail
+    lea rdx, [rel s_0x]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .en_fail
+    mov rax, [r15+Insn.imm]
+    and eax, 0xFF
+    mov rcx, rbx
+    mov rdx, rax
+    xor r8d, r8d
+    sub rsp, 32
+    call asmbuf_append_u64_hex
+    add rsp, 32
+    test eax, eax
+    jnz .en_fail
+.en_tail_hex:
     ; "; @0xVA" se -hex
     cmp byte [rel g_emit_hex], 0
     je .en_nl
@@ -1202,6 +1234,10 @@ dex_emit_native:
     je .fo_seg
     cmp eax, DEX_OP_ST
     je .fo_st
+    cmp eax, DEX_OP_VEC
+    je .fo_vec
+    cmp eax, DEX_OP_MASK
+    je .fo_mask
     jmp .fo_no                  ; kind 0/inválido → db
 .fo_st:
     ; x87: "st<reg>" (reg 0-7; a tabela x87 só produz índices válidos).
@@ -1213,6 +1249,54 @@ dex_emit_native:
     test eax, eax
     jnz .fo_fail
     movzx eax, byte [r13+DexOp.reg]
+    add eax, '0'
+    mov rcx, rbx
+    mov edx, eax
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    jmp .fo_ret
+.fo_vec:
+    ; xmm<n> / ymm<n> (DexOp.pad = 16|32); índice 0-15 em decimal.
+    lea rdx, [rel s_xmm]
+    cmp byte [r13+DexOp.pad], 32
+    jne .fo_vec_pre
+    lea rdx, [rel s_ymm]
+.fo_vec_pre:
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    jmp .fo_vecidx
+.fo_mask:
+    lea rdx, [rel s_kpre]
+    mov rcx, rbx
+    sub rsp, 32
+    call asmbuf_append_str
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+.fo_vecidx:
+    movzx eax, byte [r13+DexOp.reg]
+    mov [rbp-40], eax           ; índice (chamadas abaixo matam eax)
+    cmp eax, 10
+    jb .fo_vec1
+    mov rcx, rbx
+    mov edx, '1'
+    sub rsp, 32
+    call asmbuf_append_char
+    add rsp, 32
+    test eax, eax
+    jnz .fo_fail
+    mov eax, [rbp-40]
+    sub eax, 10
+    mov [rbp-40], eax
+.fo_vec1:
+    mov eax, [rbp-40]
     add eax, '0'
     mov rcx, rbx
     mov edx, eax

@@ -2,7 +2,7 @@ version: "1.0"
 name: Dexter
 language: asm
 created_at: 2026-10-16T21:37:42.3649225-03:00
-updated_at: 2026-10-22T20:04:17.1522817-03:00
+updated_at: 2026-10-22T21:46:31.9034719-03:00
 files:
     include\dexter.inc:
         imports:
@@ -48,8 +48,23 @@ files:
             - DEX_OP_REL
             - DEX_OP_SEG
             - DEX_OP_ST
+            - DEX_OP_VEC
+            - DEX_OP_MASK
             - DEX_MEM_TWORD
             - DEX_MEM_NOSZ
+            - VEX_ROLE_R
+            - VEX_ROLE_V
+            - VEX_ROLE_M
+            - VEX_ROLE_I
+            - VEX_CL_V16
+            - VEX_CL_V32
+            - VEX_CL_G32
+            - VEX_CL_K
+            - VEX_CL_M
+            - VEX_CL_M4
+            - VEX_CL_M8
+            - VEX_CL_I8
+            - VEX_CL_G64
             - X87_SH_DB
             - X87_SH_NONE
             - X87_SH_MEM
@@ -144,9 +159,9 @@ files:
             - SymbolTable
         calls: []
         package: ""
-        size: 13622
-        modified_at: 2026-10-22T19:34:10.7472643-03:00
-        hash: 67d5a274ffb597591376afd869efb67452677106115c80bcc8a9e6fefc235980
+        size: 15006
+        modified_at: 2026-10-22T21:44:18.7391028-03:00
+        hash: a3338283c020935eff192d0f9be83d8c782810b3c258be2c50291e85f37d2ff1
     include\errors.inc:
         imports: []
         functions:
@@ -1168,6 +1183,7 @@ files:
             - dex_tbl2_mne
             - dex_tbl38_flag
             - dex_tbl3a_flag
+            - dex_vex2_flags
             - dex_build_operands
             - s_vex
             - s_evex
@@ -1191,10 +1207,19 @@ files:
             - Insn.imm
             - Insn.target_va
             - Insn.enc
+            - Insn.vex_mm
+            - Insn.vex_npre
+            - Insn.vex_r
+            - Insn.vex_b
+            - Insn.vex_x
+            - Insn.vex_w
+            - Insn.vex_vvvv
+            - Insn.vex_pp
+            - Insn.vex_l
         package: ""
-        size: 10163
-        modified_at: 2026-10-15T19:27:01.6988837-03:00
-        hash: d332eb3e20dd35021b6407f035da3d5354074fa0d056b1f76e14e42b2befa30e
+        size: 12777
+        modified_at: 2026-10-22T21:44:18.773843-03:00
+        hash: 2bfb7dbeb15d71939eda53c062b469fe1625c3432328c8da66f2812b7c3bfdb5
     src\disasm\emit_nasm.asm:
         imports:
             - dexter.inc
@@ -1211,6 +1236,9 @@ files:
             - s_strict8
             - s_tword
             - s_st
+            - s_xmm
+            - s_ymm
+            - s_kpre
             - s_abs
             - s_nosplit
             - s_rel2
@@ -1309,12 +1337,17 @@ files:
             - Insn.rex
             - Insn.legacy66
             - Insn.legacy67
+            - Insn.vex_imm8
+            - Insn.imm
             - DEX_OP_REG
             - DEX_OP_IMM
             - DEX_OP_REL
             - DEX_OP_SEG
             - DEX_OP_ST
+            - DEX_OP_VEC
+            - DEX_OP_MASK
             - DexOp.reg
+            - DexOp.pad
             - DexOp.size
             - DexOp.val
             - DEX_MEM_TWORD
@@ -1326,9 +1359,9 @@ files:
             - Insn.has_sib
             - DexOp.scale
         package: ""
-        size: 51074
-        modified_at: 2026-10-22T19:37:34.146293-03:00
-        hash: e3716fc7f61e674583c490ed57d00aab1e3d6abf2b08f6e39798bcaa1e3750f9
+        size: 52913
+        modified_at: 2026-10-22T20:47:08.1872305-03:00
+        hash: fa10f74f4d8301199b97da828245bd7ab203c8d47680d1528ab3d20b418b6012
     src\disasm\modrm.asm:
         imports:
             - dexter.inc
@@ -1660,6 +1693,7 @@ files:
             - s_sse
             - dex_x87_mne
             - dex_x87_form
+            - dex_vex2_desc
             - s_retf
             - s_int3
             - s_int
@@ -1728,28 +1762,46 @@ files:
             - Insn.legacy67
             - Insn.opcode
             - Insn.opcode_len
+            - Insn.vex_mm
+            - Insn.mne
+            - VEX_ROLE_I
+            - VEX_ROLE_V
+            - VEX_ROLE_R
+            - Insn.modrm
+            - DEX_MEM_NOSZ
+            - VEX_CL_M4
+            - VEX_CL_M8
+            - Insn.vex_b
+            - Insn.vex_r
+            - Insn.vex_vvvv
             - Insn.op0
+            - VEX_CL_K
+            - VEX_CL_G32
+            - VEX_CL_G64
+            - DexOp.kind
+            - DEX_OP_VEC
+            - DexOp.reg
+            - DexOp.pad
+            - VEX_CL_V32
+            - DEX_OP_MASK
+            - DEX_OP_REG
+            - DexOp.size
+            - Insn.vex_imm8
             - Insn.op1
             - Insn.op2
             - Insn.is_branch
             - Insn.is_call
             - Insn.imm_size
-            - DexOp.kind
             - DEX_OP_REL
             - Insn.target_va
             - DexOp.val
-            - Insn.mne
             - Insn.legacy66
             - DEX_OP_IMM
-            - DexOp.size
             - Insn.imm
             - Insn.rep
             - Insn.has_rex
             - Insn.rex
-            - DEX_OP_REG
-            - DexOp.reg
             - Insn.has_modrm
-            - Insn.modrm
             - DEX_OP_SEG
             - X87_SH_DB
             - X87_SH_NONE
@@ -1772,9 +1824,415 @@ files:
             - Insn.sib
             - Insn.disp_size
         package: ""
-        size: 66606
-        modified_at: 2026-10-22T19:47:32.9139077-03:00
-        hash: d4daacb202d0416c308274579df21b512686286aa23eb4a3a6b660a621ad4bff
+        size: 69610
+        modified_at: 2026-10-22T21:12:15.5357032-03:00
+        hash: 0dd8fbfbd0acdd2fbedb8297392084f457efd23c6617e2ceb66089a2b9f9fc6f
+    src\disasm\vex.asm:
+        imports:
+            - dexter.inc
+            - vex2_tbl.inc
+        functions:
+            - dex_vex2_desc
+            - dex_vex2_flags
+        calls:
+            - Insn.enc
+            - Insn.vex_npre
+            - Insn.vex_mm
+            - Insn.vex_pp
+            - Insn.vex_l
+            - Insn.opcode
+            - vex2_idx
+            - VEX2_DESC_NONE
+            - VEX2_DESC_SIZE
+            - vex2_desc
+            - Insn.vex_vvvv
+        package: ""
+        size: 3658
+        modified_at: 2026-10-22T21:44:18.7467758-03:00
+        hash: a230ad21e5c23b867fda6a15087f133f222661e1dd328ae9ed92a2549af49aef
+    src\disasm\vex2_tbl.inc:
+        imports: []
+        functions:
+            - VEX2_DESC_NONE
+            - VEX2_DESC_SIZE
+            - s_v2_000
+            - s_v2_001
+            - s_v2_002
+            - s_v2_003
+            - s_v2_004
+            - s_v2_005
+            - s_v2_006
+            - s_v2_007
+            - s_v2_008
+            - s_v2_009
+            - s_v2_010
+            - s_v2_011
+            - s_v2_012
+            - s_v2_013
+            - s_v2_014
+            - s_v2_015
+            - s_v2_016
+            - s_v2_017
+            - s_v2_018
+            - s_v2_019
+            - s_v2_020
+            - s_v2_021
+            - s_v2_022
+            - s_v2_023
+            - s_v2_024
+            - s_v2_025
+            - s_v2_026
+            - s_v2_027
+            - s_v2_028
+            - s_v2_029
+            - s_v2_030
+            - s_v2_031
+            - s_v2_032
+            - s_v2_033
+            - s_v2_034
+            - s_v2_035
+            - s_v2_036
+            - s_v2_037
+            - s_v2_038
+            - s_v2_039
+            - s_v2_040
+            - s_v2_041
+            - s_v2_042
+            - s_v2_043
+            - s_v2_044
+            - s_v2_045
+            - s_v2_046
+            - s_v2_047
+            - s_v2_048
+            - s_v2_049
+            - s_v2_050
+            - s_v2_051
+            - s_v2_052
+            - s_v2_053
+            - s_v2_054
+            - s_v2_055
+            - s_v2_056
+            - s_v2_057
+            - s_v2_058
+            - s_v2_059
+            - s_v2_060
+            - s_v2_061
+            - s_v2_062
+            - s_v2_063
+            - s_v2_064
+            - s_v2_065
+            - s_v2_066
+            - s_v2_067
+            - s_v2_068
+            - s_v2_069
+            - s_v2_070
+            - s_v2_071
+            - s_v2_072
+            - s_v2_073
+            - s_v2_074
+            - s_v2_075
+            - s_v2_076
+            - s_v2_077
+            - s_v2_078
+            - s_v2_079
+            - s_v2_080
+            - s_v2_081
+            - s_v2_082
+            - s_v2_083
+            - s_v2_084
+            - s_v2_085
+            - s_v2_086
+            - s_v2_087
+            - s_v2_088
+            - s_v2_089
+            - s_v2_090
+            - s_v2_091
+            - s_v2_092
+            - s_v2_093
+            - s_v2_094
+            - s_v2_095
+            - s_v2_096
+            - s_v2_097
+            - s_v2_098
+            - s_v2_099
+            - s_v2_100
+            - s_v2_101
+            - s_v2_102
+            - s_v2_103
+            - s_v2_104
+            - s_v2_105
+            - s_v2_106
+            - s_v2_107
+            - s_v2_108
+            - s_v2_109
+            - s_v2_110
+            - s_v2_111
+            - s_v2_112
+            - s_v2_113
+            - s_v2_114
+            - s_v2_115
+            - s_v2_116
+            - s_v2_117
+            - s_v2_118
+            - s_v2_119
+            - s_v2_120
+            - s_v2_121
+            - s_v2_122
+            - s_v2_123
+            - s_v2_124
+            - s_v2_125
+            - s_v2_126
+            - s_v2_127
+            - s_v2_128
+            - s_v2_129
+            - s_v2_130
+            - s_v2_131
+            - s_v2_132
+            - s_v2_133
+            - s_v2_134
+            - s_v2_135
+            - s_v2_136
+            - s_v2_137
+            - s_v2_138
+            - s_v2_139
+            - s_v2_140
+            - s_v2_141
+            - s_v2_142
+            - s_v2_143
+            - s_v2_144
+            - s_v2_145
+            - s_v2_146
+            - s_v2_147
+            - s_v2_148
+            - s_v2_149
+            - s_v2_150
+            - s_v2_151
+            - s_v2_152
+            - s_v2_153
+            - s_v2_154
+            - s_v2_155
+            - s_v2_156
+            - s_v2_157
+            - s_v2_158
+            - s_v2_159
+            - s_v2_160
+            - s_v2_161
+            - s_v2_162
+            - s_v2_163
+            - s_v2_164
+            - s_v2_165
+            - s_v2_166
+            - s_v2_167
+            - s_v2_168
+            - s_v2_169
+            - s_v2_170
+            - s_v2_171
+            - s_v2_172
+            - s_v2_173
+            - s_v2_174
+            - s_v2_175
+            - s_v2_176
+            - s_v2_177
+            - s_v2_178
+            - s_v2_179
+            - s_v2_180
+            - s_v2_181
+            - s_v2_182
+            - s_v2_183
+            - s_v2_184
+            - s_v2_185
+            - s_v2_186
+            - s_v2_187
+            - s_v2_188
+            - s_v2_189
+            - s_v2_190
+            - s_v2_191
+            - s_v2_192
+            - s_v2_193
+            - s_v2_194
+            - s_v2_195
+            - s_v2_196
+            - s_v2_197
+            - s_v2_198
+            - s_v2_199
+            - s_v2_200
+            - s_v2_201
+            - s_v2_202
+            - s_v2_203
+            - s_v2_204
+            - s_v2_205
+            - s_v2_206
+            - s_v2_207
+            - s_v2_208
+            - s_v2_209
+            - s_v2_210
+            - s_v2_211
+            - s_v2_212
+            - s_v2_213
+            - s_v2_214
+            - s_v2_215
+            - s_v2_216
+            - s_v2_217
+            - s_v2_218
+            - s_v2_219
+            - s_v2_220
+            - s_v2_221
+            - s_v2_222
+            - s_v2_223
+            - s_v2_224
+            - s_v2_225
+            - s_v2_226
+            - s_v2_227
+            - s_v2_228
+            - s_v2_229
+            - s_v2_230
+            - s_v2_231
+            - s_v2_232
+            - s_v2_233
+            - s_v2_234
+            - s_v2_235
+            - s_v2_236
+            - s_v2_237
+            - s_v2_238
+            - s_v2_239
+            - s_v2_240
+            - s_v2_241
+            - s_v2_242
+            - s_v2_243
+            - s_v2_244
+            - s_v2_245
+            - s_v2_246
+            - s_v2_247
+            - s_v2_248
+            - s_v2_249
+            - s_v2_250
+            - s_v2_251
+            - s_v2_252
+            - s_v2_253
+            - s_v2_254
+            - s_v2_255
+            - s_v2_256
+            - s_v2_257
+            - s_v2_258
+            - s_v2_259
+            - s_v2_260
+            - s_v2_261
+            - s_v2_262
+            - s_v2_263
+            - s_v2_264
+            - s_v2_265
+            - s_v2_266
+            - s_v2_267
+            - s_v2_268
+            - s_v2_269
+            - s_v2_270
+            - s_v2_271
+            - s_v2_272
+            - s_v2_273
+            - s_v2_274
+            - s_v2_275
+            - s_v2_276
+            - s_v2_277
+            - s_v2_278
+            - s_v2_279
+            - s_v2_280
+            - s_v2_281
+            - s_v2_282
+            - s_v2_283
+            - s_v2_284
+            - s_v2_285
+            - s_v2_286
+            - s_v2_287
+            - s_v2_288
+            - s_v2_289
+            - s_v2_290
+            - s_v2_291
+            - s_v2_292
+            - s_v2_293
+            - s_v2_294
+            - s_v2_295
+            - s_v2_296
+            - s_v2_297
+            - s_v2_298
+            - s_v2_299
+            - s_v2_300
+            - s_v2_301
+            - s_v2_302
+            - s_v2_303
+            - s_v2_304
+            - s_v2_305
+            - s_v2_306
+            - s_v2_307
+            - s_v2_308
+            - s_v2_309
+            - s_v2_310
+            - s_v2_311
+            - s_v2_312
+            - s_v2_313
+            - s_v2_314
+            - s_v2_315
+            - s_v2_316
+            - s_v2_317
+            - s_v2_318
+            - s_v2_319
+            - s_v2_320
+            - s_v2_321
+            - s_v2_322
+            - s_v2_323
+            - s_v2_324
+            - s_v2_325
+            - s_v2_326
+            - s_v2_327
+            - s_v2_328
+            - s_v2_329
+            - s_v2_330
+            - s_v2_331
+            - s_v2_332
+            - s_v2_333
+            - s_v2_334
+            - s_v2_335
+            - s_v2_336
+            - s_v2_337
+            - s_v2_338
+            - s_v2_339
+            - s_v2_340
+            - s_v2_341
+            - s_v2_342
+            - s_v2_343
+            - s_v2_344
+            - s_v2_345
+            - s_v2_346
+            - s_v2_347
+            - s_v2_348
+            - s_v2_349
+            - s_v2_350
+            - s_v2_351
+            - s_v2_352
+            - s_v2_353
+            - s_v2_354
+            - s_v2_355
+            - s_v2_356
+            - s_v2_357
+            - s_v2_358
+            - s_v2_359
+            - s_v2_360
+            - s_v2_361
+            - s_v2_362
+            - s_v2_363
+            - s_v2_364
+            - s_v2_365
+            - s_v2_366
+            - s_v2_367
+            - s_v2_368
+            - s_v2_369
+            - s_v2_370
+            - vex2_desc
+            - vex2_idx
+        calls: []
+        package: ""
+        size: 54231
+        modified_at: 2026-10-22T21:16:37.5240741-03:00
+        hash: b56f041f25eb4c64135a2fdae7b4de15c502a248b9cf919d5ba34ae0c746b783
     src\disasm\x87.asm:
         imports:
             - dexter.inc
@@ -5338,6 +5796,63 @@ files:
         size: 1214
         modified_at: 2026-10-15T19:27:55.9243284-03:00
         hash: 69101c3be301cba737d8783712a15ee53264b11b7350f0f9f188ff1b48e7b0ac
+    tests\vex2nat.asm:
+        imports: []
+        functions:
+            - main
+            - vex2data
+        calls:
+            - ExitProcess
+        package: ""
+        size: 100416
+        modified_at: 2026-10-22T21:38:33.092718-03:00
+        hash: 04062895fdf609467ddee3a9a0fb65427e2c0b7a855d38af3dbed088fbb04553
+    tests\vex2_native_check.py:
+        imports:
+            - pathlib
+            - pathlib.Path
+            - re
+            - subprocess
+            - sys
+            - tempfile
+        functions:
+            - die
+            - load_manifest
+            - text_insns
+            - main
+        calls:
+            - die
+            - print
+            - load_manifest
+            - Path
+            - read_text
+            - splitlines
+            - startswith
+            - split
+            - append
+            - int
+            - upper
+            - text_insns
+            - search
+            - SystemExit
+            - end
+            - start
+            - strip
+            - main
+            - len
+            - TemporaryDirectory
+            - run
+            - str
+            - read_bytes
+            - enumerate
+            - zip
+            - instrucao
+            - d
+            - exit
+        package: ""
+        size: 3304
+        modified_at: 2026-10-22T20:55:23.2793225-03:00
+        hash: 1ab38624343812ce3341e717a9401251fc5a99d2cb541d590db754ca69d1e6fc
     tests\x87nat.asm:
         imports: []
         functions:
@@ -5347,7 +5862,7 @@ files:
             - ExitProcess
         package: ""
         size: 87096
-        modified_at: 2026-10-22T19:46:40.8259927-03:00
+        modified_at: 2026-10-22T19:53:49.5259326-03:00
         hash: 5a5fef2f5d65bf4746b8c9bb15b69773ea0b78b69d91eb74e91eab20f32e2f50
     tests\x87nat32.asm:
         imports: []
@@ -5358,7 +5873,7 @@ files:
             - _ExitProcess@4
         package: ""
         size: 87135
-        modified_at: 2026-10-22T19:46:40.8259927-03:00
+        modified_at: 2026-10-22T19:53:49.5269759-03:00
         hash: ed65222ad23cc057e965418e467571b9d0a0a2e2bb4c4bb7c693055c0a6be067
     tests\x87_check.asm:
         imports:
@@ -5420,9 +5935,9 @@ files:
             - print
             - s
         package: ""
-        size: 5271
-        modified_at: 2026-10-22T19:46:38.0335834-03:00
-        hash: d3544002a46919171c833d660021612cfcb46c65f4e3dfe4abda70c5980e1606
+        size: 5441
+        modified_at: 2026-10-22T19:53:46.7344808-03:00
+        hash: 8cb619686d3d5f58eadc19f9193220aa5b11c59a1cc79144385a912f6f738725
     tests\x87_native_check.py:
         imports:
             - pathlib
@@ -5435,6 +5950,8 @@ files:
             - die
             - load_tsv
             - text_insns
+            - check_order
+            - fixture_payload
             - main
         calls:
             - die
@@ -5455,23 +5972,156 @@ files:
             - end
             - start
             - strip
+            - check_order
+            - zip
+            - d
+            - fixture_payload
+            - bytearray
+            - group
+            - bytes
             - main
+            - instrucao
             - TemporaryDirectory
             - run
             - str
             - read_bytes
             - enumerate
-            - zip
-            - instrucao
-            - d
-            - NASM
             - join
-            - sorted
+            - write_text
             - exit
         package: ""
-        size: 4298
-        modified_at: 2026-10-22T19:42:09.7585748-03:00
-        hash: 224ded7b9fe94dc7d71c76a0836eef8aab3f62e6df6a1d9a23571d5b986950cb
+        size: 7018
+        modified_at: 2026-10-22T19:54:00.2229026-03:00
+        hash: 9057e9687edc5eb05de663b600473374d25ea92d32a3f87f2ec035d8ed6f1fd5
+    tools\gen_vex2.py:
+        imports:
+            - collections
+            - collections.Counter
+            - pathlib
+            - pathlib.Path
+            - capstone
+            - capstone.Cs
+            - capstone.CS_ARCH_X86
+            - capstone.CS_MODE_64
+            - itertools
+            - subprocess
+            - tempfile
+        functions:
+            - dec
+            - v2
+            - assemble
+            - kinds_of
+            - render
+            - try_shapes
+            - attempt
+            - derive
+            - emit
+            - main
+        calls:
+            - Path
+            - resolve
+            - Cs
+            - dec
+            - list
+            - disasm
+            - bytes
+            - len
+            - startswith
+            - v2
+            - assemble
+            - TemporaryDirectory
+            - write_text
+            - run
+            - str
+            - read_bytes
+            - kinds_of
+            - reg_name
+            - append
+            - isdigit
+            - render
+            - enumerate
+            - join
+            - try_shapes
+            - any
+            - permutations
+            - dict
+            - zip
+            - get
+            - strip
+            - attempt
+            - derive
+            - range
+            - emit
+            - VEX2
+            - py
+            - Descritor
+            - x80
+            - descritor
+            - main
+            - mkdir
+            - open
+            - write
+            - print
+            - sum
+            - Counter
+        package: ""
+        size: 10138
+        modified_at: 2026-10-22T21:14:51.4343942-03:00
+        hash: 7779eadc3e6059bbb17716c9a65c2d88edb015b557443ca06aa973dcceb307f3
+    tools\gen_vex2_fixture.py:
+        imports:
+            - pathlib
+            - pathlib.Path
+            - capstone
+            - capstone.Cs
+            - capstone.CS_ARCH_X86
+            - capstone.CS_MODE_64
+            - subprocess
+            - tempfile
+        functions:
+            - dec
+            - assemble
+            - load_rows
+            - render
+            - encode
+            - main
+        calls:
+            - Path
+            - resolve
+            - Cs
+            - dec
+            - list
+            - disasm
+            - bytes
+            - len
+            - startswith
+            - assemble
+            - TemporaryDirectory
+            - write_text
+            - run
+            - str
+            - read_bytes
+            - load_rows
+            - read_text
+            - splitlines
+            - split
+            - append
+            - int
+            - render
+            - get
+            - join
+            - encode
+            - to_bytes
+            - main
+            - any
+            - strip
+            - mkdir
+            - print
+            - sum
+        package: ""
+        size: 7620
+        modified_at: 2026-10-22T21:37:40.1171811-03:00
+        hash: 82d8d4045eec77026b04ef5935988afe8ce8c870330bc4480d7b9c3314f6bf1b
 memories:
     - id: 2ecde199-d6a3-ca7f-1b8e-29a27bf49033
       title: 'D-20: codegen nativo byte-fiel em PE MS (encoding load/store + segmento)'
@@ -6268,6 +6918,46 @@ memories:
       confidence: 1
       last_verified: 2026-10-22T20:04:16.9888625-03:00
       created_by: human
+    - id: 542e3bf7-72e3-1b6e-c896-70b15f041334
+      title: 'VEX2: vvvv invertido/exigido 1111, lacuna dex_tbl2_flag[F2] e VEX3 tambem enc=1'
+      description: '(1) VEX.vvvv e INVERTIDO: ''nao usado'' = campo 1111 = valor logico 0; entradas que nao usam vvvv exigem logico 0 (senao encoding reservado). (2) dex_tbl2_flag[0xF2]=0 na tabela legada: o decoder VEX nao lia o ModRM de vpslld e o sweep desalinhava (aad/retf no payload) - a tabela derivada traz os flags de decode (bits 3/4). (3) VEX3 (C4) tambem tem enc=1; distinguir por npre (2=C5, 3=C4) antes de consultar a tabela VEX2. (4) Escalar com L=1 e reservado: NASM normaliza L=0 e os bytes mudam -> db. (5) Chamada que clobra r8 (ABI) e usada como indice pelo caller => leitura OOB e AV; preservar em volta do call.'
+      type: lesson
+      severity: medium
+      files:
+        - src/disasm/vex.asm
+        - src/disasm/decoder.asm
+        - tools/gen_vex2.py
+      branch: main
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T21:46:31.4360764-03:00
+      updated_at: 2026-10-22T21:46:31.4360764-03:00
+      confidence: 1
+      last_verified: 2026-10-22T21:46:31.222797-03:00
+      created_by: human
+    - id: 474c7e27-5cee-231b-f43b-f3c5868d4ba6
+      title: 'Implementado: VEX2 nativo (2b) - 371 entradas derivadas, 1418 nativas'
+      description: '1.2.434. Suite 464/464 (CI 441/441), lenta 7/7. Fixture 1442 instrucoes: 1418 nativas + 24 db declaradas; -m bin -native -r byte-identico (9216 B) e exit 42; -native -r win64 exit 42. VEX3/EVEX seguem db (2c/2d).'
+      type: milestone
+      severity: medium
+      files:
+        - src/disasm/vex.asm
+        - src/disasm/vex2_tbl.inc
+        - src/disasm/semantics.asm
+        - src/disasm/emit_nasm.asm
+        - src/disasm/decoder.asm
+        - tests/vex2nat.asm
+        - tests/vex2_native_check.py
+        - tools/gen_vex2.py
+        - tools/gen_vex2_fixture.py
+      branch: main
+      tags: []
+      author: Dexter Engineer
+      created_at: 2026-10-22T21:46:31.9034719-03:00
+      updated_at: 2026-10-22T21:46:31.9034719-03:00
+      confidence: 1
+      last_verified: 2026-10-22T21:46:31.7194473-03:00
+      created_by: human
 decisions:
     - id: 488d9016-78d3-4bce-b6ef-bc1981fca9a2
       title: 'D-22: entry label via equ no -s + -r'
@@ -6363,6 +7053,26 @@ decisions:
         - 2a
         - nasm
       created_by: human
+    - id: b8c2d8e0-013b-4afa-8467-d06cb249b389
+      title: 'VEX2 nativo: tabela derivada (capstone+NASM) + flags de decode no descritor'
+      description: ""
+      decision: tools/gen_vex2.py deriva (pp,L,opcode) do mapa 0F usando o NASM como juiz dos bytes e capstone p/ mnemônico/classes; gera vex2_tbl.inc (descritor 20B com papeis R/V/M/I, classes V16/V32/G32/G64/K/M/M4/M8/I8, flags ModRM/imm/db/vvvv-unused). Decoder usa dex_vex2_flags da tabela (legado so fallback) e exige npre==2. Entradas sem forma ficam db com o mnemônico no comentario.
+      rationale: A tabela legada tem lacunas de decode (0F F2) e o mnemônico VEX nao e 'v'+legado; derivar com NASM garante byte-exatidao. Ver docs/adr/0007 e PE_NOTES 33.
+      files:
+        - src/disasm/vex.asm
+        - src/disasm/vex2_tbl.inc
+        - tools/gen_vex2.py
+        - docs/adr/0007-vex2-tabela-derivada.md
+      participants: []
+      date: 2026-10-22T00:00:00Z
+      status: accepted
+      confidence: 1
+      last_verified: 2026-10-22T21:46:31.5761526-03:00
+      tags:
+        - 2b
+        - vex
+        - avx
+      created_by: human
 dependencies:
     include\dexter.inc:
         - include\errors.inc
@@ -6445,6 +7155,7 @@ dependencies:
         - src\disasm\modrm.asm
         - src\disasm\operands.asm
         - src\disasm\opcode_tbl.asm
+        - src\disasm\vex.asm
         - src\disasm\semantics.asm
     src\disasm\emit_nasm.asm:
         - include\dexter.inc
@@ -6464,6 +7175,11 @@ dependencies:
         - include\dexter.inc
         - src\disasm\opcode_tbl.asm
         - src\disasm\x87.asm
+        - src\disasm\vex.asm
+    src\disasm\vex.asm:
+        - include\dexter.inc
+        - src\disasm\vex2_tbl.inc
+    src\disasm\vex2_tbl.inc: []
     src\disasm\x87.asm:
         - include\dexter.inc
     src\front\ast.asm:
@@ -6667,6 +7383,8 @@ dependencies:
         - include\dexter.inc
         - src\pe\pe_unwind.asm
     tests\vex.asm: []
+    tests\vex2nat.asm: []
+    tests\vex2_native_check.py: []
     tests\x87nat.asm: []
     tests\x87nat32.asm: []
     tests\x87_check.asm:
@@ -6674,4 +7392,6 @@ dependencies:
         - src\disasm\x87.asm
     tests\x87_forms_gen.py: []
     tests\x87_native_check.py: []
+    tools\gen_vex2.py: []
+    tools\gen_vex2_fixture.py: []
 tags: {}

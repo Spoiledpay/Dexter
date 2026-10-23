@@ -33,6 +33,7 @@ extern s_sysc
 extern s_sse
 extern dex_x87_mne
 extern dex_x87_form
+extern dex_vex2_desc
 extern s_retf
 extern s_int3
 extern s_int
@@ -111,10 +112,10 @@ dex_build_operands:
     test rcx, rcx
     jz .no
     mov rbx, rcx               ; insn
-    ; R-2.7: VEX/EVEX nunca são emitidos nativamente (prefixo não modelado
-    ; no emissor) — mnemônico genérico já vem do decoder; força db.
+    ; R-2.7: VEX/EVEX: o prefixo não é modelado no emissor legado; 2b trata
+    ; VEX2 (C5, mapa 0F) pela tabela, VEX3/EVEX seguem db até 2c/2d.
     cmp byte [rbx+Insn.enc], 0
-    jne .no
+    jne .bm_vex
     cmp byte [rbx+Insn.addr_mode], 1
     jne .bm64
     ; x32 Fase D1b: allowlist (resto: db fiel). Classes auditadas p/
@@ -197,6 +198,132 @@ dex_build_operands:
     cmp r11d, 2
     je .len2
     jmp .no                    ; len3 (0F38/3A): db
+.bm_vex:
+    ; 2b: VEX2 (C5, mapa 0F) pela tabela gerada; VEX3/EVEX -> db (2c/2d).
+    cmp byte [rbx+Insn.enc], 1
+    jne .no
+    cmp byte [rbx+Insn.vex_mm], 1
+    jne .no
+    mov rcx, rbx
+    sub rsp, 40
+    call dex_vex2_desc
+    add rsp, 40
+    test rax, rax
+    jz .no
+    push rsi
+    push rdi
+    mov rsi, rax                 ; descritor
+    mov rax, [rsi]               ; mnemônico da tabela
+    mov [rbx+Insn.mne], rax
+    movzx edi, byte [rsi+8]      ; flags: nops | modrm | imm | db | vvvv-unused
+    test edi, 0x40
+    jnz .bv_dbfail               ; entrada sem forma: mne fica p/ o comentário
+    and edi, 0x07                ; nops
+    xor r11d, r11d               ; i
+.bv_loop:
+    cmp r11d, edi
+    jae .bv_ok
+    mov eax, r11d
+    shl eax, 1
+    lea rcx, [rsi+9]
+    movzx edx, byte [rcx+rax]    ; papel
+    movzx r10d, byte [rcx+rax+1] ; classe
+    cmp edx, VEX_ROLE_I
+    je .bv_imm
+    cmp edx, VEX_ROLE_V
+    je .bv_vvvv
+    cmp edx, VEX_ROLE_R
+    je .bv_reg
+    ; ---- M (ModRM.rm): registrador ou memória ----
+    movzx ecx, byte [rbx+Insn.modrm]
+    shr ecx, 6
+    cmp ecx, 3
+    je .bv_rmreg
+    ; memória: size pela classe (M/M4/M8); .build_rm monta base/index/disp/seg
+    mov r9d, DEX_MEM_NOSZ
+    cmp r10d, VEX_CL_M4
+    jne .bv_m8ck
+    mov r9d, 4
+.bv_m8ck:
+    cmp r10d, VEX_CL_M8
+    jne .bv_mgo
+    mov r9d, 8
+.bv_mgo:
+    mov r8d, r11d                ; opidx
+    sub rsp, 32
+    call .build_rm
+    add rsp, 32
+    test eax, eax
+    jnz .bv_fail
+    inc r11d
+    jmp .bv_loop
+.bv_rmreg:
+    movzx eax, byte [rbx+Insn.modrm]
+    and eax, 7
+    movzx ecx, byte [rbx+Insn.vex_b]
+    add eax, ecx
+    jmp .bv_set
+.bv_reg:
+    movzx eax, byte [rbx+Insn.modrm]
+    shr eax, 3
+    and eax, 7
+    movzx ecx, byte [rbx+Insn.vex_r]
+    add eax, ecx
+    jmp .bv_set
+.bv_vvvv:
+    movzx eax, byte [rbx+Insn.vex_vvvv]
+.bv_set:
+    ; eax = índice do registrador; r10d = classe; r11d = opidx
+    lea rcx, [rbx+Insn.op0]
+    mov edx, r11d
+    shl edx, 4
+    add rcx, rdx
+    cmp r10d, VEX_CL_K
+    je .bv_setk
+    cmp r10d, VEX_CL_G32
+    je .bv_setg32
+    cmp r10d, VEX_CL_G64
+    je .bv_setg64
+    ; vetorial (V16/V32)
+    mov byte [rcx+DexOp.kind], DEX_OP_VEC
+    mov [rcx+DexOp.reg], al
+    mov byte [rcx+DexOp.pad], 16
+    cmp r10d, VEX_CL_V32
+    jne .bv_next
+    mov byte [rcx+DexOp.pad], 32
+    jmp .bv_next
+.bv_setk:
+    mov byte [rcx+DexOp.kind], DEX_OP_MASK
+    mov [rcx+DexOp.reg], al
+    jmp .bv_next
+.bv_setg32:
+    mov byte [rcx+DexOp.kind], DEX_OP_REG
+    mov [rcx+DexOp.reg], al
+    mov byte [rcx+DexOp.size], 4
+    jmp .bv_next
+.bv_setg64:
+    mov byte [rcx+DexOp.kind], DEX_OP_REG
+    mov [rcx+DexOp.reg], al
+    mov byte [rcx+DexOp.size], 8
+    jmp .bv_next
+.bv_imm:
+    ; imm8 sai depois dos operandos (emissor lê Insn.imm)
+    mov byte [rbx+Insn.vex_imm8], 1
+.bv_next:
+    inc r11d
+    jmp .bv_loop
+.bv_ok:
+    pop rdi
+    pop rsi
+    jmp .ok
+.bv_dbfail:
+    pop rdi
+    pop rsi
+    jmp .no
+.bv_fail:
+    pop rdi
+    pop rsi
+    jmp .no
 .no:
     ; limpar ops (evita meio-preenchido → emitter db limpo)
     mov qword [rbx+Insn.op0+0], 0

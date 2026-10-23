@@ -745,4 +745,53 @@ e o tamanho "sem keyword" (`DEX_MEM_NOSZ`: `fldenv`/`fnstenv`/`frstor`/
 - Regressão: suíte 453/453, lenta 7/7; `[39]` teve 2 hashes de golden
   regenerados por causa da grafia NASM (DB/DF) — sem mudança de forma.
 
+## 33. VEX2 nativo — tabela derivada (capstone + NASM), flags de decode e os bugs reais (2026-10-22)
+
+O mapa `0F` sob VEX2 (`C5`) tem **371 entradas válidas** — não é uma regra
+"legacy com `v`". A tabela é **derivada**, não escrita à mão:
+`tools/gen_vex2.py` monta alvos `C5` canônicos (reg/reg, memória, com e sem
+`vvvv`, com e sem imm) e pergunta ao **NASM** qual texto reencoda os bytes
+exatos; o capstone identifica o mnemônico e as classes dos operandos.
+Resultado: 337 entradas com forma (RVM 220, RM 75, MR 28, RVMI 5, RMI 7,
+2 sem operando) e 34 sem forma — 24 delas são escalares com `L=1`
+(*reservado*: o NASM normaliza para `L=0` e os bytes mudariam) e 10 são
+variações que não fecham. `src/disasm/vex2_tbl.inc` é gerado e versionado
+(o build **não** depende de capstone).
+
+**Formato do descritor (20 B)**: `dq mnemônico`, `db nops|flags` e quatro
+pares `papel,classe`. Papéis: R=ModRM.reg, V=vvvv, M=ModRM.rm, I=imm8.
+Classes: V16/V32, G32/G64, K (k0-7), M/M4/M8 (memória), I8. Flags:
+bit3 = ModRM presente, bit4 = imm8, bit6 = sem forma (db), bit7 = `vvvv`
+precisa ser 0 (encoding "não usa vvvv" — o campo é invertido: 1111⇔0).
+A semântica monta `DexOp` reais (`DEX_OP_VEC`/`DEX_OP_MASK`, novo) e a
+memória reusa `.build_rm`; o imm8 sai pelo novo `Insn.vex_imm8` (o modelo
+`DexOp` cobre até 3 registradores/memória).
+
+**Bugs reais encontrados e corrigidos no caminho**:
+
+1. `dex_tbl2_flag[0xF2] == 0` (legado): o decoder VEX não lia o ModRM de
+   `vpslld` e o sweep desalinhava (apareciam `aad`, `retf`, `jmp` no meio do
+   payload). O decoder VEX2 passou a usar os flags **da própria tabela**
+   (`dex_vex2_flags`), com a legada só como fallback — vale também para as
+   entradas sem forma.
+2. `dex_vex2_flags` clobbra `r8` (ABI) e o caller o usava como índice da
+   tabela legada → leitura fora da tabela → `SizeOf` de imm errado → **AV**
+   (`0xC0000005`) na geração de `C5 EE 10 CB`. Fix: `push r8`/`pop r8` em
+   volta da chamada (reproduzido em fixture mínimo antes do fix).
+3. `.vex_set` decidia `vex` vs `evex` por `eax` (enc), que os campos do
+   prefixo destroem; passou a ler `Insn.enc`. (Comentário saía `; evex`.)
+4. Cobertura: as entradas que **não usam vvvv** (loads/stores/movmsk/
+   compares) exigem o campo `1111` (lógico 0). O gerador do fixture usava
+   vvvv=2/11 e o NASM normalizava → as variantes eram descartadas e 112
+   entradas não eram testadas. Fix: vvvv=0 nessas entradas → 1442
+   instruções no fixture (era 1044).
+
+**Prova**: `tests/vex2nat.asm` (1442 instruções, uma `db` por linha, exit
+42) + manifesto `tests/expected/vex2nat.tsv`; `tests/vex2_native_check.py`
+monta o `.asm` inteiro com `nasm -f bin` e compara **byte a byte** com o
+`.exe`, além de conferir nativa/db por instrução. Resultado: **1418 nativas
++ 24 db declaradas**; `-m bin -native -r` byte-idêntico (exit 42) e
+`-native -r` win64 linka e roda 42. Suíte **464/464**, lenta 7/7, CI 441/441.
+
+
 

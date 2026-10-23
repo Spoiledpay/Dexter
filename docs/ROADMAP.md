@@ -1,7 +1,7 @@
 # Dexter — Roadmap (requisitos R-x.y + status real)
 
 Legenda: `[x]` implementado + testado em Windows (`tests\run_tests.bat`
-**438/438 OK** em 1.2.422; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
+**464/464 OK** em 1.2.434; lenta `run_slow.bat` **7/7**); `[ ]` futuro.
 IDs estáveis para branches/commits. **Fonte única da fila de execução:**
 `marco.md` §8 — este arquivo registra o status por requisito.
 
@@ -49,11 +49,21 @@ IDs estáveis para branches/commits. **Fonte única da fila de execução:**
   Prova exaustiva das 2048 codificações (`tests/x87nat*.asm` +
   `x87_native_check.py`): 1796 nativas em x64, 1736 em x32, `fstpnce`
   (8) em `db` por não existir no NASM. `PE_NOTES §32`, ADR-0006.
-- [ ] **2b/2c/2d — semântica de operandos VEX/EVEX**: decodificação/limites
-  são byte-exatos (R-2.7), mas o nativo emite `db`. Exige tabela de
-  mnemônico/forma por (mapa, pp, W, L, opcode) — AVX/AVX2 — e, no EVEX,
-  máscaras/broadcast/`disp8*N`. Ordem: VEX2 (C5/0F), VEX3 (C4/0F/38/3A),
-  EVEX (62).
+- [x] **2b — VEX2 nativo** (1.2.434, `[61]` 11 checks): tabela derivada
+  `src/disasm/vex2_tbl.inc` (371 entradas do mapa 0F: 337 com forma; 34 db,
+  sendo 24 escalares com `L` reservado + 10 que não fecham), gerada por
+  `tools/gen_vex2.py` (capstone + NASM como juiz). Descritor com
+  papel/classe por operando, flags de decode (ModRM/imm) e gate de `vvvv`;
+  semântica monta `DexOp` (`DEX_OP_VEC`/`DEX_OP_MASK`) e imm8 por
+  `Insn.vex_imm8`. Correções reais: `dex_tbl2_flag[0xF2]=0` (sweep
+  desalinhado), `r8` clobrado no caller de `dex_vex2_flags` (AV), `.vex_set`
+  lendo `eax` (comentário `evex`) e vvvv=0 nas entradas que não usam vvvv
+  (cobertura). Fixture `tests/vex2nat.asm` (1442 instruções) + oráculo
+  `vex2_native_check.py`: 1418 nativas + 24 db, bin byte-idêntico e exit 42.
+  `PE_NOTES §33`, ADR-0007.
+- [ ] **2c/2d — VEX3 (C4: 0F/38/3A, W) e EVEX (62)**: mesma metodologia
+  (tabela derivada por (mapa, pp, W, L, opcode)); no EVEX, máscara `{k}`,
+  `{z}`, broadcast e `disp8*N` comprimido. Ordem: VEX3 → EVEX.
 - [ ] **R-6.6 (opção C)** — IR otimizável + backend próprio (`-f bin` sem
   nasm). Depende de R-6.1–R-6.5 (fechados) e do corpus estável.
 - [ ] **Cobertura de imports por ordinal** no `-overview`/`-json` (R-7.1):

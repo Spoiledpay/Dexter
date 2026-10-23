@@ -136,8 +136,25 @@ endstruc
 %define DEX_OP_REL  4
 %define DEX_OP_SEG  5
 %define DEX_OP_ST   6   ; registrador x87: emite `st<reg>`
+%define DEX_OP_VEC  7   ; registrador vetorial: pad = 16 (xmm) | 32 (ymm)
+%define DEX_OP_MASK 8   ; registrador de máscara AVX-512: emite `k<reg>`
 %define DEX_MEM_TWORD 10 ; 80 bits (keyword do NASM e `tword`, nao `tbyte`)
 %define DEX_MEM_NOSZ  0xFF ; sem keyword de tamanho (fldenv/fnstenv/frstor/fnsave)
+
+; ---- tabela VEX2 (src/disasm/vex2_tbl.inc; 2b) ----
+%define VEX_ROLE_R  1   ; ModRM.reg
+%define VEX_ROLE_V  2   ; vvvv
+%define VEX_ROLE_M  3   ; ModRM.rm (reg ou memória)
+%define VEX_ROLE_I  4   ; imm8
+%define VEX_CL_V16  1   ; xmm
+%define VEX_CL_V32  2   ; ymm
+%define VEX_CL_G32  3   ; GPR 32
+%define VEX_CL_K    4   ; k0-k7
+%define VEX_CL_M    5   ; memória, sem keyword
+%define VEX_CL_M4   6   ; memória dword
+%define VEX_CL_M8   7   ; memória qword
+%define VEX_CL_I8   8   ; imm8
+%define VEX_CL_G64  9   ; GPR 64 (EVEX/REX.W; futuro)
 
 ; ---- formas de operando x87 (src/disasm/x87.asm; 2a) ----
 %define X87_SH_DB     0   ; sem forma no NASM => db (fstpnce)
@@ -189,7 +206,18 @@ struc Insn
     .segprefix      resb 1   ; 0=nenhum 1=es..6=gs (R-4.5; prefixes.asm preenche)
     .addr_mode      resb 1   ; 0 = 64 bits, 1 = 32 bits (Fase x32; dex_disasm_one preenche)
     .enc            resb 1   ; R-2.7: 0=legacy, 1=VEX (C4/C5), 2=EVEX (62)
-    .pad2           resb 18
+    .vex_pp         resb 1   ; VEX/EVEX pp (0=nenhum,1=66,2=F3,3=F2)
+    .vex_l          resb 1   ; VEX.L (0=128,1=256)
+    .vex_w          resb 1   ; VEX.W / EVEX.W
+    .vex_vvvv       resb 1   ; vvvv LÓGICO (0-15; 0 = campo 1111 "não usado")
+    .vex_mm         resb 1   ; mapa (1=0F, 2=0F38, 3=0F3A)
+    .vex_mask       resb 1   ; EVEX aaa (reservado p/ 2d)
+    .vex_r          resb 1   ; extensão do campo reg (0 ou 8)
+    .vex_b          resb 1   ; extensão do rm/base (0 ou 8)
+    .vex_x          resb 1   ; extensão do índice SIB (0 ou 8)
+    .vex_imm8       resb 1   ; VEX2 com imm8: emissor anexa ", 0x<imm>"
+    .vex_npre       resb 1   ; tamanho do prefixo VEX/EVEX (2/3/4)
+    .pad2           resb 7
     .op0            resb 16  ; DexOp (R-4.5; ver layout acima)
     .op1            resb 16
     .op2            resb 16
